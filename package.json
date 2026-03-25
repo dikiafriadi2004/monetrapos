@@ -1,0 +1,20 @@
+{
+  "name": "monetrapos",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MonetRAPOS - Multi-Business POS Application",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "api:dev": "npm run dev --workspace=apps/api",
+    "api:build": "npm run build --workspace=apps/api",
+    "api:start": "npm run start:prod --workspace=apps/api",
+    "company-admin:dev": "npm run dev --workspace=apps/company-admin",
+    "member-admin:dev": "npm run dev --workspace=apps/member-admin"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
