@@ -1,42 +1,60 @@
-import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn, DeleteDateColumn } from 'typeorm';
 import { BaseEntity } from '../../common/entities';
+import { Company } from '../companies/company.entity';
 import { Store } from '../stores/store.entity';
-import { Role } from '../roles/role.entity';
 
 @Entity('employees')
 export class Employee extends BaseEntity {
-  @Column({ length: 100 })
-  name: string;
+  @Column({ name: 'company_id' })
+  companyId: string;
 
-  @Column({ unique: true, length: 100 })
-  email: string;
-
-  @Column()
-  password: string;
-
-  @Column({ length: 20, nullable: true })
-  phone: string;
-
-  @Column({ nullable: true })
-  avatar: string;
-
-  @Column({ length: 6, nullable: true })
-  pin: string;
-
-  @Column({ default: true })
-  isActive: boolean;
+  @ManyToOne(() => Company)
+  @JoinColumn({ name: 'company_id' })
+  company: Company;
 
   @Column({ name: 'store_id' })
   storeId: string;
-
-  @Column({ name: 'role_id' })
-  roleId: string;
 
   @ManyToOne(() => Store, (store) => store.employees)
   @JoinColumn({ name: 'store_id' })
   store: Store;
 
-  @ManyToOne(() => Role, (role) => role.employees)
-  @JoinColumn({ name: 'role_id' })
-  role: Role;
+  // Basic Info
+  @Column({ length: 150 })
+  name: string;
+
+  @Column({ length: 100, nullable: true })
+  email: string;
+
+  @Column({ length: 20, nullable: true })
+  phone: string;
+
+  // Auth (separate from users table)
+  @Column({ name: 'password_hash' })
+  passwordHash: string;
+
+  @Column({ length: 6, nullable: true })
+  pin: string; // Quick PIN for POS login
+
+  // Employment
+  @Column({ length: 50, nullable: true, name: 'employee_code' })
+  employeeCode: string;
+
+  @Column({ length: 100, nullable: true })
+  position: string; // cashier, cook, waiter, manager
+
+  @Column({ type: 'date', nullable: true, name: 'hire_date' })
+  hireDate: Date;
+
+  // Profile
+  @Column({ length: 500, nullable: true, name: 'avatar_url' })
+  avatarUrl: string;
+
+  // Status
+  @Column({ default: true, name: 'is_active' })
+  isActive: boolean;
+
+  // Soft Delete
+  @DeleteDateColumn({ name: 'deleted_at' })
+  deletedAt: Date;
 }

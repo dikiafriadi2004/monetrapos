@@ -1,12 +1,11 @@
 import { SubscriptionsService } from './subscriptions.service';
-import { CreatePlanDto } from './dto/create-plan.dto';
-import { UpdatePlanDto } from './dto/update-plan.dto';
+import { CreateSubscriptionDto, ChangePlanDto, CancelSubscriptionDto } from './dto';
 export declare class SubscriptionsController {
     private readonly subscriptionsService;
     constructor(subscriptionsService: SubscriptionsService);
-    createPlan(req: any, dto: CreatePlanDto): Promise<import("./subscription-plan.entity").SubscriptionPlan>;
-    findAllPlans(req: any): Promise<import("./subscription-plan.entity").SubscriptionPlan[]>;
-    findOnePlan(req: any, id: string): Promise<import("./subscription-plan.entity").SubscriptionPlan>;
-    updatePlan(req: any, id: string, dto: UpdatePlanDto): Promise<import("./subscription-plan.entity").SubscriptionPlan>;
-    removePlan(req: any, id: string): Promise<void>;
+    subscribe(req: any, dto: CreateSubscriptionDto): Promise<import("./subscription.entity").Subscription>;
+    getSubscriptions(req: any): Promise<import("./subscription.entity").Subscription | null>;
+    changePlan(req: any, dto: ChangePlanDto): Promise<import("./subscription.entity").Subscription>;
+    cancel(req: any, dto: CancelSubscriptionDto): Promise<import("./subscription.entity").Subscription>;
+    reactivate(req: any): Promise<import("./subscription.entity").Subscription>;
 }

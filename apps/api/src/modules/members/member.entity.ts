@@ -1,9 +1,12 @@
-import { Entity, Column, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
+import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { BaseEntity } from '../../common/entities';
 import { Company } from '../companies/company.entity';
-import { Store } from '../stores/store.entity';
-import { Subscription } from '../subscriptions/subscription.entity';
 
+/**
+ * @deprecated This entity is deprecated. Use User entity instead.
+ * Member concept has been replaced with Company → User structure.
+ * This file is kept for backward compatibility only.
+ */
 @Entity('members')
 export class Member extends BaseEntity {
   @Column({ length: 100 })
@@ -30,13 +33,14 @@ export class Member extends BaseEntity {
   @Column({ name: 'company_id' })
   companyId: string;
 
-  @ManyToOne(() => Company, (company) => company.members)
+  @ManyToOne(() => Company)
   @JoinColumn({ name: 'company_id' })
   company: Company;
 
-  @OneToMany(() => Store, (store) => store.member)
-  stores: Store[];
+  // Relations removed - use User entity instead
+  // @OneToMany(() => Store, (store) => store.member)
+  // stores: Store[];
 
-  @OneToMany(() => Subscription, (sub) => sub.member)
-  subscriptions: Subscription[];
+  // @OneToMany(() => Subscription, (sub) => sub.member)
+  // subscriptions: Subscription[];
 }

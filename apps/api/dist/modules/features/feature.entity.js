@@ -12,7 +12,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.Feature = void 0;
 const typeorm_1 = require("typeorm");
 const entities_1 = require("../../common/entities");
-const company_entity_1 = require("../companies/company.entity");
 const subscription_plan_entity_1 = require("../subscriptions/subscription-plan.entity");
 let Feature = class Feature extends entities_1.BaseEntity {
     name;
@@ -21,7 +20,6 @@ let Feature = class Feature extends entities_1.BaseEntity {
     icon;
     isActive;
     companyId;
-    company;
     plans;
 };
 exports.Feature = Feature;
@@ -49,11 +47,6 @@ __decorate([
     (0, typeorm_1.Column)({ name: 'company_id' }),
     __metadata("design:type", String)
 ], Feature.prototype, "companyId", void 0);
-__decorate([
-    (0, typeorm_1.ManyToOne)(() => company_entity_1.Company, (company) => company.features),
-    (0, typeorm_1.JoinColumn)({ name: 'company_id' }),
-    __metadata("design:type", company_entity_1.Company)
-], Feature.prototype, "company", void 0);
 __decorate([
     (0, typeorm_1.ManyToMany)(() => subscription_plan_entity_1.SubscriptionPlan, (plan) => plan.features),
     __metadata("design:type", Array)

@@ -16,15 +16,24 @@ const auth_controller_1 = require("./auth.controller");
 const auth_service_1 = require("./auth.service");
 const jwt_strategy_1 = require("./strategies/jwt.strategy");
 const company_entity_1 = require("../companies/company.entity");
-const member_entity_1 = require("../members/member.entity");
+const user_entity_1 = require("../users/user.entity");
 const employee_entity_1 = require("../employees/employee.entity");
+const email_verification_token_entity_1 = require("./email-verification-token.entity");
+const password_reset_token_entity_1 = require("./password-reset-token.entity");
+const subscriptions_module_1 = require("../subscriptions/subscriptions.module");
 let AuthModule = class AuthModule {
 };
 exports.AuthModule = AuthModule;
 exports.AuthModule = AuthModule = __decorate([
     (0, common_1.Module)({
         imports: [
-            typeorm_1.TypeOrmModule.forFeature([company_entity_1.Company, member_entity_1.Member, employee_entity_1.Employee]),
+            typeorm_1.TypeOrmModule.forFeature([
+                company_entity_1.Company,
+                user_entity_1.User,
+                employee_entity_1.Employee,
+                email_verification_token_entity_1.EmailVerificationToken,
+                password_reset_token_entity_1.PasswordResetToken,
+            ]),
             passport_1.PassportModule.register({ defaultStrategy: 'jwt' }),
             jwt_1.JwtModule.registerAsync({
                 imports: [config_1.ConfigModule],
@@ -32,10 +41,11 @@ exports.AuthModule = AuthModule = __decorate([
                 useFactory: (configService) => ({
                     secret: configService.get('JWT_SECRET') || 'fallback_secret',
                     signOptions: {
-                        expiresIn: (configService.get('JWT_EXPIRES_IN') || '15m'),
+                        expiresIn: '15m',
                     },
                 }),
             }),
+            subscriptions_module_1.SubscriptionsModule,
         ],
         controllers: [auth_controller_1.AuthController],
         providers: [auth_service_1.AuthService, jwt_strategy_1.JwtStrategy],

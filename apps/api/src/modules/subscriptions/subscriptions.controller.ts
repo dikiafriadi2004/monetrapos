@@ -1,59 +1,74 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Request, UseGuards, UnauthorizedException } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Body,
+  UseGuards,
+  Request,
+  HttpStatus,
+  HttpCode,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { SubscriptionsService } from './subscriptions.service';
-import { CreatePlanDto } from './dto/create-plan.dto';
-import { UpdatePlanDto } from './dto/update-plan.dto';
+import {
+  CreateSubscriptionDto,
+  ChangePlanDto,
+  CancelSubscriptionDto,
+} from './dto';
 
-@ApiTags('Subscription Plans')
-@ApiBearerAuth()
+@Controller('subscriptions')
 @UseGuards(AuthGuard('jwt'))
-@Controller('subscriptions/plans')
 export class SubscriptionsController {
   constructor(private readonly subscriptionsService: SubscriptionsService) {}
 
-  @Post()
-  @ApiOperation({ summary: 'Create a new subscription plan' })
-  createPlan(@Request() req, @Body() dto: CreatePlanDto) {
-    if (req.user.type !== 'company_admin') {
-      throw new UnauthorizedException('Only company admins can manage plans');
-    }
-    return this.subscriptionsService.createPlan(req.user.id, dto);
+  @Post('subscribe')
+  @HttpCode(HttpStatus.CREATED)
+  async subscribe(@Request() req: any, @Body() dto: CreateSubscriptionDto) {
+    const companyId = req.user.companyId;
+    return this.subscriptionsService.createSubscription(companyId, dto.planId);
   }
 
   @Get()
-  @ApiOperation({ summary: 'List all subscription plans' })
-  findAllPlans(@Request() req) {
-    if (req.user.type !== 'company_admin') {
-      throw new UnauthorizedException('Only company admins can manage plans');
-    }
-    return this.subscriptionsService.findAllPlans(req.user.id);
+  async getSubscriptions(@Request() req: any) {
+    const companyId = req.user.companyId;
+    return this.subscriptionsService.findActiveByCompany(companyId);
   }
 
-  @Get(':id')
-  @ApiOperation({ summary: 'Get a specific subscription plan' })
-  findOnePlan(@Request() req, @Param('id') id: string) {
-    if (req.user.type !== 'company_admin') {
-      throw new UnauthorizedException('Only company admins can manage plans');
-    }
-    return this.subscriptionsService.findOnePlan(req.user.id, id);
+  @Put('change-plan')
+  async changePlan(@Request() req: any, @Body() dto: ChangePlanDto) {
+    const companyId = req.user.companyId;
+    return this.subscriptionsService.changePlan(companyId, dto.newPlanId);
   }
 
-  @Patch(':id')
-  @ApiOperation({ summary: 'Update a subscription plan' })
-  updatePlan(@Request() req, @Param('id') id: string, @Body() dto: UpdatePlanDto) {
-    if (req.user.type !== 'company_admin') {
-      throw new UnauthorizedException('Only company admins can manage plans');
+  @Post('cancel')
+  async cancel(@Request() req: any, @Body() dto: CancelSubscriptionDto) {
+    const companyId = req.user.companyId;
+    const subscription = await this.subscriptionsService.findActiveByCompany(
+      companyId,
+    );
+
+    if (!subscription) {
+      throw new Error('No active subscription found');
     }
-    return this.subscriptionsService.updatePlan(req.user.id, id, dto);
+
+    return this.subscriptionsService.cancelSubscription(
+      subscription.id,
+      dto.reason,
+    );
   }
 
-  @Delete(':id')
-  @ApiOperation({ summary: 'Delete a subscription plan' })
-  removePlan(@Request() req, @Param('id') id: string) {
-    if (req.user.type !== 'company_admin') {
-      throw new UnauthorizedException('Only company admins can manage plans');
+  @Post('reactivate')
+  async reactivate(@Request() req: any) {
+    const companyId = req.user.companyId;
+    const subscription = await this.subscriptionsService.findActiveByCompany(
+      companyId,
+    );
+
+    if (!subscription) {
+      throw new Error('No subscription found');
     }
-    return this.subscriptionsService.removePlan(req.user.id, id);
+
+    return this.subscriptionsService.reactivateSubscription(subscription.id);
   }
 }

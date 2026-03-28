@@ -1,18 +1,24 @@
 import { BaseEntity } from '../../common/entities';
-import { Company } from '../companies/company.entity';
-import { Feature } from '../features/feature.entity';
 import { Subscription } from './subscription.entity';
 export declare class SubscriptionPlan extends BaseEntity {
     name: string;
+    slug: string;
     description: string;
-    price: number;
-    durationDays: number;
-    maxOutlets: number;
+    priceMonthly: number;
+    priceYearly: number;
+    setupFee: number;
+    trialDays: number;
+    features: Record<string, boolean>;
+    maxStores: number;
+    maxUsers: number;
+    maxEmployees: number;
     maxProducts: number;
-    sortOrder: number;
+    maxTransactionsPerMonth: number;
+    maxCustomers: number;
+    maxStorageMb: number;
     isActive: boolean;
-    companyId: string;
-    company: Company;
-    features: Feature[];
+    isPopular: boolean;
+    sortOrder: number;
     subscriptions: Subscription[];
+    deletedAt: Date;
 }

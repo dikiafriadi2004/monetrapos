@@ -10,19 +10,22 @@ exports.SubscriptionsModule = void 0;
 const common_1 = require("@nestjs/common");
 const typeorm_1 = require("@nestjs/typeorm");
 const subscriptions_service_1 = require("./subscriptions.service");
+const subscription_plans_service_1 = require("./subscription-plans.service");
 const subscriptions_controller_1 = require("./subscriptions.controller");
+const subscription_plans_controller_1 = require("./subscription-plans.controller");
 const subscription_plan_entity_1 = require("./subscription-plan.entity");
 const subscription_entity_1 = require("./subscription.entity");
 const feature_entity_1 = require("../features/feature.entity");
+const company_entity_1 = require("../companies/company.entity");
 let SubscriptionsModule = class SubscriptionsModule {
 };
 exports.SubscriptionsModule = SubscriptionsModule;
 exports.SubscriptionsModule = SubscriptionsModule = __decorate([
     (0, common_1.Module)({
-        imports: [typeorm_1.TypeOrmModule.forFeature([subscription_plan_entity_1.SubscriptionPlan, subscription_entity_1.Subscription, feature_entity_1.Feature])],
-        controllers: [subscriptions_controller_1.SubscriptionsController],
-        providers: [subscriptions_service_1.SubscriptionsService],
-        exports: [subscriptions_service_1.SubscriptionsService],
+        imports: [typeorm_1.TypeOrmModule.forFeature([subscription_plan_entity_1.SubscriptionPlan, subscription_entity_1.Subscription, feature_entity_1.Feature, company_entity_1.Company])],
+        controllers: [subscriptions_controller_1.SubscriptionsController, subscription_plans_controller_1.SubscriptionPlansController],
+        providers: [subscriptions_service_1.SubscriptionsService, subscription_plans_service_1.SubscriptionPlansService],
+        exports: [subscriptions_service_1.SubscriptionsService, subscription_plans_service_1.SubscriptionPlansService],
     })
 ], SubscriptionsModule);
 //# sourceMappingURL=subscriptions.module.js.map

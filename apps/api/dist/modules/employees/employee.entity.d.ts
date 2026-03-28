@@ -1,16 +1,20 @@
 import { BaseEntity } from '../../common/entities';
+import { Company } from '../companies/company.entity';
 import { Store } from '../stores/store.entity';
-import { Role } from '../roles/role.entity';
 export declare class Employee extends BaseEntity {
+    companyId: string;
+    company: Company;
+    storeId: string;
+    store: Store;
     name: string;
     email: string;
-    password: string;
     phone: string;
-    avatar: string;
+    passwordHash: string;
     pin: string;
+    employeeCode: string;
+    position: string;
+    hireDate: Date;
+    avatarUrl: string;
     isActive: boolean;
-    storeId: string;
-    roleId: string;
-    store: Store;
-    role: Role;
+    deletedAt: Date;
 }

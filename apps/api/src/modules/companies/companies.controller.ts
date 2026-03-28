@@ -13,7 +13,7 @@ export class CompaniesController {
 
   @Get('profile')
   @ApiOperation({ summary: 'Get current company profile' })
-  getProfile(@Request() req) {
+  getProfile(@Request() req: any) {
     if (req.user.type !== 'company_admin') {
       throw new UnauthorizedException('Only company admins can access this endpoint');
     }
@@ -22,7 +22,7 @@ export class CompaniesController {
 
   @Patch('profile')
   @ApiOperation({ summary: 'Update company profile' })
-  updateProfile(@Request() req, @Body() dto: UpdateCompanyDto) {
+  updateProfile(@Request() req: any, @Body() dto: UpdateCompanyDto) {
     if (req.user.type !== 'company_admin') {
       throw new UnauthorizedException('Only company admins can access this endpoint');
     }

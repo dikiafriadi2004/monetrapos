@@ -13,8 +13,6 @@ exports.Member = void 0;
 const typeorm_1 = require("typeorm");
 const entities_1 = require("../../common/entities");
 const company_entity_1 = require("../companies/company.entity");
-const store_entity_1 = require("../stores/store.entity");
-const subscription_entity_1 = require("../subscriptions/subscription.entity");
 let Member = class Member extends entities_1.BaseEntity {
     name;
     email;
@@ -25,8 +23,6 @@ let Member = class Member extends entities_1.BaseEntity {
     isActive;
     companyId;
     company;
-    stores;
-    subscriptions;
 };
 exports.Member = Member;
 __decorate([
@@ -62,18 +58,10 @@ __decorate([
     __metadata("design:type", String)
 ], Member.prototype, "companyId", void 0);
 __decorate([
-    (0, typeorm_1.ManyToOne)(() => company_entity_1.Company, (company) => company.members),
+    (0, typeorm_1.ManyToOne)(() => company_entity_1.Company),
     (0, typeorm_1.JoinColumn)({ name: 'company_id' }),
     __metadata("design:type", company_entity_1.Company)
 ], Member.prototype, "company", void 0);
-__decorate([
-    (0, typeorm_1.OneToMany)(() => store_entity_1.Store, (store) => store.member),
-    __metadata("design:type", Array)
-], Member.prototype, "stores", void 0);
-__decorate([
-    (0, typeorm_1.OneToMany)(() => subscription_entity_1.Subscription, (sub) => sub.member),
-    __metadata("design:type", Array)
-], Member.prototype, "subscriptions", void 0);
 exports.Member = Member = __decorate([
     (0, typeorm_1.Entity)('members')
 ], Member);

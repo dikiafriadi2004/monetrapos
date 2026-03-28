@@ -1,15 +1,28 @@
 import { Repository } from 'typeorm';
+import { Subscription, BillingCycle } from './subscription.entity';
 import { SubscriptionPlan } from './subscription-plan.entity';
-import { Feature } from '../features/feature.entity';
-import { CreatePlanDto } from './dto/create-plan.dto';
-import { UpdatePlanDto } from './dto/update-plan.dto';
+import { Company } from '../companies/company.entity';
 export declare class SubscriptionsService {
-    private planRepo;
-    private featureRepo;
-    constructor(planRepo: Repository<SubscriptionPlan>, featureRepo: Repository<Feature>);
-    createPlan(companyId: string, dto: CreatePlanDto): Promise<SubscriptionPlan>;
-    findAllPlans(companyId: string): Promise<SubscriptionPlan[]>;
-    findOnePlan(companyId: string, id: string): Promise<SubscriptionPlan>;
-    updatePlan(companyId: string, id: string, dto: UpdatePlanDto): Promise<SubscriptionPlan>;
-    removePlan(companyId: string, id: string): Promise<void>;
+    private readonly subscriptionRepository;
+    private readonly planRepository;
+    private readonly companyRepository;
+    constructor(subscriptionRepository: Repository<Subscription>, planRepository: Repository<SubscriptionPlan>, companyRepository: Repository<Company>);
+    create(data: {
+        companyId: string;
+        planId: string;
+        billingCycle: BillingCycle;
+        startTrial?: boolean;
+    }): Promise<Subscription>;
+    createSubscription(companyId: string, planId: string): Promise<Subscription>;
+    findActiveByCompany(companyId: string): Promise<Subscription | null>;
+    findByCompany(companyId: string): Promise<Subscription[]>;
+    changePlan(companyId: string, newPlanId: string): Promise<Subscription>;
+    cancel(companyId: string, reason?: string): Promise<Subscription>;
+    cancelSubscription(subscriptionId: string, reason?: string): Promise<Subscription>;
+    reactivate(companyId: string): Promise<Subscription>;
+    reactivateSubscription(subscriptionId: string): Promise<Subscription>;
+    renew(subscriptionId: string): Promise<Subscription>;
+    convertTrialToPaid(companyId: string): Promise<Subscription>;
+    expire(subscriptionId: string): Promise<void>;
+    checkExpiredSubscriptions(): Promise<void>;
 }

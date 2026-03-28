@@ -14,91 +14,93 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthController = void 0;
 const common_1 = require("@nestjs/common");
-const swagger_1 = require("@nestjs/swagger");
-const passport_1 = require("@nestjs/passport");
 const auth_service_1 = require("./auth.service");
 const dto_1 = require("./dto");
-const guards_1 = require("./guards");
-const enums_1 = require("../../common/enums");
 let AuthController = class AuthController {
     authService;
     constructor(authService) {
         this.authService = authService;
     }
-    registerCompany(dto) {
+    async register(dto) {
         return this.authService.registerCompany(dto);
     }
-    loginCompany(dto) {
-        return this.authService.loginCompany(dto);
+    async verifyEmail(dto) {
+        return this.authService.verifyEmail(dto);
     }
-    registerMember(dto, req) {
-        return this.authService.registerMember(dto, req.user.id);
+    async login(dto) {
+        return this.authService.login(dto);
     }
-    loginMember(dto) {
-        return this.authService.loginMember(dto);
-    }
-    loginEmployee(dto) {
+    async loginEmployee(dto) {
         return this.authService.loginEmployee(dto);
     }
-    refreshToken(dto) {
-        return this.authService.refreshToken(dto.refreshToken);
+    async forgotPassword(dto) {
+        return this.authService.forgotPassword(dto);
+    }
+    async resetPassword(dto) {
+        return this.authService.resetPassword(dto);
+    }
+    async refresh(refreshToken) {
+        return this.authService.refreshToken(refreshToken);
     }
 };
 exports.AuthController = AuthController;
 __decorate([
-    (0, common_1.Post)('company/register'),
-    (0, swagger_1.ApiOperation)({ summary: 'Register a new company (platform owner)' }),
+    (0, common_1.Post)('register'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [dto_1.RegisterCompanyDto]),
-    __metadata("design:returntype", void 0)
-], AuthController.prototype, "registerCompany", null);
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "register", null);
 __decorate([
-    (0, common_1.Post)('company/login'),
-    (0, swagger_1.ApiOperation)({ summary: 'Company admin login' }),
+    (0, common_1.Post)('verify-email'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [dto_1.VerifyEmailDto]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "verifyEmail", null);
+__decorate([
+    (0, common_1.Post)('login'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [dto_1.LoginDto]),
-    __metadata("design:returntype", void 0)
-], AuthController.prototype, "loginCompany", null);
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "login", null);
 __decorate([
-    (0, common_1.Post)('member/register'),
-    (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt'), guards_1.RolesGuard),
-    (0, guards_1.RequireRoles)(enums_1.UserType.COMPANY_ADMIN),
-    (0, swagger_1.ApiBearerAuth)(),
-    (0, swagger_1.ApiOperation)({ summary: 'Register a new member (by company admin)' }),
-    __param(0, (0, common_1.Body)()),
-    __param(1, (0, common_1.Request)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [dto_1.RegisterMemberDto, Object]),
-    __metadata("design:returntype", void 0)
-], AuthController.prototype, "registerMember", null);
-__decorate([
-    (0, common_1.Post)('member/login'),
-    (0, swagger_1.ApiOperation)({ summary: 'Member login' }),
+    (0, common_1.Post)('login/employee'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [dto_1.LoginDto]),
-    __metadata("design:returntype", void 0)
-], AuthController.prototype, "loginMember", null);
-__decorate([
-    (0, common_1.Post)('employee/login'),
-    (0, swagger_1.ApiOperation)({ summary: 'Employee/Cashier login' }),
-    __param(0, (0, common_1.Body)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [dto_1.LoginDto]),
-    __metadata("design:returntype", void 0)
+    __metadata("design:returntype", Promise)
 ], AuthController.prototype, "loginEmployee", null);
 __decorate([
-    (0, common_1.Post)('refresh'),
-    (0, swagger_1.ApiOperation)({ summary: 'Refresh access token' }),
+    (0, common_1.Post)('forgot-password'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [dto_1.RefreshTokenDto]),
-    __metadata("design:returntype", void 0)
-], AuthController.prototype, "refreshToken", null);
+    __metadata("design:paramtypes", [dto_1.ForgotPasswordDto]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "forgotPassword", null);
+__decorate([
+    (0, common_1.Post)('reset-password'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [dto_1.ResetPasswordDto]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "resetPassword", null);
+__decorate([
+    (0, common_1.Post)('refresh'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.OK),
+    __param(0, (0, common_1.Body)('refreshToken')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "refresh", null);
 exports.AuthController = AuthController = __decorate([
-    (0, swagger_1.ApiTags)('Auth'),
     (0, common_1.Controller)('auth'),
     __metadata("design:paramtypes", [auth_service_1.AuthService])
 ], AuthController);

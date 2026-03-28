@@ -1,7 +1,6 @@
 import { Repository } from 'typeorm';
 import { Feature } from './feature.entity';
-import { CreateFeatureDto } from './dto/create-feature.dto';
-import { UpdateFeatureDto } from './dto/update-feature.dto';
+import { CreateFeatureDto, UpdateFeatureDto } from './dto';
 export declare class FeaturesService {
     private featureRepo;
     constructor(featureRepo: Repository<Feature>);

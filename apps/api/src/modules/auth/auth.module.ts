@@ -7,12 +7,21 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { Company } from '../companies/company.entity';
-import { Member } from '../members/member.entity';
+import { User } from '../users/user.entity';
 import { Employee } from '../employees/employee.entity';
+import { EmailVerificationToken } from './email-verification-token.entity';
+import { PasswordResetToken } from './password-reset-token.entity';
+import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Company, Member, Employee]),
+    TypeOrmModule.forFeature([
+      Company,
+      User,
+      Employee,
+      EmailVerificationToken,
+      PasswordResetToken,
+    ]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -20,10 +29,11 @@ import { Employee } from '../employees/employee.entity';
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET') || 'fallback_secret',
         signOptions: {
-          expiresIn: (configService.get<string>('JWT_EXPIRES_IN') || '15m') as any,
+          expiresIn: '15m',
         },
       }),
     }),
+    SubscriptionsModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],

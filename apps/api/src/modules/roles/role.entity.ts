@@ -30,6 +30,7 @@ export class Role extends BaseEntity {
   })
   permissions: Permission[];
 
-  @OneToMany(() => Employee, (employee) => employee.role)
-  employees: Employee[];
+  // Employee relation commented out until Employee entity is updated with roleId
+  // @OneToMany(() => Employee, (employee) => employee.role)
+  // employees: Employee[];
 }

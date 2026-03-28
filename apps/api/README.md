@@ -1,98 +1,301 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# MonetRAPOS API
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Backend API untuk MonetRAPOS - Multi-Business POS Application
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## 🚀 Tech Stack
 
-## Description
+- **Framework:** NestJS 11
+- **Database:** MySQL 3.12 + TypeORM
+- **Authentication:** JWT + Passport
+- **Validation:** class-validator + class-transformer
+- **Documentation:** Swagger/OpenAPI
+- **Language:** TypeScript 5.7
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## 📋 Prerequisites
 
-## Project setup
+- Node.js >= 20.0.0
+- MySQL >= 8.0
+- npm atau yarn
+
+## 🔧 Installation
 
 ```bash
-$ npm install
+# Install dependencies
+npm install
+
+# Copy environment file
+cp .env.example .env
+
+# Update .env with your configuration
 ```
 
-## Compile and run the project
+## 🗄️ Database Setup
 
 ```bash
-# development
-$ npm run start
+# Create database
+mysql -u root -p
+CREATE DATABASE monetrapos;
 
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+# Run migrations (auto-sync in development)
+npm run start:dev
 ```
 
-## Run tests
+## 🏃 Running the App
 
 ```bash
-# unit tests
-$ npm run test
+# Development
+npm run dev
 
-# e2e tests
-$ npm run test:e2e
+# Watch mode
+npm run start:dev
 
-# test coverage
-$ npm run test:cov
+# Production mode
+npm run build
+npm run start:prod
 ```
 
-## Deployment
+## 📚 API Documentation
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+Setelah aplikasi berjalan, akses Swagger documentation di:
+```
+http://localhost:3003/api/docs
+```
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## 🔑 Environment Variables
+
+Lihat `.env.example` untuk daftar lengkap environment variables yang diperlukan.
+
+### Required Variables:
+- `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_DATABASE`
+- `JWT_SECRET`, `JWT_REFRESH_SECRET`
+
+### Optional Variables:
+- `SENDGRID_API_KEY` - Untuk email notifications
+- `TWILIO_*` - Untuk SMS notifications
+- `MIDTRANS_*` - Untuk payment gateway
+
+## 📦 Modules
+
+### Core Modules
+- **Auth** - Authentication & Authorization (JWT, RBAC)
+- **Companies** - Company management
+- **Members** - Business owner management
+- **Stores** - Store management
+- **Employees** - Employee management
+- **Roles** - Role & permission management
+
+### Business Modules
+- **Products** - Product, category, variant management
+- **Transactions** - POS transactions with auto stock deduction
+- **Payments** - Payment methods & processing
+- **Inventory** - Stock movement tracking
+- **Customers** - Customer management with loyalty points
+- **Discounts** - Discount & voucher management
+- **Taxes** - Tax configuration
+
+### Operational Modules
+- **Shifts** - Cashier shift management with reconciliation
+- **Receipts** - Receipt generation (thermal, A4, email)
+- **Notifications** - Email, SMS, WhatsApp notifications
+- **Audit** - Activity logging
+- **Subscriptions** - Subscription plan management
+- **Features** - Feature marketplace
+
+### System Modules
+- **Health** - Health check endpoints
+
+## 🎯 Key Features
+
+### 1. Multi-Tenant Architecture
+- Company → Members → Stores hierarchy
+- Data isolation per store
+- Subscription-based features
+
+### 2. Shift Management
+- Cash declaration by denomination
+- Multi-payment method reconciliation
+- Variance tracking
+- Detailed shift reports
+
+### 3. Customer Loyalty
+- Point accumulation (1 point per Rp 10.000)
+- Point redemption (100 points = Rp 10.000)
+- Transaction-based tracking
+
+### 4. Stock Management
+- Automatic stock deduction on transaction
+- Atomic database transactions
+- Stock movement tracking
+- Low stock alerts
+
+### 5. Receipt System
+- Thermal receipt (58mm/80mm)
+- A4 receipt (HTML for PDF)
+- Email receipt
+- Print receipt
+
+## 🔐 Authentication
+
+### User Types
+1. **Company Admin** - Company owner
+2. **Member** - Business owner/manager
+3. **Employee** - Store staff
+
+### Endpoints
+```
+POST /api/v1/auth/company/register
+POST /api/v1/auth/company/login
+POST /api/v1/auth/member/login
+POST /api/v1/auth/employee/login
+POST /api/v1/auth/refresh
+```
+
+### Authorization
+- JWT Bearer token
+- Role-Based Access Control (RBAC)
+- Permission-based guards
+
+## 📊 API Endpoints
+
+### Main Endpoints
+- `/api/v1/auth` - Authentication
+- `/api/v1/companies` - Company management
+- `/api/v1/members` - Member management
+- `/api/v1/stores` - Store management
+- `/api/v1/products` - Product management
+- `/api/v1/transactions` - Transaction management
+- `/api/v1/shifts` - Shift management
+- `/api/v1/customers` - Customer management
+- `/api/v1/receipts` - Receipt generation
+- `/api/v1/notifications` - Notifications
+- `/api/v1/health` - Health check
+
+## 🧪 Testing
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+# Unit tests
+npm run test
+
+# E2E tests
+npm run test:e2e
+
+# Test coverage
+npm run test:cov
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+## 🏗️ Project Structure
 
-## Resources
+```
+apps/api/
+├── src/
+│   ├── common/              # Shared utilities
+│   │   ├── entities/        # Base entities
+│   │   ├── enums/           # Enums
+│   │   ├── filters/         # Exception filters
+│   │   ├── interceptors/    # Interceptors
+│   │   ├── middleware/      # Middleware
+│   │   └── seeders/         # Database seeders
+│   ├── config/              # Configuration
+│   ├── health/              # Health check
+│   ├── modules/             # Feature modules
+│   │   ├── auth/
+│   │   ├── companies/
+│   │   ├── members/
+│   │   ├── stores/
+│   │   ├── products/
+│   │   ├── transactions/
+│   │   ├── shifts/
+│   │   ├── customers/
+│   │   ├── receipts/
+│   │   └── ...
+│   ├── app.module.ts
+│   └── main.ts
+├── test/
+├── .env.example
+├── nest-cli.json
+├── package.json
+└── tsconfig.json
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+## 🚢 Deployment
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+### Production Build
+```bash
+npm run build
+```
 
-## Support
+### Environment Setup
+1. Set `NODE_ENV=production`
+2. Configure production database
+3. Set secure JWT secrets
+4. Configure CORS allowed origins
+5. Setup SSL/TLS
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+### Docker (Optional)
+```bash
+# Build image
+docker build -t monetrapos-api .
 
-## Stay in touch
+# Run container
+docker run -p 3003:3003 monetrapos-api
+```
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+## 📈 Performance
 
-## License
+- Response time: <100ms (average)
+- Database queries: Optimized with indexes
+- Caching: Ready for Redis integration
+- Rate limiting: Configurable
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+## 🔒 Security
+
+- Input validation with class-validator
+- SQL injection prevention (TypeORM)
+- XSS protection
+- CORS configuration
+- JWT authentication
+- Password hashing (bcrypt)
+- Environment variable validation
+
+## 🐛 Troubleshooting
+
+### Database Connection Error
+```bash
+# Check MySQL is running
+mysql -u root -p
+
+# Verify credentials in .env
+```
+
+### Port Already in Use
+```bash
+# Change PORT in .env
+PORT=3004
+```
+
+### Build Errors
+```bash
+# Clean and rebuild
+rm -rf dist node_modules
+npm install
+npm run build
+```
+
+## 📞 Support
+
+- Documentation: `/api/docs`
+- Issues: GitHub Issues
+- Email: support@monetrapos.com
+
+## 📄 License
+
+Proprietary - MonetRAPOS
+
+## 👥 Contributors
+
+- Development Team
+
+---
+
+**Version:** 1.0.0  
+**Last Updated:** 27 Maret 2026

@@ -1,50 +1,74 @@
-import { Entity, Column, ManyToOne, ManyToMany, OneToMany, JoinColumn, JoinTable } from 'typeorm';
+import { Entity, Column, OneToMany, DeleteDateColumn } from 'typeorm';
 import { BaseEntity } from '../../common/entities';
-import { Company } from '../companies/company.entity';
-import { Feature } from '../features/feature.entity';
 import { Subscription } from './subscription.entity';
 
 @Entity('subscription_plans')
 export class SubscriptionPlan extends BaseEntity {
+  // Basic Info
   @Column({ length: 100 })
   name: string;
+
+  @Column({ unique: true, length: 50 })
+  slug: string;
 
   @Column({ type: 'text', nullable: true })
   description: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
-  price: number;
+  // Pricing
+  @Column({ type: 'decimal', precision: 12, scale: 2, name: 'price_monthly' })
+  priceMonthly: number;
 
-  @Column({ default: 30 })
-  durationDays: number;
+  @Column({ type: 'decimal', precision: 12, scale: 2, name: 'price_yearly' })
+  priceYearly: number;
 
-  @Column({ default: 1 })
-  maxOutlets: number;
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, name: 'setup_fee' })
+  setupFee: number;
 
-  @Column({ default: 50 })
+  // Trial
+  @Column({ default: 14, name: 'trial_days' })
+  trialDays: number;
+
+  // Features (JSON for flexibility)
+  @Column({ type: 'json', default: '{}' })
+  features: Record<string, boolean>;
+
+  // Limits
+  @Column({ default: 1, name: 'max_stores' })
+  maxStores: number;
+
+  @Column({ default: 5, name: 'max_users' })
+  maxUsers: number;
+
+  @Column({ default: 10, name: 'max_employees' })
+  maxEmployees: number;
+
+  @Column({ default: 100, name: 'max_products' })
   maxProducts: number;
 
-  @Column({ default: 0 })
-  sortOrder: number;
+  @Column({ default: 1000, name: 'max_transactions_per_month' })
+  maxTransactionsPerMonth: number;
 
-  @Column({ default: true })
+  @Column({ default: 500, name: 'max_customers' })
+  maxCustomers: number;
+
+  @Column({ default: 1000, name: 'max_storage_mb' })
+  maxStorageMb: number;
+
+  // Metadata
+  @Column({ default: true, name: 'is_active' })
   isActive: boolean;
 
-  @Column({ name: 'company_id' })
-  companyId: string;
+  @Column({ default: false, name: 'is_popular' })
+  isPopular: boolean;
 
-  @ManyToOne(() => Company, (company) => company.subscriptionPlans)
-  @JoinColumn({ name: 'company_id' })
-  company: Company;
+  @Column({ default: 0, name: 'sort_order' })
+  sortOrder: number;
 
-  @ManyToMany(() => Feature, (feature) => feature.plans, { eager: true })
-  @JoinTable({
-    name: 'plan_features',
-    joinColumn: { name: 'plan_id', referencedColumnName: 'id' },
-    inverseJoinColumn: { name: 'feature_id', referencedColumnName: 'id' },
-  })
-  features: Feature[];
-
-  @OneToMany(() => Subscription, (sub) => sub.plan)
+  // Relations
+  @OneToMany(() => Subscription, (subscription) => subscription.plan)
   subscriptions: Subscription[];
+
+  // Soft Delete
+  @DeleteDateColumn({ name: 'deleted_at' })
+  deletedAt: Date;
 }

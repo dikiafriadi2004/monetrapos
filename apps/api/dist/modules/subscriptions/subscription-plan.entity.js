@@ -12,22 +12,28 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.SubscriptionPlan = void 0;
 const typeorm_1 = require("typeorm");
 const entities_1 = require("../../common/entities");
-const company_entity_1 = require("../companies/company.entity");
-const feature_entity_1 = require("../features/feature.entity");
 const subscription_entity_1 = require("./subscription.entity");
 let SubscriptionPlan = class SubscriptionPlan extends entities_1.BaseEntity {
     name;
+    slug;
     description;
-    price;
-    durationDays;
-    maxOutlets;
-    maxProducts;
-    sortOrder;
-    isActive;
-    companyId;
-    company;
+    priceMonthly;
+    priceYearly;
+    setupFee;
+    trialDays;
     features;
+    maxStores;
+    maxUsers;
+    maxEmployees;
+    maxProducts;
+    maxTransactionsPerMonth;
+    maxCustomers;
+    maxStorageMb;
+    isActive;
+    isPopular;
+    sortOrder;
     subscriptions;
+    deletedAt;
 };
 exports.SubscriptionPlan = SubscriptionPlan;
 __decorate([
@@ -35,55 +41,81 @@ __decorate([
     __metadata("design:type", String)
 ], SubscriptionPlan.prototype, "name", void 0);
 __decorate([
+    (0, typeorm_1.Column)({ unique: true, length: 50 }),
+    __metadata("design:type", String)
+], SubscriptionPlan.prototype, "slug", void 0);
+__decorate([
     (0, typeorm_1.Column)({ type: 'text', nullable: true }),
     __metadata("design:type", String)
 ], SubscriptionPlan.prototype, "description", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ type: 'decimal', precision: 12, scale: 2 }),
+    (0, typeorm_1.Column)({ type: 'decimal', precision: 12, scale: 2, name: 'price_monthly' }),
     __metadata("design:type", Number)
-], SubscriptionPlan.prototype, "price", void 0);
+], SubscriptionPlan.prototype, "priceMonthly", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ default: 30 }),
+    (0, typeorm_1.Column)({ type: 'decimal', precision: 12, scale: 2, name: 'price_yearly' }),
     __metadata("design:type", Number)
-], SubscriptionPlan.prototype, "durationDays", void 0);
+], SubscriptionPlan.prototype, "priceYearly", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ default: 1 }),
+    (0, typeorm_1.Column)({ type: 'decimal', precision: 12, scale: 2, default: 0, name: 'setup_fee' }),
     __metadata("design:type", Number)
-], SubscriptionPlan.prototype, "maxOutlets", void 0);
+], SubscriptionPlan.prototype, "setupFee", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ default: 50 }),
+    (0, typeorm_1.Column)({ default: 14, name: 'trial_days' }),
+    __metadata("design:type", Number)
+], SubscriptionPlan.prototype, "trialDays", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'json', default: '{}' }),
+    __metadata("design:type", Object)
+], SubscriptionPlan.prototype, "features", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ default: 1, name: 'max_stores' }),
+    __metadata("design:type", Number)
+], SubscriptionPlan.prototype, "maxStores", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ default: 5, name: 'max_users' }),
+    __metadata("design:type", Number)
+], SubscriptionPlan.prototype, "maxUsers", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ default: 10, name: 'max_employees' }),
+    __metadata("design:type", Number)
+], SubscriptionPlan.prototype, "maxEmployees", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ default: 100, name: 'max_products' }),
     __metadata("design:type", Number)
 ], SubscriptionPlan.prototype, "maxProducts", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ default: 0 }),
+    (0, typeorm_1.Column)({ default: 1000, name: 'max_transactions_per_month' }),
     __metadata("design:type", Number)
-], SubscriptionPlan.prototype, "sortOrder", void 0);
+], SubscriptionPlan.prototype, "maxTransactionsPerMonth", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ default: true }),
+    (0, typeorm_1.Column)({ default: 500, name: 'max_customers' }),
+    __metadata("design:type", Number)
+], SubscriptionPlan.prototype, "maxCustomers", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ default: 1000, name: 'max_storage_mb' }),
+    __metadata("design:type", Number)
+], SubscriptionPlan.prototype, "maxStorageMb", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ default: true, name: 'is_active' }),
     __metadata("design:type", Boolean)
 ], SubscriptionPlan.prototype, "isActive", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ name: 'company_id' }),
-    __metadata("design:type", String)
-], SubscriptionPlan.prototype, "companyId", void 0);
+    (0, typeorm_1.Column)({ default: false, name: 'is_popular' }),
+    __metadata("design:type", Boolean)
+], SubscriptionPlan.prototype, "isPopular", void 0);
 __decorate([
-    (0, typeorm_1.ManyToOne)(() => company_entity_1.Company, (company) => company.subscriptionPlans),
-    (0, typeorm_1.JoinColumn)({ name: 'company_id' }),
-    __metadata("design:type", company_entity_1.Company)
-], SubscriptionPlan.prototype, "company", void 0);
+    (0, typeorm_1.Column)({ default: 0, name: 'sort_order' }),
+    __metadata("design:type", Number)
+], SubscriptionPlan.prototype, "sortOrder", void 0);
 __decorate([
-    (0, typeorm_1.ManyToMany)(() => feature_entity_1.Feature, (feature) => feature.plans, { eager: true }),
-    (0, typeorm_1.JoinTable)({
-        name: 'plan_features',
-        joinColumn: { name: 'plan_id', referencedColumnName: 'id' },
-        inverseJoinColumn: { name: 'feature_id', referencedColumnName: 'id' },
-    }),
-    __metadata("design:type", Array)
-], SubscriptionPlan.prototype, "features", void 0);
-__decorate([
-    (0, typeorm_1.OneToMany)(() => subscription_entity_1.Subscription, (sub) => sub.plan),
+    (0, typeorm_1.OneToMany)(() => subscription_entity_1.Subscription, (subscription) => subscription.plan),
     __metadata("design:type", Array)
 ], SubscriptionPlan.prototype, "subscriptions", void 0);
+__decorate([
+    (0, typeorm_1.DeleteDateColumn)({ name: 'deleted_at' }),
+    __metadata("design:type", Date)
+], SubscriptionPlan.prototype, "deletedAt", void 0);
 exports.SubscriptionPlan = SubscriptionPlan = __decorate([
     (0, typeorm_1.Entity)('subscription_plans')
 ], SubscriptionPlan);

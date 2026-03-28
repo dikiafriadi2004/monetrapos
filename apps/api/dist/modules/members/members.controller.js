@@ -17,7 +17,7 @@ const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const passport_1 = require("@nestjs/passport");
 const members_service_1 = require("./members.service");
-const update_member_dto_1 = require("./dto/update-member.dto");
+const dto_1 = require("./dto");
 let MembersController = class MembersController {
     membersService;
     constructor(membersService) {
@@ -34,6 +34,13 @@ let MembersController = class MembersController {
             throw new common_1.UnauthorizedException('Only members can update their own profile');
         }
         return this.membersService.updateProfile(req.user.id, dto);
+    }
+    create(req, dto) {
+        if (req.user.type !== 'company_admin') {
+            throw new common_1.UnauthorizedException('Only company admins can create members');
+        }
+        dto.companyId = req.user.id;
+        return this.membersService.create(dto);
     }
     findAll(req) {
         if (req.user.type !== 'company_admin') {
@@ -53,6 +60,12 @@ let MembersController = class MembersController {
         }
         return this.membersService.updateByCompany(req.user.id, id, dto);
     }
+    remove(req, id) {
+        if (req.user.type !== 'company_admin') {
+            throw new common_1.UnauthorizedException('Only company admins can delete members');
+        }
+        return this.membersService.removeByCompany(req.user.id, id);
+    }
 };
 exports.MembersController = MembersController;
 __decorate([
@@ -69,9 +82,18 @@ __decorate([
     __param(0, (0, common_1.Request)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, update_member_dto_1.UpdateMemberDto]),
+    __metadata("design:paramtypes", [Object, dto_1.UpdateMemberDto]),
     __metadata("design:returntype", void 0)
 ], MembersController.prototype, "updateProfile", null);
+__decorate([
+    (0, common_1.Post)(),
+    (0, swagger_1.ApiOperation)({ summary: 'Create a new member under this company' }),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, dto_1.CreateMemberDto]),
+    __metadata("design:returntype", void 0)
+], MembersController.prototype, "create", null);
 __decorate([
     (0, common_1.Get)(),
     (0, swagger_1.ApiOperation)({ summary: 'List all members under this company' }),
@@ -96,9 +118,18 @@ __decorate([
     __param(1, (0, common_1.Param)('id')),
     __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, update_member_dto_1.UpdateMemberDto]),
+    __metadata("design:paramtypes", [Object, String, dto_1.UpdateMemberDto]),
     __metadata("design:returntype", void 0)
 ], MembersController.prototype, "update", null);
+__decorate([
+    (0, common_1.Delete)(':id'),
+    (0, swagger_1.ApiOperation)({ summary: 'Delete a specific member' }),
+    __param(0, (0, common_1.Request)()),
+    __param(1, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, String]),
+    __metadata("design:returntype", void 0)
+], MembersController.prototype, "remove", null);
 exports.MembersController = MembersController = __decorate([
     (0, swagger_1.ApiTags)('Members'),
     (0, swagger_1.ApiBearerAuth)(),

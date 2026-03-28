@@ -17,8 +17,7 @@ const common_1 = require("@nestjs/common");
 const swagger_1 = require("@nestjs/swagger");
 const passport_1 = require("@nestjs/passport");
 const features_service_1 = require("./features.service");
-const create_feature_dto_1 = require("./dto/create-feature.dto");
-const update_feature_dto_1 = require("./dto/update-feature.dto");
+const dto_1 = require("./dto");
 let FeaturesController = class FeaturesController {
     featuresService;
     constructor(featuresService) {
@@ -62,7 +61,7 @@ __decorate([
     __param(0, (0, common_1.Request)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, create_feature_dto_1.CreateFeatureDto]),
+    __metadata("design:paramtypes", [Object, dto_1.CreateFeatureDto]),
     __metadata("design:returntype", void 0)
 ], FeaturesController.prototype, "create", null);
 __decorate([
@@ -89,7 +88,7 @@ __decorate([
     __param(1, (0, common_1.Param)('id')),
     __param(2, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, update_feature_dto_1.UpdateFeatureDto]),
+    __metadata("design:paramtypes", [Object, String, dto_1.UpdateFeatureDto]),
     __metadata("design:returntype", void 0)
 ], FeaturesController.prototype, "update", null);
 __decorate([

@@ -23,9 +23,8 @@ export class Feature extends BaseEntity {
   @Column({ name: 'company_id' })
   companyId: string;
 
-  @ManyToOne(() => Company, (company) => company.features)
-  @JoinColumn({ name: 'company_id' })
-  company: Company;
+  // Relations removed - Member entity deprecated
+  // Use Company → User structure instead
 
   @ManyToMany(() => SubscriptionPlan, (plan) => plan.features)
   plans: SubscriptionPlan[];

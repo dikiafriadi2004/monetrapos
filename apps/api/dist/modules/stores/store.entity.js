@@ -9,11 +9,10 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Store = void 0;
+exports.Store = exports.StoreType = void 0;
 const typeorm_1 = require("typeorm");
 const entities_1 = require("../../common/entities");
-const enums_1 = require("../../common/enums");
-const member_entity_1 = require("../members/member.entity");
+const company_entity_1 = require("../companies/company.entity");
 const product_entity_1 = require("../products/product.entity");
 const category_entity_1 = require("../products/category.entity");
 const employee_entity_1 = require("../employees/employee.entity");
@@ -23,18 +22,32 @@ const discount_entity_1 = require("../discounts/discount.entity");
 const transaction_entity_1 = require("../transactions/transaction.entity");
 const payment_method_entity_1 = require("../payments/payment-method.entity");
 const qris_config_entity_1 = require("../payments/qris-config.entity");
+var StoreType;
+(function (StoreType) {
+    StoreType["RETAIL"] = "retail";
+    StoreType["FNB"] = "fnb";
+    StoreType["WAREHOUSE"] = "warehouse";
+    StoreType["SERVICE"] = "service";
+})(StoreType || (exports.StoreType = StoreType = {}));
 let Store = class Store extends entities_1.BaseEntity {
+    companyId;
+    company;
     name;
+    code;
     type;
-    address;
     phone;
-    logo;
+    email;
+    address;
+    city;
+    province;
+    postalCode;
+    latitude;
+    longitude;
     operationalHours;
     receiptHeader;
     receiptFooter;
+    receiptLogoUrl;
     isActive;
-    memberId;
-    member;
     products;
     categories;
     employees;
@@ -44,53 +57,82 @@ let Store = class Store extends entities_1.BaseEntity {
     transactions;
     paymentMethods;
     qrisConfigs;
+    deletedAt;
 };
 exports.Store = Store;
 __decorate([
-    (0, typeorm_1.Column)({ length: 100 }),
+    (0, typeorm_1.Column)({ name: 'company_id' }),
+    __metadata("design:type", String)
+], Store.prototype, "companyId", void 0);
+__decorate([
+    (0, typeorm_1.ManyToOne)(() => company_entity_1.Company),
+    (0, typeorm_1.JoinColumn)({ name: 'company_id' }),
+    __metadata("design:type", company_entity_1.Company)
+], Store.prototype, "company", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ length: 200 }),
     __metadata("design:type", String)
 ], Store.prototype, "name", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ type: 'enum', enum: enums_1.StoreType, default: enums_1.StoreType.OTHER }),
+    (0, typeorm_1.Column)({ length: 50, nullable: true }),
+    __metadata("design:type", String)
+], Store.prototype, "code", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'enum', enum: StoreType, default: StoreType.RETAIL }),
     __metadata("design:type", String)
 ], Store.prototype, "type", void 0);
-__decorate([
-    (0, typeorm_1.Column)({ type: 'text', nullable: true }),
-    __metadata("design:type", String)
-], Store.prototype, "address", void 0);
 __decorate([
     (0, typeorm_1.Column)({ length: 20, nullable: true }),
     __metadata("design:type", String)
 ], Store.prototype, "phone", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ nullable: true }),
+    (0, typeorm_1.Column)({ length: 100, nullable: true }),
     __metadata("design:type", String)
-], Store.prototype, "logo", void 0);
+], Store.prototype, "email", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ type: 'json', nullable: true }),
+    (0, typeorm_1.Column)({ type: 'text', nullable: true }),
+    __metadata("design:type", String)
+], Store.prototype, "address", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ length: 100, nullable: true }),
+    __metadata("design:type", String)
+], Store.prototype, "city", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ length: 100, nullable: true }),
+    __metadata("design:type", String)
+], Store.prototype, "province", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ length: 10, nullable: true, name: 'postal_code' }),
+    __metadata("design:type", String)
+], Store.prototype, "postalCode", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'decimal', precision: 10, scale: 8, nullable: true }),
+    __metadata("design:type", Number)
+], Store.prototype, "latitude", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'decimal', precision: 11, scale: 8, nullable: true }),
+    __metadata("design:type", Number)
+], Store.prototype, "longitude", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'json', nullable: true, name: 'operational_hours' }),
     __metadata("design:type", Object)
 ], Store.prototype, "operationalHours", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ type: 'text', nullable: true }),
+    (0, typeorm_1.Column)({ type: 'text', nullable: true, name: 'receipt_header' }),
     __metadata("design:type", String)
 ], Store.prototype, "receiptHeader", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ type: 'text', nullable: true }),
+    (0, typeorm_1.Column)({ type: 'text', nullable: true, name: 'receipt_footer' }),
     __metadata("design:type", String)
 ], Store.prototype, "receiptFooter", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ default: true }),
+    (0, typeorm_1.Column)({ length: 500, nullable: true, name: 'receipt_logo_url' }),
+    __metadata("design:type", String)
+], Store.prototype, "receiptLogoUrl", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ default: true, name: 'is_active' }),
     __metadata("design:type", Boolean)
 ], Store.prototype, "isActive", void 0);
-__decorate([
-    (0, typeorm_1.Column)({ name: 'member_id' }),
-    __metadata("design:type", String)
-], Store.prototype, "memberId", void 0);
-__decorate([
-    (0, typeorm_1.ManyToOne)(() => member_entity_1.Member, (member) => member.stores),
-    (0, typeorm_1.JoinColumn)({ name: 'member_id' }),
-    __metadata("design:type", member_entity_1.Member)
-], Store.prototype, "member", void 0);
 __decorate([
     (0, typeorm_1.OneToMany)(() => product_entity_1.Product, (product) => product.store),
     __metadata("design:type", Array)
@@ -127,6 +169,10 @@ __decorate([
     (0, typeorm_1.OneToMany)(() => qris_config_entity_1.QrisConfig, (qris) => qris.store),
     __metadata("design:type", Array)
 ], Store.prototype, "qrisConfigs", void 0);
+__decorate([
+    (0, typeorm_1.DeleteDateColumn)({ name: 'deleted_at' }),
+    __metadata("design:type", Date)
+], Store.prototype, "deletedAt", void 0);
 exports.Store = Store = __decorate([
     (0, typeorm_1.Entity)('stores')
 ], Store);

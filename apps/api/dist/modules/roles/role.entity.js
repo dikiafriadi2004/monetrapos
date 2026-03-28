@@ -14,7 +14,6 @@ const typeorm_1 = require("typeorm");
 const entities_1 = require("../../common/entities");
 const store_entity_1 = require("../stores/store.entity");
 const permission_entity_1 = require("./permission.entity");
-const employee_entity_1 = require("../employees/employee.entity");
 let Role = class Role extends entities_1.BaseEntity {
     name;
     description;
@@ -22,7 +21,6 @@ let Role = class Role extends entities_1.BaseEntity {
     storeId;
     store;
     permissions;
-    employees;
 };
 exports.Role = Role;
 __decorate([
@@ -55,10 +53,6 @@ __decorate([
     }),
     __metadata("design:type", Array)
 ], Role.prototype, "permissions", void 0);
-__decorate([
-    (0, typeorm_1.OneToMany)(() => employee_entity_1.Employee, (employee) => employee.role),
-    __metadata("design:type", Array)
-], Role.prototype, "employees", void 0);
 exports.Role = Role = __decorate([
     (0, typeorm_1.Entity)('roles')
 ], Role);

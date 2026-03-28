@@ -9,8 +9,20 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AppService = void 0;
 const common_1 = require("@nestjs/common");
 let AppService = class AppService {
-    getHello() {
-        return 'Hello World!';
+    getWelcome() {
+        return {
+            name: 'MonetRAPOS API',
+            version: '1.0.0',
+            status: 'running',
+            message: 'Welcome to MonetRAPOS API',
+            documentation: '/api/docs',
+            endpoints: {
+                health: '/api/v1/health',
+                healthSimple: '/api/v1/health/simple',
+                swagger: '/api/docs',
+            },
+            timestamp: new Date().toISOString(),
+        };
     }
 };
 exports.AppService = AppService;

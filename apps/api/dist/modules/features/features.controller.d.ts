@@ -1,6 +1,5 @@
 import { FeaturesService } from './features.service';
-import { CreateFeatureDto } from './dto/create-feature.dto';
-import { UpdateFeatureDto } from './dto/update-feature.dto';
+import { CreateFeatureDto, UpdateFeatureDto } from './dto';
 export declare class FeaturesController {
     private readonly featuresService;
     constructor(featuresService: FeaturesService);

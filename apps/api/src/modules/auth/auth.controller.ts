@@ -1,60 +1,56 @@
-import { Controller, Post, Body, UseGuards, Request } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
+import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import { AuthService } from './auth.service';
-import { LoginDto, RegisterCompanyDto, RegisterMemberDto, RefreshTokenDto } from './dto';
-import { RequireRoles, RolesGuard } from './guards';
-import { UserType } from '../../common/enums';
+import {
+  LoginDto,
+  RegisterCompanyDto,
+  VerifyEmailDto,
+  ForgotPasswordDto,
+  ResetPasswordDto,
+} from './dto';
 
-@ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(private readonly authService: AuthService) {}
 
-  // ────── Company Auth ──────
-
-  @Post('company/register')
-  @ApiOperation({ summary: 'Register a new company (platform owner)' })
-  registerCompany(@Body() dto: RegisterCompanyDto) {
+  @Post('register')
+  @HttpCode(HttpStatus.CREATED)
+  async register(@Body() dto: RegisterCompanyDto) {
     return this.authService.registerCompany(dto);
   }
 
-  @Post('company/login')
-  @ApiOperation({ summary: 'Company admin login' })
-  loginCompany(@Body() dto: LoginDto) {
-    return this.authService.loginCompany(dto);
+  @Post('verify-email')
+  @HttpCode(HttpStatus.OK)
+  async verifyEmail(@Body() dto: VerifyEmailDto) {
+    return this.authService.verifyEmail(dto);
   }
 
-  // ────── Member Auth ──────
-
-  @Post('member/register')
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
-  @RequireRoles(UserType.COMPANY_ADMIN)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Register a new member (by company admin)' })
-  registerMember(@Body() dto: RegisterMemberDto, @Request() req: any) {
-    return this.authService.registerMember(dto, req.user.id);
+  @Post('login')
+  @HttpCode(HttpStatus.OK)
+  async login(@Body() dto: LoginDto) {
+    return this.authService.login(dto);
   }
 
-  @Post('member/login')
-  @ApiOperation({ summary: 'Member login' })
-  loginMember(@Body() dto: LoginDto) {
-    return this.authService.loginMember(dto);
-  }
-
-  // ────── Employee Auth ──────
-
-  @Post('employee/login')
-  @ApiOperation({ summary: 'Employee/Cashier login' })
-  loginEmployee(@Body() dto: LoginDto) {
+  @Post('login/employee')
+  @HttpCode(HttpStatus.OK)
+  async loginEmployee(@Body() dto: LoginDto) {
     return this.authService.loginEmployee(dto);
   }
 
-  // ────── Token Refresh ──────
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto);
+  }
+
+  @Post('reset-password')
+  @HttpCode(HttpStatus.OK)
+  async resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
+  }
 
   @Post('refresh')
-  @ApiOperation({ summary: 'Refresh access token' })
-  refreshToken(@Body() dto: RefreshTokenDto) {
-    return this.authService.refreshToken(dto.refreshToken);
+  @HttpCode(HttpStatus.OK)
+  async refresh(@Body('refreshToken') refreshToken: string) {
+    return this.authService.refreshToken(refreshToken);
   }
 }

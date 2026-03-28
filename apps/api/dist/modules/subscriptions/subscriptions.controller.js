@@ -14,98 +14,86 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SubscriptionsController = void 0;
 const common_1 = require("@nestjs/common");
-const swagger_1 = require("@nestjs/swagger");
 const passport_1 = require("@nestjs/passport");
 const subscriptions_service_1 = require("./subscriptions.service");
-const create_plan_dto_1 = require("./dto/create-plan.dto");
-const update_plan_dto_1 = require("./dto/update-plan.dto");
+const dto_1 = require("./dto");
 let SubscriptionsController = class SubscriptionsController {
     subscriptionsService;
     constructor(subscriptionsService) {
         this.subscriptionsService = subscriptionsService;
     }
-    createPlan(req, dto) {
-        if (req.user.type !== 'company_admin') {
-            throw new common_1.UnauthorizedException('Only company admins can manage plans');
-        }
-        return this.subscriptionsService.createPlan(req.user.id, dto);
+    async subscribe(req, dto) {
+        const companyId = req.user.companyId;
+        return this.subscriptionsService.createSubscription(companyId, dto.planId);
     }
-    findAllPlans(req) {
-        if (req.user.type !== 'company_admin') {
-            throw new common_1.UnauthorizedException('Only company admins can manage plans');
-        }
-        return this.subscriptionsService.findAllPlans(req.user.id);
+    async getSubscriptions(req) {
+        const companyId = req.user.companyId;
+        return this.subscriptionsService.findActiveByCompany(companyId);
     }
-    findOnePlan(req, id) {
-        if (req.user.type !== 'company_admin') {
-            throw new common_1.UnauthorizedException('Only company admins can manage plans');
-        }
-        return this.subscriptionsService.findOnePlan(req.user.id, id);
+    async changePlan(req, dto) {
+        const companyId = req.user.companyId;
+        return this.subscriptionsService.changePlan(companyId, dto.newPlanId);
     }
-    updatePlan(req, id, dto) {
-        if (req.user.type !== 'company_admin') {
-            throw new common_1.UnauthorizedException('Only company admins can manage plans');
+    async cancel(req, dto) {
+        const companyId = req.user.companyId;
+        const subscription = await this.subscriptionsService.findActiveByCompany(companyId);
+        if (!subscription) {
+            throw new Error('No active subscription found');
         }
-        return this.subscriptionsService.updatePlan(req.user.id, id, dto);
+        return this.subscriptionsService.cancelSubscription(subscription.id, dto.reason);
     }
-    removePlan(req, id) {
-        if (req.user.type !== 'company_admin') {
-            throw new common_1.UnauthorizedException('Only company admins can manage plans');
+    async reactivate(req) {
+        const companyId = req.user.companyId;
+        const subscription = await this.subscriptionsService.findActiveByCompany(companyId);
+        if (!subscription) {
+            throw new Error('No subscription found');
         }
-        return this.subscriptionsService.removePlan(req.user.id, id);
+        return this.subscriptionsService.reactivateSubscription(subscription.id);
     }
 };
 exports.SubscriptionsController = SubscriptionsController;
 __decorate([
-    (0, common_1.Post)(),
-    (0, swagger_1.ApiOperation)({ summary: 'Create a new subscription plan' }),
+    (0, common_1.Post)('subscribe'),
+    (0, common_1.HttpCode)(common_1.HttpStatus.CREATED),
     __param(0, (0, common_1.Request)()),
     __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, create_plan_dto_1.CreatePlanDto]),
-    __metadata("design:returntype", void 0)
-], SubscriptionsController.prototype, "createPlan", null);
+    __metadata("design:paramtypes", [Object, dto_1.CreateSubscriptionDto]),
+    __metadata("design:returntype", Promise)
+], SubscriptionsController.prototype, "subscribe", null);
 __decorate([
     (0, common_1.Get)(),
-    (0, swagger_1.ApiOperation)({ summary: 'List all subscription plans' }),
     __param(0, (0, common_1.Request)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
-    __metadata("design:returntype", void 0)
-], SubscriptionsController.prototype, "findAllPlans", null);
+    __metadata("design:returntype", Promise)
+], SubscriptionsController.prototype, "getSubscriptions", null);
 __decorate([
-    (0, common_1.Get)(':id'),
-    (0, swagger_1.ApiOperation)({ summary: 'Get a specific subscription plan' }),
+    (0, common_1.Put)('change-plan'),
     __param(0, (0, common_1.Request)()),
-    __param(1, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String]),
-    __metadata("design:returntype", void 0)
-], SubscriptionsController.prototype, "findOnePlan", null);
+    __metadata("design:paramtypes", [Object, dto_1.ChangePlanDto]),
+    __metadata("design:returntype", Promise)
+], SubscriptionsController.prototype, "changePlan", null);
 __decorate([
-    (0, common_1.Patch)(':id'),
-    (0, swagger_1.ApiOperation)({ summary: 'Update a subscription plan' }),
+    (0, common_1.Post)('cancel'),
     __param(0, (0, common_1.Request)()),
-    __param(1, (0, common_1.Param)('id')),
-    __param(2, (0, common_1.Body)()),
+    __param(1, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String, update_plan_dto_1.UpdatePlanDto]),
-    __metadata("design:returntype", void 0)
-], SubscriptionsController.prototype, "updatePlan", null);
+    __metadata("design:paramtypes", [Object, dto_1.CancelSubscriptionDto]),
+    __metadata("design:returntype", Promise)
+], SubscriptionsController.prototype, "cancel", null);
 __decorate([
-    (0, common_1.Delete)(':id'),
-    (0, swagger_1.ApiOperation)({ summary: 'Delete a subscription plan' }),
+    (0, common_1.Post)('reactivate'),
     __param(0, (0, common_1.Request)()),
-    __param(1, (0, common_1.Param)('id')),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, String]),
-    __metadata("design:returntype", void 0)
-], SubscriptionsController.prototype, "removePlan", null);
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], SubscriptionsController.prototype, "reactivate", null);
 exports.SubscriptionsController = SubscriptionsController = __decorate([
-    (0, swagger_1.ApiTags)('Subscription Plans'),
-    (0, swagger_1.ApiBearerAuth)(),
+    (0, common_1.Controller)('subscriptions'),
     (0, common_1.UseGuards)((0, passport_1.AuthGuard)('jwt')),
-    (0, common_1.Controller)('subscriptions/plans'),
     __metadata("design:paramtypes", [subscriptions_service_1.SubscriptionsService])
 ], SubscriptionsController);
 //# sourceMappingURL=subscriptions.controller.js.map

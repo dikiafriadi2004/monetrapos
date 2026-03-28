@@ -1,5 +1,4 @@
 import { BaseEntity } from '../../common/entities';
-import { Company } from '../companies/company.entity';
 import { SubscriptionPlan } from '../subscriptions/subscription-plan.entity';
 export declare class Feature extends BaseEntity {
     name: string;
@@ -8,6 +7,5 @@ export declare class Feature extends BaseEntity {
     icon: string;
     isActive: boolean;
     companyId: string;
-    company: Company;
     plans: SubscriptionPlan[];
 }

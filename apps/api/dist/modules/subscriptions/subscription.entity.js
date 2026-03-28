@@ -9,52 +9,109 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.Subscription = void 0;
+exports.Subscription = exports.BillingCycle = exports.SubscriptionStatus = void 0;
 const typeorm_1 = require("typeorm");
 const entities_1 = require("../../common/entities");
-const enums_1 = require("../../common/enums");
-const member_entity_1 = require("../members/member.entity");
+const company_entity_1 = require("../companies/company.entity");
 const subscription_plan_entity_1 = require("./subscription-plan.entity");
+var SubscriptionStatus;
+(function (SubscriptionStatus) {
+    SubscriptionStatus["TRIAL"] = "trial";
+    SubscriptionStatus["ACTIVE"] = "active";
+    SubscriptionStatus["PAST_DUE"] = "past_due";
+    SubscriptionStatus["CANCELLED"] = "cancelled";
+    SubscriptionStatus["EXPIRED"] = "expired";
+})(SubscriptionStatus || (exports.SubscriptionStatus = SubscriptionStatus = {}));
+var BillingCycle;
+(function (BillingCycle) {
+    BillingCycle["MONTHLY"] = "monthly";
+    BillingCycle["YEARLY"] = "yearly";
+})(BillingCycle || (exports.BillingCycle = BillingCycle = {}));
 let Subscription = class Subscription extends entities_1.BaseEntity {
-    status;
-    startDate;
-    endDate;
-    memberId;
+    companyId;
+    company;
     planId;
-    member;
     plan;
+    status;
+    billingCycle;
+    currentPeriodStart;
+    currentPeriodEnd;
+    trialStart;
+    trialEnd;
+    cancelAtPeriodEnd;
+    cancelledAt;
+    cancellationReason;
+    price;
+    currency;
+    metadata;
 };
 exports.Subscription = Subscription;
 __decorate([
-    (0, typeorm_1.Column)({ type: 'enum', enum: enums_1.SubscriptionStatus, default: enums_1.SubscriptionStatus.ACTIVE }),
+    (0, typeorm_1.Column)({ name: 'company_id' }),
     __metadata("design:type", String)
-], Subscription.prototype, "status", void 0);
+], Subscription.prototype, "companyId", void 0);
 __decorate([
-    (0, typeorm_1.Column)({ type: 'datetime' }),
-    __metadata("design:type", Date)
-], Subscription.prototype, "startDate", void 0);
-__decorate([
-    (0, typeorm_1.Column)({ type: 'datetime' }),
-    __metadata("design:type", Date)
-], Subscription.prototype, "endDate", void 0);
-__decorate([
-    (0, typeorm_1.Column)({ name: 'member_id' }),
-    __metadata("design:type", String)
-], Subscription.prototype, "memberId", void 0);
+    (0, typeorm_1.ManyToOne)(() => company_entity_1.Company),
+    (0, typeorm_1.JoinColumn)({ name: 'company_id' }),
+    __metadata("design:type", company_entity_1.Company)
+], Subscription.prototype, "company", void 0);
 __decorate([
     (0, typeorm_1.Column)({ name: 'plan_id' }),
     __metadata("design:type", String)
 ], Subscription.prototype, "planId", void 0);
 __decorate([
-    (0, typeorm_1.ManyToOne)(() => member_entity_1.Member, (member) => member.subscriptions),
-    (0, typeorm_1.JoinColumn)({ name: 'member_id' }),
-    __metadata("design:type", member_entity_1.Member)
-], Subscription.prototype, "member", void 0);
-__decorate([
     (0, typeorm_1.ManyToOne)(() => subscription_plan_entity_1.SubscriptionPlan, (plan) => plan.subscriptions),
     (0, typeorm_1.JoinColumn)({ name: 'plan_id' }),
     __metadata("design:type", subscription_plan_entity_1.SubscriptionPlan)
 ], Subscription.prototype, "plan", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'enum', enum: SubscriptionStatus }),
+    __metadata("design:type", String)
+], Subscription.prototype, "status", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'enum', enum: BillingCycle, name: 'billing_cycle' }),
+    __metadata("design:type", String)
+], Subscription.prototype, "billingCycle", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'timestamp', nullable: true, name: 'current_period_start' }),
+    __metadata("design:type", Date)
+], Subscription.prototype, "currentPeriodStart", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'timestamp', nullable: true, name: 'current_period_end' }),
+    __metadata("design:type", Date)
+], Subscription.prototype, "currentPeriodEnd", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'timestamp', nullable: true, name: 'trial_start' }),
+    __metadata("design:type", Date)
+], Subscription.prototype, "trialStart", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'timestamp', nullable: true, name: 'trial_end' }),
+    __metadata("design:type", Date)
+], Subscription.prototype, "trialEnd", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ default: false, name: 'cancel_at_period_end' }),
+    __metadata("design:type", Boolean)
+], Subscription.prototype, "cancelAtPeriodEnd", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'timestamp', nullable: true, name: 'cancelled_at' }),
+    __metadata("design:type", Date)
+], Subscription.prototype, "cancelledAt", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'text', nullable: true, name: 'cancellation_reason' }),
+    __metadata("design:type", String)
+], Subscription.prototype, "cancellationReason", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'decimal', precision: 12, scale: 2 }),
+    __metadata("design:type", Number)
+], Subscription.prototype, "price", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ length: 3, default: 'IDR' }),
+    __metadata("design:type", String)
+], Subscription.prototype, "currency", void 0);
+__decorate([
+    (0, typeorm_1.Column)({ type: 'json', default: '{}' }),
+    __metadata("design:type", Object)
+], Subscription.prototype, "metadata", void 0);
 exports.Subscription = Subscription = __decorate([
     (0, typeorm_1.Entity)('subscriptions')
 ], Subscription);
