@@ -29,7 +29,7 @@ export default function MembersPage() {
 
   const fetchMembers = async () => {
     try {
-      const data: any = await api.get('/members');
+      const data: any = await api.get('/admin/companies');
       setMembers(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to fetch members', err);
@@ -47,7 +47,7 @@ export default function MembersPage() {
     const action = newStatus === 'suspended' ? 'suspend' : 'activate';
     if (!confirm(`Are you sure you want to ${action} "${member.name}"?`)) return;
     try {
-      await api.patch(`/members/${member.id}`, { status: newStatus });
+      await api.patch(`/admin/companies/${member.id}/status`, { status: newStatus });
       setMembers(prev => prev.map(m => m.id === member.id ? { ...m, status: newStatus } : m));
     } catch (err) {
       alert(`Failed to ${action} member`);
@@ -57,7 +57,7 @@ export default function MembersPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this member? This action cannot be undone.')) return;
     try {
-      await api.delete(`/members/${id}`);
+      await api.delete(`/admin/companies/${id}`);
       setMembers(prev => prev.filter(m => m.id !== id));
     } catch (err) {
       alert('Failed to delete member');
@@ -86,14 +86,14 @@ export default function MembersPage() {
     setSubmitting(true);
     try {
       if (editingMember) {
-        await api.patch(`/members/${editingMember.id}`, formData);
+        await api.patch(`/admin/companies/${editingMember.id}`, formData);
       } else {
-        await api.post('/auth/member/register', { ...formData, password: 'default123' });
+        await api.post('/admin/companies', { ...formData, password: 'Monetra@123' });
       }
       await fetchMembers();
       setModalOpen(false);
-    } catch (err) {
-      alert('Failed to save member');
+    } catch (err: any) {
+      alert(err?.message || 'Failed to save member');
     } finally {
       setSubmitting(false);
     }

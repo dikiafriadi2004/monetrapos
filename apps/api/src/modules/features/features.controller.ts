@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, Request, UseGuards, UnauthorizedException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Request,
+  UseGuards,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { FeaturesService } from './features.service';
@@ -15,7 +26,9 @@ export class FeaturesController {
   @ApiOperation({ summary: 'Create a new feature for the marketplace' })
   create(@Request() req: any, @Body() dto: CreateFeatureDto) {
     if (req.user.type !== 'company_admin') {
-      throw new UnauthorizedException('Only company admins can manage features');
+      throw new UnauthorizedException(
+        'Only company admins can manage features',
+      );
     }
     return this.featuresService.create(req.user.id, dto);
   }
@@ -24,7 +37,9 @@ export class FeaturesController {
   @ApiOperation({ summary: 'List all features' })
   findAll(@Request() req: any) {
     if (req.user.type !== 'company_admin') {
-      throw new UnauthorizedException('Only company admins can manage features');
+      throw new UnauthorizedException(
+        'Only company admins can manage features',
+      );
     }
     return this.featuresService.findAll(req.user.id);
   }
@@ -33,16 +48,24 @@ export class FeaturesController {
   @ApiOperation({ summary: 'Get a specific feature' })
   findOne(@Request() req: any, @Param('id') id: string) {
     if (req.user.type !== 'company_admin') {
-      throw new UnauthorizedException('Only company admins can manage features');
+      throw new UnauthorizedException(
+        'Only company admins can manage features',
+      );
     }
     return this.featuresService.findOne(req.user.id, id);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update a feature' })
-  update(@Request() req: any, @Param('id') id: string, @Body() dto: UpdateFeatureDto) {
+  update(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() dto: UpdateFeatureDto,
+  ) {
     if (req.user.type !== 'company_admin') {
-      throw new UnauthorizedException('Only company admins can manage features');
+      throw new UnauthorizedException(
+        'Only company admins can manage features',
+      );
     }
     return this.featuresService.update(req.user.id, id, dto);
   }
@@ -51,7 +74,9 @@ export class FeaturesController {
   @ApiOperation({ summary: 'Delete a feature' })
   remove(@Request() req: any, @Param('id') id: string) {
     if (req.user.type !== 'company_admin') {
-      throw new UnauthorizedException('Only company admins can manage features');
+      throw new UnauthorizedException(
+        'Only company admins can manage features',
+      );
     }
     return this.featuresService.remove(req.user.id, id);
   }

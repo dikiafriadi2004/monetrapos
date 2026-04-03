@@ -1,4 +1,13 @@
-import { IsString, IsOptional, IsNumber, IsEnum, IsArray, ValidateNested, MaxLength, Min } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsNumber,
+  IsEnum,
+  IsArray,
+  ValidateNested,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PaymentMethodType } from '../../../common/enums';
@@ -92,20 +101,46 @@ export class CreateTransactionDto {
   @IsString()
   notes?: string;
 
-  @ApiPropertyOptional({ example: 'John' })
+  @ApiPropertyOptional({ example: 'customer-uuid' })
+  @IsOptional()
+  @IsString()
+  customerId?: string;
+
+  @ApiPropertyOptional({ example: 'John Doe' })
   @IsOptional()
   @IsString()
   customerName?: string;
+
+  @ApiPropertyOptional({ example: '081234567890' })
+  @IsOptional()
+  @IsString()
+  customerPhone?: string;
 
   @ApiPropertyOptional({ example: 'employee-uuid' })
   @IsOptional()
   @IsString()
   employeeId?: string;
 
+  @ApiPropertyOptional({ example: 'shift-uuid' })
+  @IsOptional()
+  @IsString()
+  shiftId?: string;
+
   @ApiPropertyOptional({ example: 'Jane Kasir' })
   @IsOptional()
   @IsString()
   employeeName?: string;
+
+  @ApiPropertyOptional({
+    description: 'Split payment methods',
+    example: [
+      { method: 'cash', amount: 50000 },
+      { method: 'qris', amount: 56000 },
+    ],
+  })
+  @IsOptional()
+  @IsArray()
+  paymentMethods?: Array<{ method: string; amount: number }>;
 
   @ApiProperty({ type: [CreateTransactionItemDto] })
   @IsArray()
@@ -119,4 +154,9 @@ export class VoidTransactionDto {
   @IsString()
   @MaxLength(500)
   reason: string;
+
+  @ApiPropertyOptional({ example: 'employee-uuid' })
+  @IsOptional()
+  @IsString()
+  voidedBy?: string;
 }

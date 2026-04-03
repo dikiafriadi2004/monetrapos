@@ -43,7 +43,13 @@ export class Shift extends BaseEntity {
   @Column({ type: 'decimal', precision: 12, scale: 2, name: 'opening_cash' })
   openingCash: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true, name: 'closing_cash' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+    name: 'closing_cash',
+  })
   closingCash: number;
 
   // Cash Breakdown (by denomination)
@@ -54,33 +60,81 @@ export class Shift extends BaseEntity {
   closingCashBreakdown: Record<string, number>;
 
   // Expected vs Actual
-  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true, name: 'expected_cash' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+    name: 'expected_cash',
+  })
   expectedCash: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true, name: 'cash_difference' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+    name: 'cash_difference',
+  })
   cashDifference: number;
 
   // Sales Summary
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, name: 'total_sales' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    name: 'total_sales',
+  })
   totalSales: number;
 
   @Column({ default: 0, name: 'total_transactions' })
   totalTransactions: number;
 
   // Payment Method Breakdown
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, name: 'cash_sales' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    name: 'cash_sales',
+  })
   cashSales: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, name: 'card_sales' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    name: 'card_sales',
+  })
   cardSales: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, name: 'qris_sales' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    name: 'qris_sales',
+  })
   qrisSales: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, name: 'ewallet_sales' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    name: 'ewallet_sales',
+  })
   ewalletSales: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, name: 'bank_transfer_sales' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    name: 'bank_transfer_sales',
+  })
   bankTransferSales: number;
 
   // Status

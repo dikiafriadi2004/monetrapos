@@ -1,4 +1,10 @@
-import { Entity, Column, ManyToOne, JoinColumn, DeleteDateColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  DeleteDateColumn,
+} from 'typeorm';
 import { BaseEntity } from '../../common/entities';
 import { Company } from '../companies/company.entity';
 import { Store } from '../stores/store.entity';
@@ -20,6 +26,9 @@ export class Customer extends BaseEntity {
   store: Store;
 
   // Basic Info
+  @Column({ length: 50, unique: true, name: 'customer_number' })
+  customerNumber: string; // Auto-generated: CUST-YYYYMMDD-XXXX
+
   @Column({ length: 150 })
   name: string;
 
@@ -43,11 +52,38 @@ export class Customer extends BaseEntity {
   @Column({ default: 0, name: 'loyalty_points' })
   loyaltyPoints: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, name: 'total_spent' })
+  @Column({
+    type: 'enum',
+    enum: ['regular', 'silver', 'gold', 'platinum'],
+    default: 'regular',
+    name: 'loyalty_tier',
+  })
+  loyaltyTier: string;
+
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    name: 'total_spent',
+  })
   totalSpent: number;
 
   @Column({ default: 0, name: 'total_orders' })
   totalOrders: number;
+
+  @Column({ type: 'date', nullable: true, name: 'date_of_birth' })
+  dateOfBirth: Date;
+
+  @Column({
+    type: 'enum',
+    enum: ['male', 'female', 'other'],
+    nullable: true,
+  })
+  gender: string;
+
+  @Column({ type: 'text', nullable: true })
+  notes: string;
 
   // Dates
   @Column({ type: 'timestamp', nullable: true, name: 'first_purchase_at' })

@@ -1,4 +1,12 @@
-import { Entity, Column, ManyToOne, ManyToMany, JoinColumn, JoinTable, OneToMany } from 'typeorm';
+import {
+  Entity,
+  Column,
+  ManyToOne,
+  ManyToMany,
+  JoinColumn,
+  JoinTable,
+  OneToMany,
+} from 'typeorm';
 import { BaseEntity } from '../../common/entities';
 import { Store } from '../stores/store.entity';
 import { Permission } from './permission.entity';
@@ -22,7 +30,9 @@ export class Role extends BaseEntity {
   @JoinColumn({ name: 'store_id' })
   store: Store;
 
-  @ManyToMany(() => Permission, (permission) => permission.roles, { eager: true })
+  @ManyToMany(() => Permission, (permission) => permission.roles, {
+    eager: true,
+  })
   @JoinTable({
     name: 'role_permissions',
     joinColumn: { name: 'role_id', referencedColumnName: 'id' },

@@ -37,7 +37,12 @@ export class PaymentTransaction extends BaseEntity {
   @Column({ type: 'enum', enum: PaymentGateway })
   gateway: PaymentGateway;
 
-  @Column({ unique: true, length: 100, nullable: true, name: 'gateway_transaction_id' })
+  @Column({
+    unique: true,
+    length: 100,
+    nullable: true,
+    name: 'gateway_transaction_id',
+  })
   gatewayTransactionId: string;
 
   // Amount

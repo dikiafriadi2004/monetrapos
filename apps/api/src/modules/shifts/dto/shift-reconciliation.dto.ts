@@ -1,4 +1,11 @@
-import { IsUUID, IsNumber, IsString, IsOptional, ValidateNested, Min } from 'class-validator';
+import {
+  IsUUID,
+  IsNumber,
+  IsString,
+  IsOptional,
+  ValidateNested,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { CashDeclarationDto } from './cash-declaration.dto';
@@ -33,7 +40,10 @@ export class ShiftReconciliationDto {
   @Min(0)
   actualEwallet: number;
 
-  @ApiProperty({ required: false, example: 'Cash variance due to customer tips' })
+  @ApiProperty({
+    required: false,
+    example: 'Cash variance due to customer tips',
+  })
   @IsOptional()
   @IsString()
   notes?: string;

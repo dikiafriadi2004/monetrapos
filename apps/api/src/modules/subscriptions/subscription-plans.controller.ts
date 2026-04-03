@@ -25,6 +25,14 @@ export class SubscriptionPlansController {
   }
 
   /**
+   * Get all active plans with duration options (PUBLIC)
+   */
+  @Get('with-durations')
+  async findAllWithDurations() {
+    return this.subscriptionPlansService.findAllActiveWithDurations();
+  }
+
+  /**
    * Get plan by slug (PUBLIC)
    */
   @Get('slug/:slug')
@@ -38,6 +46,22 @@ export class SubscriptionPlansController {
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.subscriptionPlansService.findOne(id);
+  }
+
+  /**
+   * Get plan with duration options (PUBLIC)
+   */
+  @Get(':id/with-durations')
+  async findOneWithDurations(@Param('id') id: string) {
+    return this.subscriptionPlansService.findOneWithDurations(id);
+  }
+
+  /**
+   * Get duration options for a plan (PUBLIC)
+   */
+  @Get(':id/durations')
+  async getDurations(@Param('id') id: string) {
+    return this.subscriptionPlansService.getDurationsByPlan(id);
   }
 
   // ============================================
@@ -123,5 +147,36 @@ export class SubscriptionPlansController {
   async seed() {
     await this.subscriptionPlansService.seedDefaultPlans();
     return { message: 'Plans seeded successfully' };
+  }
+
+  /**
+   * Create or update duration option for a plan (ADMIN ONLY)
+   */
+  @Post(':id/durations')
+  // @UseGuards(JwtAuthGuard, AdminGuard)
+  async createDuration(
+    @Param('id') planId: string,
+    @Body() body: { durationMonths: number },
+  ) {
+    return this.subscriptionPlansService.createOrUpdateDuration(
+      planId,
+      body.durationMonths,
+    );
+  }
+
+  /**
+   * Delete duration option (ADMIN ONLY)
+   */
+  @Delete(':id/durations/:durationMonths')
+  // @UseGuards(JwtAuthGuard, AdminGuard)
+  async removeDuration(
+    @Param('id') planId: string,
+    @Param('durationMonths') durationMonths: string,
+  ) {
+    await this.subscriptionPlansService.removeDuration(
+      planId,
+      parseInt(durationMonths, 10),
+    );
+    return { message: 'Duration option deleted successfully' };
   }
 }

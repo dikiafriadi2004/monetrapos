@@ -4,11 +4,13 @@ import { Company } from '../companies/company.entity';
 import { SubscriptionPlan } from './subscription-plan.entity';
 
 export enum SubscriptionStatus {
+  PENDING = 'pending',
   TRIAL = 'trial',
   ACTIVE = 'active',
   PAST_DUE = 'past_due',
-  CANCELLED = 'cancelled',
   EXPIRED = 'expired',
+  SUSPENDED = 'suspended',
+  CANCELLED = 'cancelled',
 }
 
 export enum BillingCycle {
@@ -47,6 +49,18 @@ export class Subscription extends BaseEntity {
   @Column({ type: 'timestamp', nullable: true, name: 'current_period_end' })
   currentPeriodEnd: Date;
 
+  @Column({ type: 'date', nullable: true, name: 'start_date' })
+  startDate: Date;
+
+  @Column({ type: 'date', nullable: true, name: 'end_date' })
+  endDate: Date;
+
+  @Column({ type: 'date', nullable: true, name: 'grace_period_end_date' })
+  gracePeriodEndDate: Date;
+
+  @Column({ type: 'int', nullable: true, name: 'duration_months' })
+  durationMonths: number;
+
   @Column({ type: 'timestamp', nullable: true, name: 'trial_start' })
   trialStart: Date;
 
@@ -73,4 +87,12 @@ export class Subscription extends BaseEntity {
   // Metadata
   @Column({ type: 'json', default: '{}' })
   metadata: Record<string, any>;
+
+  // Pending renewal info (temporary storage before payment)
+  @Column({ type: 'json', nullable: true, name: 'pending_renewal' })
+  pendingRenewal: {
+    durationMonths: number;
+    newEndDate: string;
+    amount: number;
+  };
 }

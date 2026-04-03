@@ -1,12 +1,13 @@
 'use client';
 
-import { Trash2, Plus, Minus } from 'lucide-react';
+import { Trash2, Plus, Minus, Tag } from 'lucide-react';
 import { CartItem } from '@/types';
 
 interface CartProps {
   items: CartItem[];
   onUpdateQuantity: (index: number, quantity: number) => void;
   onRemoveItem: (index: number) => void;
+  onItemDiscount?: (index: number) => void;
   subtotal: number;
   tax: number;
   discount: number;
@@ -17,6 +18,7 @@ export default function Cart({
   items,
   onUpdateQuantity,
   onRemoveItem,
+  onItemDiscount,
   subtotal,
   tax,
   discount,
@@ -47,12 +49,23 @@ export default function Cart({
                       Rp {item.price.toLocaleString('id-ID')}
                     </div>
                   </div>
-                  <button
-                    onClick={() => onRemoveItem(index)}
-                    className="text-red-500 hover:text-red-700"
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                  <div className="flex items-center space-x-1">
+                    {onItemDiscount && (
+                      <button
+                        onClick={() => onItemDiscount(index)}
+                        className="text-green-500 hover:text-green-700 p-1"
+                        title="Apply item discount"
+                      >
+                        <Tag size={18} />
+                      </button>
+                    )}
+                    <button
+                      onClick={() => onRemoveItem(index)}
+                      className="text-red-500 hover:text-red-700 p-1"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-between">

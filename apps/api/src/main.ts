@@ -3,10 +3,18 @@ import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // Serve static files (for invoice PDFs)
+  app.useStaticAssets(join(process.cwd(), 'uploads'), {
+    prefix: '/uploads/',
+  });
 
   // Global prefix
   app.setGlobalPrefix('api/v1');
@@ -14,7 +22,11 @@ async function bootstrap() {
   // CORS
   const allowedOrigins = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(',')
-    : ['http://localhost:4402', 'http://localhost:4403', 'http://localhost:4404'];
+    : [
+        'http://localhost:4402',
+        'http://localhost:4403',
+        'http://localhost:4404',
+      ];
 
   app.enableCors({
     origin: allowedOrigins,
@@ -25,6 +37,9 @@ async function bootstrap() {
 
   // Global Exception Filter
   app.useGlobalFilters(new AllExceptionsFilter());
+
+  // Global Logging Interceptor
+  app.useGlobalInterceptors(new LoggingInterceptor());
 
   // Validation
   app.useGlobalPipes(
@@ -60,9 +75,9 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  const port = process.env.PORT || 3003;
+  const port = process.env.PORT || 4404;
   await app.listen(port);
-  
+
   logger.log(`🚀 MonetRAPOS API running on http://localhost:${port}`);
   logger.log(`📚 Swagger docs: http://localhost:${port}/api/docs`);
   logger.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);

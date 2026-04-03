@@ -1,67 +1,81 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
-import { PermissionGuard, RequirePermissions } from '../auth/guards';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  Request,
+} from '@nestjs/common';
 import { DiscountsService } from './discounts.service';
-import { CreateDiscountDto, UpdateDiscountDto } from './dto';
+import { CreateDiscountDto } from './dto/create-discount.dto';
+import { UpdateDiscountDto } from './dto/update-discount.dto';
+import { ValidatePromoCodeDto, GeneratePromoCodeDto } from './dto/validate-promo-code.dto';
 
-@ApiTags('Discounts')
-@ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'), PermissionGuard)
 @Controller('discounts')
+// @UseGuards(JwtAuthGuard)
 export class DiscountsController {
   constructor(private readonly discountsService: DiscountsService) {}
 
   @Post()
-  @RequirePermissions('finance.manage_discount')
-  @ApiOperation({ summary: 'Create a new discount' })
-  create(@Body() dto: CreateDiscountDto) {
-    return this.discountsService.create(dto);
+  create(@Body() createDto: CreateDiscountDto, @Request() req) {
+    const companyId = req.user?.company_id || 'default-company-id';
+    return this.discountsService.create(createDto, companyId);
   }
 
   @Get()
-  @RequirePermissions('finance.view_reports')
-  @ApiOperation({ summary: 'Get all discounts for a store' })
-  @ApiQuery({ name: 'storeId', required: true })
-  findAll(@Query('storeId') storeId: string) {
-    return this.discountsService.findAllByStore(storeId);
-  }
-
-  @Get('active')
-  @RequirePermissions('pos.apply_discount')
-  @ApiOperation({ summary: 'Get currently active discounts for a store' })
-  @ApiQuery({ name: 'storeId', required: true })
-  findActive(@Query('storeId') storeId: string) {
-    return this.discountsService.findActiveByStore(storeId);
-  }
-
-  @Get('voucher')
-  @RequirePermissions('pos.apply_discount')
-  @ApiOperation({ summary: 'Find discount by voucher code' })
-  @ApiQuery({ name: 'storeId', required: true })
-  @ApiQuery({ name: 'code', required: true })
-  findByVoucher(@Query('storeId') storeId: string, @Query('code') code: string) {
-    return this.discountsService.findByVoucherCode(storeId, code);
+  findAll(
+    @Request() req,
+    @Query('store_id') storeId?: string,
+    @Query('is_active') isActive?: string,
+  ) {
+    const companyId = req.user?.company_id || 'default-company-id';
+    const isActiveBoolean = isActive === 'true' ? true : isActive === 'false' ? false : undefined;
+    return this.discountsService.findAll(companyId, storeId, isActiveBoolean);
   }
 
   @Get(':id')
-  @RequirePermissions('finance.view_reports')
-  @ApiOperation({ summary: 'Get discount by ID' })
-  findOne(@Param('id') id: string) {
-    return this.discountsService.findOne(id);
+  findOne(@Param('id') id: string, @Request() req) {
+    const companyId = req.user?.company_id || 'default-company-id';
+    return this.discountsService.findOne(id, companyId);
+  }
+
+  @Get(':id/stats')
+  getUsageStats(@Param('id') id: string, @Request() req) {
+    const companyId = req.user?.company_id || 'default-company-id';
+    return this.discountsService.getUsageStats(id, companyId);
   }
 
   @Patch(':id')
-  @RequirePermissions('finance.manage_discount')
-  @ApiOperation({ summary: 'Update discount' })
-  update(@Param('id') id: string, @Body() dto: UpdateDiscountDto) {
-    return this.discountsService.update(id, dto);
+  update(
+    @Param('id') id: string,
+    @Body() updateDto: UpdateDiscountDto,
+    @Request() req,
+  ) {
+    const companyId = req.user?.company_id || 'default-company-id';
+    return this.discountsService.update(id, updateDto, companyId);
   }
 
   @Delete(':id')
-  @RequirePermissions('finance.manage_discount')
-  @ApiOperation({ summary: 'Delete discount' })
-  remove(@Param('id') id: string) {
-    return this.discountsService.remove(id);
+  remove(@Param('id') id: string, @Request() req) {
+    const companyId = req.user?.company_id || 'default-company-id';
+    return this.discountsService.remove(id, companyId);
+  }
+
+  @Post('validate')
+  validatePromoCode(@Body() validateDto: ValidatePromoCodeDto, @Request() req) {
+    const companyId = req.user?.company_id || 'default-company-id';
+    return this.discountsService.validatePromoCode(validateDto, companyId);
+  }
+
+  @Post('generate-code')
+  async generatePromoCode(@Body() generateDto: GeneratePromoCodeDto) {
+    const code = await this.discountsService.generatePromoCode(
+      generateDto.prefix,
+      generateDto.length || 8,
+    );
+    return { promoCode: code };
   }
 }

@@ -8,12 +8,13 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run api:dev\" \"npm run company-admin:dev\" \"npm run member-admin:dev\"",
+    "dev": "concurrently --names \"API,COMPANY,MEMBER\" --prefix-colors \"blue,green,yellow\" \"npm run api:dev\" \"npm run company-admin:dev\" \"npm run member-admin:dev\"",
     "api:dev": "npm run dev --workspace=apps/api",
     "api:build": "npm run build --workspace=apps/api",
     "api:start": "npm run start:prod --workspace=apps/api",
-    "company-admin:dev": "npm run dev --workspace=apps/company-admin -- -p 3000",
-    "member-admin:dev": "npm run dev --workspace=apps/member-admin -- -p 3001"
+    "company-admin:dev": "npm run dev --workspace=apps/company-admin",
+    "member-admin:dev": "npm run dev --workspace=apps/member-admin",
+    "build": "npm run build --workspace=apps/api && npm run build --workspace=apps/company-admin && npm run build --workspace=apps/member-admin"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

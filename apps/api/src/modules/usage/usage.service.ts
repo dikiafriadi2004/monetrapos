@@ -104,7 +104,10 @@ export class UsageService {
    * Enforce limit - throw error if exceeded
    */
   async enforceLimit(companyId: string, metric: UsageMetric): Promise<void> {
-    const { allowed, current, limit } = await this.checkLimit(companyId, metric);
+    const { allowed, current, limit } = await this.checkLimit(
+      companyId,
+      metric,
+    );
 
     if (!allowed) {
       throw new ForbiddenException(
@@ -117,7 +120,11 @@ export class UsageService {
    * Get usage summary for all metrics
    */
   async getUsageSummary(companyId: string): Promise<{
-    [key in UsageMetric]?: { current: number; limit: number; percentage: number };
+    [key in UsageMetric]?: {
+      current: number;
+      limit: number;
+      percentage: number;
+    };
   }> {
     const company = await this.companyRepository.findOne({
       where: { id: companyId },

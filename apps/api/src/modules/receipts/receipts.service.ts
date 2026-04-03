@@ -3,7 +3,12 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Transaction } from '../transactions/transaction.entity';
 import { Store } from '../stores/store.entity';
-import { GenerateReceiptDto, EmailReceiptDto, PrintReceiptDto, ReceiptFormat } from './dto';
+import {
+  GenerateReceiptDto,
+  EmailReceiptDto,
+  PrintReceiptDto,
+  ReceiptFormat,
+} from './dto';
 
 @Injectable()
 export class ReceiptsService {
@@ -65,7 +70,7 @@ export class ReceiptsService {
     }
 
     const receiptData = this.buildReceiptData(transaction, store);
-    
+
     // TODO: Integrate with email service (SendGrid/AWS SES)
     return {
       success: true,
@@ -155,17 +160,39 @@ export class ReceiptsService {
     });
 
     receipt += this.line(32) + '\n';
-    receipt += this.rightAlign(`Subtotal: ${this.formatCurrency(data.summary.subtotal)}`, 32) + '\n';
+    receipt +=
+      this.rightAlign(
+        `Subtotal: ${this.formatCurrency(data.summary.subtotal)}`,
+        32,
+      ) + '\n';
     if (data.summary.discountAmount > 0) {
-      receipt += this.rightAlign(`Discount: ${this.formatCurrency(data.summary.discountAmount)}`, 32) + '\n';
+      receipt +=
+        this.rightAlign(
+          `Discount: ${this.formatCurrency(data.summary.discountAmount)}`,
+          32,
+        ) + '\n';
     }
     if (data.summary.taxAmount > 0) {
-      receipt += this.rightAlign(`Tax: ${this.formatCurrency(data.summary.taxAmount)}`, 32) + '\n';
+      receipt +=
+        this.rightAlign(
+          `Tax: ${this.formatCurrency(data.summary.taxAmount)}`,
+          32,
+        ) + '\n';
     }
     receipt += this.line(32) + '\n';
-    receipt += this.rightAlign(`TOTAL: ${this.formatCurrency(data.summary.total)}`, 32) + '\n';
-    receipt += this.rightAlign(`Paid: ${this.formatCurrency(data.summary.paidAmount)}`, 32) + '\n';
-    receipt += this.rightAlign(`Change: ${this.formatCurrency(data.summary.changeAmount)}`, 32) + '\n';
+    receipt +=
+      this.rightAlign(`TOTAL: ${this.formatCurrency(data.summary.total)}`, 32) +
+      '\n';
+    receipt +=
+      this.rightAlign(
+        `Paid: ${this.formatCurrency(data.summary.paidAmount)}`,
+        32,
+      ) + '\n';
+    receipt +=
+      this.rightAlign(
+        `Change: ${this.formatCurrency(data.summary.changeAmount)}`,
+        32,
+      ) + '\n';
     receipt += this.line(32) + '\n';
     receipt += this.centerText('Thank You!', 32) + '\n';
     receipt += this.centerText('Please Come Again', 32) + '\n';
@@ -211,14 +238,18 @@ export class ReceiptsService {
             </tr>
           </thead>
           <tbody>
-            ${data.items.map((item: any) => `
+            ${data.items
+              .map(
+                (item: any) => `
               <tr>
                 <td>${item.name}</td>
                 <td>${item.quantity}</td>
                 <td>${this.formatCurrency(item.price)}</td>
                 <td>${this.formatCurrency(item.subtotal)}</td>
               </tr>
-            `).join('')}
+            `,
+              )
+              .join('')}
           </tbody>
         </table>
         <div style="margin-top: 20px; text-align: right;">

@@ -60,6 +60,9 @@ export class Transaction extends BaseEntity {
   customer: Customer;
 
   // Invoice
+  @Column({ unique: true, length: 50, name: 'transaction_number' })
+  transactionNumber: string;
+
   @Column({ unique: true, length: 50, name: 'invoice_number' })
   invoiceNumber: string;
 
@@ -67,13 +70,31 @@ export class Transaction extends BaseEntity {
   @Column({ type: 'decimal', precision: 12, scale: 2 })
   subtotal: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, name: 'tax_amount' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    name: 'tax_amount',
+  })
   taxAmount: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, name: 'discount_amount' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    name: 'discount_amount',
+  })
   discountAmount: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, name: 'service_charge' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    name: 'service_charge',
+  })
   serviceCharge: number;
 
   @Column({ type: 'decimal', precision: 12, scale: 2 })
@@ -86,7 +107,13 @@ export class Transaction extends BaseEntity {
   @Column({ type: 'decimal', precision: 12, scale: 2, name: 'paid_amount' })
   paidAmount: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, name: 'change_amount' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    name: 'change_amount',
+  })
   changeAmount: number;
 
   // Customer Info (denormalized)
@@ -97,7 +124,11 @@ export class Transaction extends BaseEntity {
   customerPhone: string;
 
   // Status
-  @Column({ type: 'enum', enum: TransactionStatus, default: TransactionStatus.COMPLETED })
+  @Column({
+    type: 'enum',
+    enum: TransactionStatus,
+    default: TransactionStatus.COMPLETED,
+  })
   status: TransactionStatus;
 
   // Void/Refund
@@ -123,6 +154,8 @@ export class Transaction extends BaseEntity {
   metadata: Record<string, any>;
 
   // Relations
-  @OneToMany(() => TransactionItem, (item) => item.transaction, { cascade: true })
+  @OneToMany(() => TransactionItem, (item) => item.transaction, {
+    cascade: true,
+  })
   items: TransactionItem[];
 }

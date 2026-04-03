@@ -1,6 +1,14 @@
-import { Entity, Column, ManyToOne, OneToMany, JoinColumn, DeleteDateColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  ManyToOne,
+  OneToMany,
+  JoinColumn,
+  DeleteDateColumn,
+} from 'typeorm';
 import { BaseEntity } from '../../common/entities';
 import { Company } from '../companies/company.entity';
+import { User } from '../users/user.entity';
 import { Product } from '../products/product.entity';
 import { Category } from '../products/category.entity';
 import { Employee } from '../employees/employee.entity';
@@ -65,8 +73,16 @@ export class Store extends BaseEntity {
   longitude: number;
 
   // Operations
-  @Column({ type: 'json', nullable: true, name: 'operational_hours' })
-  operationalHours: Record<string, { open: string; close: string }>;
+  @Column({ type: 'json', nullable: true, name: 'opening_hours' })
+  openingHours: Record<string, { open: string; close: string }>;
+
+  // Manager
+  @Column({ name: 'manager_id', nullable: true })
+  managerId: string;
+
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'manager_id' })
+  manager: User;
 
   // Receipt Settings
   @Column({ type: 'text', nullable: true, name: 'receipt_header' })

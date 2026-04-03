@@ -1,4 +1,11 @@
-import { Entity, Column, ManyToOne, JoinColumn, OneToMany, DeleteDateColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  ManyToOne,
+  JoinColumn,
+  OneToMany,
+  DeleteDateColumn,
+} from 'typeorm';
 import { BaseEntity } from '../../common/entities';
 import { Company } from '../companies/company.entity';
 import { Store } from '../stores/store.entity';
@@ -30,7 +37,9 @@ export class Product extends BaseEntity {
   @Column({ nullable: true, name: 'category_id' })
   categoryId: string;
 
-  @ManyToOne(() => Category, (category) => category.products, { nullable: true })
+  @ManyToOne(() => Category, (category) => category.products, {
+    nullable: true,
+  })
   @JoinColumn({ name: 'category_id' })
   category: Category;
 
@@ -54,7 +63,13 @@ export class Product extends BaseEntity {
   @Column({ type: 'decimal', precision: 12, scale: 2 })
   price: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true, name: 'compare_at_price' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+    name: 'compare_at_price',
+  })
   compareAtPrice: number; // Original price for discount display
 
   // Inventory
@@ -89,7 +104,13 @@ export class Product extends BaseEntity {
   @Column({ default: true, name: 'is_taxable' })
   isTaxable: boolean;
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true, name: 'tax_rate' })
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    nullable: true,
+    name: 'tax_rate',
+  })
   taxRate: number;
 
   // Status

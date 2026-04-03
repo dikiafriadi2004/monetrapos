@@ -36,7 +36,10 @@ export class UsageLimitGuard implements CanActivate {
       throw new ForbiddenException('Company ID not found');
     }
 
-    const canUse = await this.usageService.checkLimit(companyId, metricName as any);
+    const canUse = await this.usageService.checkLimit(
+      companyId,
+      metricName as any,
+    );
 
     if (!canUse) {
       throw new ForbiddenException(

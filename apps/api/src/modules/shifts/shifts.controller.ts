@@ -1,5 +1,20 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, Request, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Body,
+  Param,
+  Query,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { ShiftsService } from './shifts.service';
 import { OpenShiftDto, CloseShiftDto, ShiftReconciliationDto } from './dto';
@@ -27,7 +42,11 @@ export class ShiftsController {
   @Patch(':id/close')
   @RequireRoles(UserType.EMPLOYEE, UserType.MEMBER)
   @ApiOperation({ summary: 'Close a cashier register shift' })
-  closeShift(@Param('id') id: string, @Request() req: any, @Body() dto: CloseShiftDto) {
+  closeShift(
+    @Param('id') id: string,
+    @Request() req: any,
+    @Body() dto: CloseShiftDto,
+  ) {
     const userId = req.user.id;
     const userType = req.user.userType;
     const memberId = userType === UserType.MEMBER ? userId : null;
@@ -63,7 +82,9 @@ export class ShiftsController {
 
   @Get()
   @RequireRoles(UserType.MEMBER)
-  @ApiOperation({ summary: 'Get all shifts history for a store (Manager only)' })
+  @ApiOperation({
+    summary: 'Get all shifts history for a store (Manager only)',
+  })
   @ApiQuery({ name: 'storeId', required: false })
   findAll(@Request() req: any, @Query('storeId') storeId?: string) {
     return this.shiftsService.findAll(req.user.id, storeId);

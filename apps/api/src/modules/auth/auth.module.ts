@@ -12,6 +12,8 @@ import { Employee } from '../employees/employee.entity';
 import { EmailVerificationToken } from './email-verification-token.entity';
 import { PasswordResetToken } from './password-reset-token.entity';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
+import { BillingModule } from '../billing/billing.module';
+import { PaymentGatewayModule } from '../payment-gateway/payment-gateway.module';
 
 @Module({
   imports: [
@@ -34,6 +36,8 @@ import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
       }),
     }),
     SubscriptionsModule,
+    BillingModule,
+    PaymentGatewayModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],

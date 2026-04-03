@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User, UserRole } from './user.entity';
@@ -94,7 +98,11 @@ export class UsersService {
     return this.userRepository.save(user);
   }
 
-  async updatePassword(id: string, companyId: string, newPassword: string): Promise<void> {
+  async updatePassword(
+    id: string,
+    companyId: string,
+    newPassword: string,
+  ): Promise<void> {
     const user = await this.findOne(id, companyId);
     user.passwordHash = await bcrypt.hash(newPassword, 10);
     await this.userRepository.save(user);

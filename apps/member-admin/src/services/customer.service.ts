@@ -1,9 +1,9 @@
-import api from '@/lib/api';
+import apiClient from '@/lib/api-client';
 import { Customer } from '@/types';
 
 export const customerService = {
   async getCustomers(storeId?: string): Promise<Customer[]> {
-    const response = await api.get<Customer[]>('/customers', {
+    const response = await apiClient.get<Customer[]>('/customers', {
       params: { storeId },
     });
     return response.data;
@@ -19,7 +19,7 @@ export const customerService = {
   },
 
   async addPoints(customerId: string, points: number, reason: string, transactionId?: string) {
-    const response = await api.post('/customers/loyalty/add-points', {
+    const response = await apiClient.post('/customers/loyalty/add-points', {
       customerId,
       points,
       reason,
@@ -29,7 +29,7 @@ export const customerService = {
   },
 
   async redeemPoints(customerId: string, points: number, transactionId: string) {
-    const response = await api.post('/customers/loyalty/redeem-points', {
+    const response = await apiClient.post('/customers/loyalty/redeem-points', {
       customerId,
       points,
       transactionId,
@@ -38,7 +38,7 @@ export const customerService = {
   },
 
   async getPointsValue(points: number): Promise<number> {
-    const response = await api.get(`/customers/loyalty/points-value/${points}`);
+    const response = await apiClient.get(`/customers/loyalty/points-value/${points}`);
     return response.data.value;
   },
 };

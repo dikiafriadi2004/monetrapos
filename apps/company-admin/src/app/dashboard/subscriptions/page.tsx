@@ -41,7 +41,7 @@ export default function SubscriptionsPage() {
   const fetchData = async () => {
     try {
       const [plansData, featuresData]: any = await Promise.all([
-        api.get('/subscriptions/plans'),
+        api.get('/subscription-plans'),
         api.get('/features')
       ]);
       setPlans(Array.isArray(plansData) ? plansData : []);
@@ -94,9 +94,9 @@ export default function SubscriptionsPage() {
         isActive: true
       };
       if (editingPlan) {
-        await api.patch(`/subscriptions/plans/${editingPlan.id}`, payload);
+        await api.patch(`/subscription-plans/${editingPlan.id}`, payload);
       } else {
-        await api.post('/subscriptions/plans', payload);
+        await api.post('/subscription-plans', payload);
       }
       await fetchData();
       setModalOpen(false);
@@ -110,7 +110,7 @@ export default function SubscriptionsPage() {
   const handleDelete = async (id: string) => {
     if (!confirm('Delete this subscription plan? Active subscribers will not be affected.')) return;
     try {
-      await api.delete(`/subscriptions/plans/${id}`);
+      await api.delete(`/subscription-plans/${id}`);
       setPlans(prev => prev.filter(p => p.id !== id));
     } catch {
       alert('Failed to delete plan');

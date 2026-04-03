@@ -1,5 +1,19 @@
-import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { PermissionGuard, RequirePermissions } from '../auth/guards';
 import { TransactionsService } from './transactions.service';
@@ -62,6 +76,13 @@ export class TransactionsController {
   @ApiOperation({ summary: 'Get transaction by invoice number' })
   findByInvoice(@Param('invoiceNumber') invoiceNumber: string) {
     return this.transactionsService.findByInvoice(invoiceNumber);
+  }
+
+  @Get(':id/receipt')
+  @RequirePermissions('finance.view_transactions')
+  @ApiOperation({ summary: 'Get transaction receipt' })
+  getReceipt(@Param('id') id: string) {
+    return this.transactionsService.getReceipt(id);
   }
 
   @Get(':id')

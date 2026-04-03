@@ -1,11 +1,28 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { PermissionGuard, RequirePermissions } from '../auth/guards';
 import { PaymentsService } from './payments.service';
 import {
-  CreatePaymentMethodDto, UpdatePaymentMethodDto,
-  CreateQrisConfigDto, UpdateQrisConfigDto,
+  CreatePaymentMethodDto,
+  UpdatePaymentMethodDto,
+  CreateQrisConfigDto,
+  UpdateQrisConfigDto,
 } from './dto';
 
 @ApiTags('Payments')
@@ -47,7 +64,10 @@ export class PaymentsController {
   @Patch('payment-methods/:id')
   @RequirePermissions('finance.manage_payment')
   @ApiOperation({ summary: 'Update payment method' })
-  updatePaymentMethod(@Param('id') id: string, @Body() dto: UpdatePaymentMethodDto) {
+  updatePaymentMethod(
+    @Param('id') id: string,
+    @Body() dto: UpdatePaymentMethodDto,
+  ) {
     return this.paymentsService.updatePaymentMethod(id, dto);
   }
 

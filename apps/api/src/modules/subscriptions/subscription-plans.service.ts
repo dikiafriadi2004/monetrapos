@@ -2,12 +2,15 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { SubscriptionPlan } from './subscription-plan.entity';
+import { SubscriptionDuration } from './subscription-duration.entity';
 
 @Injectable()
 export class SubscriptionPlansService {
   constructor(
     @InjectRepository(SubscriptionPlan)
     private readonly planRepository: Repository<SubscriptionPlan>,
+    @InjectRepository(SubscriptionDuration)
+    private readonly durationRepository: Repository<SubscriptionDuration>,
   ) {}
 
   /**
@@ -18,6 +21,33 @@ export class SubscriptionPlansService {
       where: { isActive: true },
       order: { sortOrder: 'ASC' },
     });
+  }
+
+  /**
+   * Get all active plans with duration options
+   */
+  async findAllActiveWithDurations(): Promise<SubscriptionPlan[]> {
+    return this.planRepository.find({
+      where: { isActive: true },
+      relations: ['durations'],
+      order: { sortOrder: 'ASC' },
+    });
+  }
+
+  /**
+   * Get plan with all duration options
+   */
+  async findOneWithDurations(id: string): Promise<SubscriptionPlan> {
+    const plan = await this.planRepository.findOne({
+      where: { id },
+      relations: ['durations'],
+    });
+
+    if (!plan) {
+      throw new NotFoundException('Subscription plan not found');
+    }
+
+    return plan;
   }
 
   /**
@@ -124,6 +154,112 @@ export class SubscriptionPlansService {
   async remove(id: string): Promise<void> {
     const plan = await this.findOne(id);
     await this.planRepository.softRemove(plan);
+  }
+
+  /**
+   * Calculate final price based on duration and discount
+   * @param basePrice - Monthly base price
+   * @param durationMonths - Duration in months (1, 3, 6, 12)
+   * @returns Object with subtotal, discount, and final price
+   */
+  calculateDurationPrice(
+    basePrice: number,
+    durationMonths: number,
+  ): {
+    subtotal: number;
+    discountPercentage: number;
+    discountAmount: number;
+    finalPrice: number;
+  } {
+    const discountMap: Record<number, number> = {
+      1: 0, // 0% discount
+      3: 5, // 5% discount
+      6: 10, // 10% discount
+      12: 20, // 20% discount
+    };
+
+    const discountPercentage = discountMap[durationMonths] || 0;
+    const subtotal = basePrice * durationMonths;
+    const discountAmount = (subtotal * discountPercentage) / 100;
+    const finalPrice = subtotal - discountAmount;
+
+    return {
+      subtotal,
+      discountPercentage,
+      discountAmount,
+      finalPrice,
+    };
+  }
+
+  /**
+   * Create or update duration pricing for a plan
+   * @param planId - Plan ID
+   * @param durationMonths - Duration in months (1, 3, 6, 12)
+   * @returns Created or updated SubscriptionDuration
+   */
+  async createOrUpdateDuration(
+    planId: string,
+    durationMonths: number,
+  ): Promise<SubscriptionDuration> {
+    // Validate plan exists
+    const plan = await this.findOne(planId);
+
+    // Calculate pricing
+    const { discountPercentage, finalPrice } = this.calculateDurationPrice(
+      Number(plan.priceMonthly),
+      durationMonths,
+    );
+
+    // Check if duration already exists
+    const existing = await this.durationRepository.findOne({
+      where: { planId, durationMonths },
+    });
+
+    if (existing) {
+      // Update existing
+      existing.discountPercentage = discountPercentage;
+      existing.finalPrice = finalPrice;
+      return this.durationRepository.save(existing);
+    }
+
+    // Create new
+    const duration = this.durationRepository.create({
+      planId,
+      durationMonths,
+      discountPercentage,
+      finalPrice,
+    });
+
+    return this.durationRepository.save(duration);
+  }
+
+  /**
+   * Get all duration options for a plan
+   * @param planId - Plan ID
+   * @returns Array of SubscriptionDuration
+   */
+  async getDurationsByPlan(planId: string): Promise<SubscriptionDuration[]> {
+    return this.durationRepository.find({
+      where: { planId },
+      order: { durationMonths: 'ASC' },
+    });
+  }
+
+  /**
+   * Delete a duration option
+   * @param planId - Plan ID
+   * @param durationMonths - Duration in months
+   */
+  async removeDuration(planId: string, durationMonths: number): Promise<void> {
+    const duration = await this.durationRepository.findOne({
+      where: { planId, durationMonths },
+    });
+
+    if (!duration) {
+      throw new NotFoundException('Duration option not found');
+    }
+
+    await this.durationRepository.remove(duration);
   }
 
   /**
@@ -241,9 +377,26 @@ export class SubscriptionPlansService {
     ];
 
     for (const planData of plans) {
-      await this.create(planData as any);
+      const plan = await this.create(planData as any);
+
+      // Seed duration options for each plan
+      await this.seedDurationOptionsForPlan(plan.id);
     }
 
     console.log('✅ Default subscription plans seeded successfully');
+  }
+
+  /**
+   * Seed duration options for a plan (1, 3, 6, 12 months)
+   * @param planId - Plan ID
+   */
+  async seedDurationOptionsForPlan(planId: string): Promise<void> {
+    const durations = [1, 3, 6, 12];
+
+    for (const durationMonths of durations) {
+      await this.createOrUpdateDuration(planId, durationMonths);
+    }
+
+    console.log(`✅ Duration options seeded for plan ${planId}`);
   }
 }

@@ -23,21 +23,31 @@ class EnvironmentVariables {
   @IsOptional()
   PORT: number = 3003;
 
+  // PostgreSQL Connection (using DATABASE_URL)
   @IsString()
-  DB_HOST: string;
+  @IsOptional()
+  DATABASE_URL?: string;
+
+  // MySQL/Database fields
+  @IsString()
+  @IsOptional()
+  DB_HOST?: string;
 
   @IsNumber()
   @IsOptional()
-  DB_PORT: number = 3306;
+  DB_PORT?: number = 3306;
 
   @IsString()
-  DB_USERNAME: string;
+  @IsOptional()
+  DB_USERNAME?: string;
 
   @IsString()
-  DB_PASSWORD: string;
+  @IsOptional()
+  DB_PASSWORD?: string;
 
   @IsString()
-  DB_DATABASE: string;
+  @IsOptional()
+  DB_DATABASE?: string;
 
   @IsString()
   JWT_SECRET: string;
@@ -53,6 +63,23 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   JWT_REFRESH_EXPIRES_IN: string = '7d';
+
+  // Redis (Optional)
+  @IsOptional()
+  @IsString()
+  REDIS_URL?: string;
+
+  @IsOptional()
+  @IsString()
+  REDIS_HOST?: string;
+
+  @IsOptional()
+  @IsNumber()
+  REDIS_PORT?: number;
+
+  @IsOptional()
+  @IsString()
+  REDIS_PASSWORD?: string;
 
   // Email (Optional)
   @IsOptional()
@@ -90,11 +117,11 @@ class EnvironmentVariables {
 
   // App URLs
   @IsOptional()
-  @IsUrl()
+  @IsUrl({ require_tld: false })
   APP_URL?: string;
 
   @IsOptional()
-  @IsUrl()
+  @IsUrl({ require_tld: false })
   FRONTEND_URL?: string;
 }
 

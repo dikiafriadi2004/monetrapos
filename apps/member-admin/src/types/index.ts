@@ -1,33 +1,27 @@
-// User Types
-export enum UserType {
-  COMPANY_ADMIN = 'company_admin',
-  MEMBER = 'member',
-  EMPLOYEE = 'employee',
-}
+// Export all types
+export * from './auth.types';
+export * from './subscription.types';
+export * from './api.types';
+export * from './payment-method.types';
 
-export interface User {
-  id: string;
-  email: string;
-  name: string;
-  userType: UserType;
-}
+// Legacy Payment Method Type (for backward compatibility)
+export type PaymentMethodType = 'cash' | 'card' | 'transfer' | 'qris';
 
 // Product Types
 export interface Product {
   id: string;
   name: string;
-  sku?: string;
+  sku: string;
   barcode?: string;
   description?: string;
+  categoryId: string;
   price: number;
-  cost?: number;
+  cost: number;
   stock: number;
-  lowStockAlert?: number;
-  categoryId?: string;
-  category?: Category;
-  storeId: string;
+  minStock: number;
+  unit: string;
   isActive: boolean;
-  image?: string;
+  companyId: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -36,96 +30,88 @@ export interface Category {
   id: string;
   name: string;
   description?: string;
-  storeId: string;
-}
-
-export interface ProductVariant {
-  id: string;
-  productId: string;
-  name: string;
-  sku?: string;
-  barcode?: string;
-  price: number;
-  stock: number;
-}
-
-// Transaction Types
-export enum TransactionStatus {
-  PENDING = 'pending',
-  COMPLETED = 'completed',
-  VOIDED = 'voided',
-  REFUNDED = 'refunded',
-}
-
-export enum PaymentMethodType {
-  CASH = 'cash',
-  QRIS = 'qris',
-  BANK_TRANSFER = 'bank_transfer',
-  EDC = 'edc',
-  EWALLET = 'ewallet',
-}
-
-export interface TransactionItem {
-  productId: string;
-  productName: string;
-  quantity: number;
-  price: number;
-  subtotal: number;
-  notes?: string;
-}
-
-export interface Transaction {
-  id: string;
-  invoiceNumber: string;
-  storeId: string;
-  paymentMethod: PaymentMethodType;
-  subtotal: number;
-  taxAmount: number;
-  discountAmount: number;
-  total: number;
-  paidAmount: number;
-  changeAmount: number;
-  status: TransactionStatus;
-  customerName?: string;
-  customerId?: string;
-  employeeId?: string;
-  employeeName?: string;
-  notes?: string;
-  items: TransactionItem[];
+  companyId: string;
+  isActive: boolean;
   createdAt: string;
+  updatedAt: string;
 }
 
 // Customer Types
 export interface Customer {
   id: string;
+  customerNumber: string;
   name: string;
-  phone?: string;
   email?: string;
-  loyaltyPoints: number;
+  phone?: string;
+  address?: string;
+  city?: string;
+  postalCode?: string;
+  companyId: string;
   storeId: string;
-  memberId: string;
+  loyaltyPoints: number;
+  loyaltyTier: 'regular' | 'silver' | 'gold' | 'platinum';
+  totalSpent: number;
+  totalOrders: number;
+  dateOfBirth?: string;
+  gender?: 'male' | 'female' | 'other';
+  notes?: string;
+  firstPurchaseAt?: string;
+  lastPurchaseAt?: string;
+  isActive: boolean;
   createdAt: string;
+  updatedAt: string;
+}
+
+// Transaction Types
+export interface Transaction {
+  id: string;
+  transactionNumber: string;
+  companyId: string;
+  customerId?: string;
+  userId: string;
+  shiftId?: string;
+  subtotal: number;
+  tax: number;
+  discount: number;
+  total: number;
+  paymentMethod: 'cash' | 'card' | 'transfer' | 'qris';
+  status: 'pending' | 'completed' | 'cancelled' | 'refunded';
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  items?: TransactionItem[];
+  customer?: Customer;
+}
+
+export interface TransactionItem {
+  id: string;
+  transactionId: string;
+  productId: string;
+  quantity: number;
+  price: number;
+  subtotal: number;
+  discount: number;
+  total: number;
+  product?: Product;
 }
 
 // Shift Types
-export enum ShiftStatus {
-  OPEN = 'open',
-  CLOSED = 'closed',
-}
-
 export interface Shift {
   id: string;
-  memberId: string;
-  employeeId: string;
-  storeId: string;
+  companyId: string;
+  userId: string;
+  startTime: string;
+  endTime?: string;
   startingCash: number;
-  expectedCash: number;
-  actualCash?: number;
-  difference?: number;
-  openTime: string;
-  closeTime?: string;
-  status: ShiftStatus;
+  endingCash?: number;
+  expectedCash?: number;
+  cashDifference?: number;
+  totalSales?: number;
+  totalTransactions?: number;
+  status: 'open' | 'closed';
   notes?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // Cart Types
@@ -135,29 +121,4 @@ export interface CartItem {
   price: number;
   subtotal: number;
   notes?: string;
-}
-
-// API Response Types
-export interface ApiResponse<T> {
-  data: T;
-  message?: string;
-}
-
-export interface PaginatedResponse<T> {
-  data: T[];
-  total: number;
-  page: number;
-  limit: number;
-}
-
-// Auth Types
-export interface LoginRequest {
-  email: string;
-  password: string;
-}
-
-export interface AuthResponse {
-  accessToken: string;
-  refreshToken: string;
-  user: User;
 }

@@ -1,4 +1,11 @@
-import { IsString, IsOptional, IsEnum, IsBoolean, IsObject, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsEnum,
+  IsBoolean,
+  IsObject,
+  MaxLength,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { PaymentMethodType } from '../../../common/enums';
 
@@ -12,7 +19,9 @@ export class CreatePaymentMethodDto {
   @MaxLength(100)
   name: string;
 
-  @ApiPropertyOptional({ example: { bankName: 'BCA', accountNumber: '1234567890' } })
+  @ApiPropertyOptional({
+    example: { bankName: 'BCA', accountNumber: '1234567890' },
+  })
   @IsOptional()
   @IsObject()
   config?: Record<string, any>;

@@ -1,4 +1,11 @@
-import { Entity, Column, OneToMany, ManyToOne, JoinColumn, DeleteDateColumn } from 'typeorm';
+import {
+  Entity,
+  Column,
+  OneToMany,
+  ManyToOne,
+  JoinColumn,
+  DeleteDateColumn,
+} from 'typeorm';
 import { BaseEntity } from '../../common/entities';
 import { SubscriptionPlan } from '../subscriptions/subscription-plan.entity';
 
@@ -86,6 +93,15 @@ export class Company extends BaseEntity {
 
   @Column({ type: 'timestamp', nullable: true, name: 'subscription_ends_at' })
   subscriptionEndsAt: Date;
+
+  // Payment Gateway Preference
+  @Column({ 
+    length: 20, 
+    nullable: true, 
+    name: 'payment_gateway_preference',
+    default: 'midtrans'
+  })
+  paymentGatewayPreference: string; // midtrans, xendit
 
   // Metadata
   @Column({ type: 'json', default: '{}' })

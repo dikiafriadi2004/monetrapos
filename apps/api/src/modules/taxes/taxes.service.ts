@@ -6,9 +6,7 @@ import { CreateTaxDto, UpdateTaxDto } from './dto';
 
 @Injectable()
 export class TaxesService {
-  constructor(
-    @InjectRepository(Tax) private taxRepo: Repository<Tax>,
-  ) {}
+  constructor(@InjectRepository(Tax) private taxRepo: Repository<Tax>) {}
 
   async create(dto: CreateTaxDto): Promise<Tax> {
     const tax = this.taxRepo.create(dto);

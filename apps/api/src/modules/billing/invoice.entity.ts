@@ -12,6 +12,12 @@ export enum InvoiceStatus {
   CANCELLED = 'cancelled',
 }
 
+export enum InvoiceType {
+  SUBSCRIPTION = 'subscription',
+  ADD_ON = 'add_on',
+  RENEWAL = 'renewal',
+}
+
 @Entity('invoices')
 export class Invoice extends BaseEntity {
   @Column({ name: 'company_id' })
@@ -32,17 +38,52 @@ export class Invoice extends BaseEntity {
   @Column({ unique: true, length: 50, name: 'invoice_number' })
   invoiceNumber: string;
 
+  @Column({
+    type: 'enum',
+    enum: InvoiceType,
+    default: InvoiceType.SUBSCRIPTION,
+    name: 'invoice_type',
+  })
+  invoiceType: InvoiceType;
+
+  @Column({ length: 500, nullable: true, name: 'invoice_pdf_url' })
+  invoicePdfUrl: string;
+
+  @Column({ nullable: true, name: 'add_on_id' })
+  addOnId: string;
+
+  @Column({ nullable: true, name: 'company_add_on_id' })
+  companyAddOnId: string;
+
   // Amounts
   @Column({ type: 'decimal', precision: 12, scale: 2 })
   subtotal: number;
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0, name: 'tax_rate' })
+  @Column({
+    type: 'decimal',
+    precision: 5,
+    scale: 2,
+    default: 0,
+    name: 'tax_rate',
+  })
   taxRate: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, name: 'tax_amount' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    name: 'tax_amount',
+  })
   taxAmount: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, name: 'discount_amount' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    name: 'discount_amount',
+  })
   discountAmount: number;
 
   @Column({ type: 'decimal', precision: 12, scale: 2 })

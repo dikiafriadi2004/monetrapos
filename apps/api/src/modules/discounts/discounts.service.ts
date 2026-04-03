@@ -1,64 +1,355 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
-import { Discount } from './discount.entity';
-import { CreateDiscountDto, UpdateDiscountDto } from './dto';
+import { Repository, LessThanOrEqual, MoreThanOrEqual, IsNull, Not } from 'typeorm';
+import { Discount, DiscountScope } from './discount.entity';
+import { DiscountUsage } from './discount-usage.entity';
+import { CreateDiscountDto } from './dto/create-discount.dto';
+import { UpdateDiscountDto } from './dto/update-discount.dto';
+import { ValidatePromoCodeDto } from './dto/validate-promo-code.dto';
+import { DiscountType } from '../../common/enums';
 
 @Injectable()
 export class DiscountsService {
   constructor(
-    @InjectRepository(Discount) private discountRepo: Repository<Discount>,
+    @InjectRepository(Discount)
+    private readonly discountRepository: Repository<Discount>,
+    @InjectRepository(DiscountUsage)
+    private readonly usageRepository: Repository<DiscountUsage>,
   ) {}
 
-  async create(dto: CreateDiscountDto): Promise<Discount> {
-    const discount = this.discountRepo.create(dto);
-    return this.discountRepo.save(discount);
-  }
+  async create(createDto: CreateDiscountDto, companyId: string): Promise<Discount> {
+    // Validate promo code uniqueness if provided
+    if (createDto.promoCode) {
+      const existing = await this.discountRepository.findOne({
+        where: { promoCode: createDto.promoCode, companyId },
+      });
 
-  async findAllByStore(storeId: string): Promise<Discount[]> {
-    return this.discountRepo.find({
-      where: { storeId },
-      order: { createdAt: 'DESC' },
+      if (existing) {
+        throw new BadRequestException('Promo code already exists');
+      }
+    }
+
+    // Validate percentage discount
+    if (createDto.type === DiscountType.PERCENTAGE && createDto.value > 100) {
+      throw new BadRequestException('Percentage discount cannot exceed 100%');
+    }
+
+    const discount = this.discountRepository.create({
+      ...createDto,
+      companyId,
+      scope: createDto.scope || DiscountScope.ALL,
     });
+
+    return await this.discountRepository.save(discount);
   }
 
-  async findOne(id: string): Promise<Discount> {
-    const discount = await this.discountRepo.findOne({ where: { id } });
-    if (!discount) throw new NotFoundException('Discount not found');
+  async findAll(
+    companyId: string,
+    storeId?: string,
+    isActive?: boolean,
+  ): Promise<Discount[]> {
+    const query = this.discountRepository
+      .createQueryBuilder('discount')
+      .where('discount.companyId = :companyId', { companyId })
+      .leftJoinAndSelect('discount.store', 'store')
+      .orderBy('discount.createdAt', 'DESC');
+
+    if (storeId) {
+      query.andWhere('(discount.storeId = :storeId OR discount.storeId IS NULL)', {
+        storeId,
+      });
+    }
+
+    if (isActive !== undefined) {
+      query.andWhere('discount.isActive = :isActive', { isActive });
+    }
+
+    return await query.getMany();
+  }
+
+  async findOne(id: string, companyId: string): Promise<Discount> {
+    const discount = await this.discountRepository.findOne({
+      where: { id, companyId },
+      relations: ['store'],
+    });
+
+    if (!discount) {
+      throw new NotFoundException(`Discount with ID ${id} not found`);
+    }
+
     return discount;
   }
 
-  async findActiveByStore(storeId: string): Promise<Discount[]> {
+  async update(
+    id: string,
+    updateDto: UpdateDiscountDto,
+    companyId: string,
+  ): Promise<Discount> {
+    const discount = await this.findOne(id, companyId);
+
+    // Validate promo code uniqueness if changed
+    if (updateDto.promoCode && updateDto.promoCode !== discount.promoCode) {
+      const existing = await this.discountRepository.findOne({
+        where: { promoCode: updateDto.promoCode, companyId },
+      });
+
+      if (existing && existing.id !== id) {
+        throw new BadRequestException('Promo code already exists');
+      }
+    }
+
+    // Validate percentage discount
+    if (
+      updateDto.type === DiscountType.PERCENTAGE &&
+      updateDto.value !== undefined &&
+      updateDto.value > 100
+    ) {
+      throw new BadRequestException('Percentage discount cannot exceed 100%');
+    }
+
+    Object.assign(discount, updateDto);
+    return await this.discountRepository.save(discount);
+  }
+
+  async remove(id: string, companyId: string): Promise<void> {
+    const discount = await this.findOne(id, companyId);
+    discount.isActive = false;
+    await this.discountRepository.save(discount);
+  }
+
+  async validatePromoCode(
+    validateDto: ValidatePromoCodeDto,
+    companyId: string,
+  ): Promise<{
+    valid: boolean;
+    discount?: Discount;
+    discountAmount?: number;
+    message?: string;
+  }> {
+    // Find discount by promo code
+    const discount = await this.discountRepository.findOne({
+      where: {
+        promoCode: validateDto.promoCode,
+        companyId,
+        isActive: true,
+      },
+    });
+
+    if (!discount) {
+      return {
+        valid: false,
+        message: 'Invalid promo code',
+      };
+    }
+
+    // Check date validity
     const now = new Date();
-    return this.discountRepo
-      .createQueryBuilder('discount')
-      .where('discount.storeId = :storeId', { storeId })
-      .andWhere('discount.isActive = :isActive', { isActive: true })
-      .andWhere('(discount.startDate IS NULL OR discount.startDate <= :now)', { now })
-      .andWhere('(discount.endDate IS NULL OR discount.endDate >= :now)', { now })
-      .getMany();
+    if (discount.startDate && new Date(discount.startDate) > now) {
+      return {
+        valid: false,
+        message: 'Promo code not yet active',
+      };
+    }
+
+    if (discount.endDate && new Date(discount.endDate) < now) {
+      return {
+        valid: false,
+        message: 'Promo code has expired',
+      };
+    }
+
+    // Check usage limit
+    if (discount.usageLimit && discount.usageCount >= discount.usageLimit) {
+      return {
+        valid: false,
+        message: 'Promo code usage limit reached',
+      };
+    }
+
+    // Check per-customer usage limit
+    if (discount.usageLimitPerCustomer && validateDto.customerId) {
+      const customerUsageCount = await this.usageRepository.count({
+        where: {
+          discount_id: discount.id,
+          customer_id: validateDto.customerId,
+        },
+      });
+
+      if (customerUsageCount >= discount.usageLimitPerCustomer) {
+        return {
+          valid: false,
+          message: 'You have reached the usage limit for this promo code',
+        };
+      }
+    }
+
+    // Check minimum transaction
+    if (discount.minTransaction && validateDto.transactionTotal < discount.minTransaction) {
+      return {
+        valid: false,
+        message: `Minimum transaction amount is ${discount.minTransaction}`,
+      };
+    }
+
+    // Check store applicability
+    if (discount.storeId && validateDto.storeId && discount.storeId !== validateDto.storeId) {
+      return {
+        valid: false,
+        message: 'Promo code not applicable to this store',
+      };
+    }
+
+    // Check scope applicability
+    if (discount.scope === DiscountScope.CATEGORY) {
+      if (!validateDto.categoryIds || validateDto.categoryIds.length === 0) {
+        return {
+          valid: false,
+          message: 'No applicable categories in cart',
+        };
+      }
+
+      const hasApplicableCategory = discount.applicableIds?.some((id) =>
+        validateDto.categoryIds?.includes(id),
+      );
+
+      if (!hasApplicableCategory) {
+        return {
+          valid: false,
+          message: 'Promo code not applicable to items in cart',
+        };
+      }
+    }
+
+    if (discount.scope === DiscountScope.PRODUCT) {
+      if (!validateDto.productIds || validateDto.productIds.length === 0) {
+        return {
+          valid: false,
+          message: 'No applicable products in cart',
+        };
+      }
+
+      const hasApplicableProduct = discount.applicableIds?.some((id) =>
+        validateDto.productIds?.includes(id),
+      );
+
+      if (!hasApplicableProduct) {
+        return {
+          valid: false,
+          message: 'Promo code not applicable to items in cart',
+        };
+      }
+    }
+
+    // Calculate discount amount
+    let discountAmount = 0;
+    if (discount.type === DiscountType.PERCENTAGE) {
+      discountAmount = (validateDto.transactionTotal * discount.value) / 100;
+    } else {
+      discountAmount = discount.value;
+    }
+
+    // Apply max discount limit
+    if (discount.maxDiscount && discountAmount > discount.maxDiscount) {
+      discountAmount = discount.maxDiscount;
+    }
+
+    return {
+      valid: true,
+      discount,
+      discountAmount,
+      message: 'Promo code applied successfully',
+    };
   }
 
-  async findByVoucherCode(storeId: string, code: string): Promise<Discount | null> {
-    const now = new Date();
-    return this.discountRepo
-      .createQueryBuilder('discount')
-      .where('discount.storeId = :storeId', { storeId })
-      .andWhere('discount.voucherCode = :code', { code })
-      .andWhere('discount.isActive = :isActive', { isActive: true })
-      .andWhere('(discount.startDate IS NULL OR discount.startDate <= :now)', { now })
-      .andWhere('(discount.endDate IS NULL OR discount.endDate >= :now)', { now })
-      .getOne();
+  async recordUsage(
+    discountId: string,
+    transactionId: string,
+    discountAmount: number,
+    customerId?: string,
+  ): Promise<void> {
+    // Create usage record
+    const usage = this.usageRepository.create({
+      discount_id: discountId,
+      transaction_id: transactionId,
+      customer_id: customerId,
+      discount_amount: discountAmount,
+    });
+
+    await this.usageRepository.save(usage);
+
+    // Increment usage count
+    await this.discountRepository.increment({ id: discountId }, 'usageCount', 1);
   }
 
-  async update(id: string, dto: UpdateDiscountDto): Promise<Discount> {
-    const discount = await this.findOne(id);
-    Object.assign(discount, dto);
-    return this.discountRepo.save(discount);
+  async generatePromoCode(prefix: string, length: number = 8): Promise<string> {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = prefix.toUpperCase();
+
+    for (let i = 0; i < length; i++) {
+      code += characters.charAt(Math.floor(Math.random() * characters.length));
+    }
+
+    // Check if code already exists
+    const existing = await this.discountRepository.findOne({
+      where: { promoCode: code },
+    });
+
+    if (existing) {
+      // Recursively generate new code
+      return this.generatePromoCode(prefix, length);
+    }
+
+    return code;
   }
 
-  async remove(id: string): Promise<void> {
-    const discount = await this.findOne(id);
-    await this.discountRepo.remove(discount);
+  async getUsageStats(discountId: string, companyId: string): Promise<{
+    totalUsage: number;
+    totalDiscountAmount: number;
+    usageByCustomer: Array<{ customerId: string; count: number; totalAmount: number }>;
+  }> {
+    const discount = await this.findOne(discountId, companyId);
+
+    const usages = await this.usageRepository.find({
+      where: { discount_id: discountId },
+      relations: ['customer'],
+    });
+
+    const totalUsage = usages.length;
+    const totalDiscountAmount = usages.reduce(
+      (sum, usage) => sum + Number(usage.discount_amount),
+      0,
+    );
+
+    // Group by customer
+    const usageByCustomerMap = new Map<
+      string,
+      { count: number; totalAmount: number }
+    >();
+
+    usages.forEach((usage) => {
+      if (usage.customer_id) {
+        const existing = usageByCustomerMap.get(usage.customer_id) || {
+          count: 0,
+          totalAmount: 0,
+        };
+        existing.count++;
+        existing.totalAmount += Number(usage.discount_amount);
+        usageByCustomerMap.set(usage.customer_id, existing);
+      }
+    });
+
+    const usageByCustomer = Array.from(usageByCustomerMap.entries()).map(
+      ([customerId, data]) => ({
+        customerId,
+        count: data.count,
+        totalAmount: data.totalAmount,
+      }),
+    );
+
+    return {
+      totalUsage,
+      totalDiscountAmount,
+      usageByCustomer,
+    };
   }
 }

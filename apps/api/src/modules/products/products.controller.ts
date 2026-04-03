@@ -1,12 +1,30 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+} from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { PermissionGuard, RequirePermissions } from '../auth/guards';
 import { ProductsService } from './products.service';
 import {
-  CreateProductDto, UpdateProductDto,
-  CreateCategoryDto, UpdateCategoryDto,
-  CreateVariantDto, UpdateVariantDto,
+  CreateProductDto,
+  UpdateProductDto,
+  CreateCategoryDto,
+  UpdateCategoryDto,
+  CreateVariantDto,
+  UpdateVariantDto,
 } from './dto';
 
 @ApiTags('Products')
@@ -29,8 +47,29 @@ export class ProductsController {
   @RequirePermissions('product.view')
   @ApiOperation({ summary: 'Get all products for a store' })
   @ApiQuery({ name: 'storeId', required: true })
-  findAllProducts(@Query('storeId') storeId: string) {
-    return this.productsService.findAllProducts(storeId);
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'categoryId', required: false, type: String })
+  @ApiQuery({ name: 'isActive', required: false, type: Boolean })
+  @ApiQuery({ name: 'lowStock', required: false, type: Boolean })
+  findAllProducts(
+    @Query('storeId') storeId: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+    @Query('categoryId') categoryId?: string,
+    @Query('isActive') isActive?: boolean,
+    @Query('lowStock') lowStock?: boolean,
+  ) {
+    return this.productsService.findAllProducts(storeId, {
+      page: page ? +page : undefined,
+      limit: limit ? +limit : undefined,
+      search,
+      categoryId,
+      isActive: isActive !== undefined ? (isActive === true || (isActive as any) === 'true') : undefined,
+      lowStock: lowStock === true || (lowStock as any) === 'true',
+    });
   }
 
   @Get('products/:id')
@@ -61,6 +100,33 @@ export class ProductsController {
     return this.productsService.updateStock(id, stock);
   }
 
+  @Post('products/bulk/prices')
+  @RequirePermissions('product.edit')
+  @ApiOperation({ summary: 'Bulk update product prices' })
+  bulkUpdatePrices(
+    @Body() dto: { storeId: string; updates: Array<{ id: string; price: number; cost?: number }> },
+  ) {
+    return this.productsService.bulkUpdatePrices(dto.storeId, dto.updates);
+  }
+
+  @Post('products/bulk/stock')
+  @RequirePermissions('product.manage_stock')
+  @ApiOperation({ summary: 'Bulk update product stock' })
+  bulkUpdateStock(
+    @Body() dto: { storeId: string; updates: Array<{ id: string; stock: number }> },
+  ) {
+    return this.productsService.bulkUpdateStock(dto.storeId, dto.updates);
+  }
+
+  @Post('products/bulk/activate')
+  @RequirePermissions('product.edit')
+  @ApiOperation({ summary: 'Bulk activate/deactivate products' })
+  bulkActivate(
+    @Body() dto: { storeId: string; productIds: string[]; isActive: boolean },
+  ) {
+    return this.productsService.bulkActivate(dto.storeId, dto.productIds, dto.isActive);
+  }
+
   // ────── Categories ──────
 
   @Post('categories')
@@ -72,31 +138,60 @@ export class ProductsController {
 
   @Get('categories')
   @RequirePermissions('product.view')
-  @ApiOperation({ summary: 'Get all categories for a store' })
-  @ApiQuery({ name: 'storeId', required: true })
-  findAllCategories(@Query('storeId') storeId: string) {
-    return this.productsService.findAllCategories(storeId);
+  @ApiOperation({ summary: 'Get all categories for a company/store' })
+  @ApiQuery({ name: 'companyId', required: true })
+  @ApiQuery({ name: 'storeId', required: false })
+  findAllCategories(
+    @Query('companyId') companyId: string,
+    @Query('storeId') storeId?: string,
+  ) {
+    return this.productsService.findAllCategories(companyId, storeId);
+  }
+
+  @Get('categories/tree')
+  @RequirePermissions('product.view')
+  @ApiOperation({ summary: 'Get category tree structure' })
+  @ApiQuery({ name: 'companyId', required: true })
+  @ApiQuery({ name: 'storeId', required: false })
+  getCategoryTree(
+    @Query('companyId') companyId: string,
+    @Query('storeId') storeId?: string,
+  ) {
+    return this.productsService.getCategoryTree(companyId, storeId);
   }
 
   @Get('categories/:id')
   @RequirePermissions('product.view')
   @ApiOperation({ summary: 'Get category by ID with products' })
-  findOneCategory(@Param('id') id: string) {
-    return this.productsService.findOneCategory(id);
+  @ApiQuery({ name: 'companyId', required: true })
+  findOneCategory(
+    @Param('id') id: string,
+    @Query('companyId') companyId: string,
+  ) {
+    return this.productsService.findOneCategory(id, companyId);
   }
 
   @Patch('categories/:id')
   @RequirePermissions('product.edit')
   @ApiOperation({ summary: 'Update category' })
-  updateCategory(@Param('id') id: string, @Body() dto: UpdateCategoryDto) {
-    return this.productsService.updateCategory(id, dto);
+  @ApiQuery({ name: 'companyId', required: true })
+  updateCategory(
+    @Param('id') id: string,
+    @Query('companyId') companyId: string,
+    @Body() dto: UpdateCategoryDto,
+  ) {
+    return this.productsService.updateCategory(id, companyId, dto);
   }
 
   @Delete('categories/:id')
   @RequirePermissions('product.delete')
   @ApiOperation({ summary: 'Delete category' })
-  removeCategory(@Param('id') id: string) {
-    return this.productsService.removeCategory(id);
+  @ApiQuery({ name: 'companyId', required: true })
+  removeCategory(
+    @Param('id') id: string,
+    @Query('companyId') companyId: string,
+  ) {
+    return this.productsService.removeCategory(id, companyId);
   }
 
   // ────── Variants ──────
@@ -104,7 +199,10 @@ export class ProductsController {
   @Post('products/:productId/variants')
   @RequirePermissions('product.create')
   @ApiOperation({ summary: 'Create a product variant' })
-  createVariant(@Param('productId') productId: string, @Body() dto: CreateVariantDto) {
+  createVariant(
+    @Param('productId') productId: string,
+    @Body() dto: CreateVariantDto,
+  ) {
     return this.productsService.createVariant(productId, dto);
   }
 

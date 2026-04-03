@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Member } from './member.entity';
@@ -13,7 +17,9 @@ export class MembersService {
   ) {}
 
   async create(dto: CreateMemberDto): Promise<Member> {
-    const exists = await this.memberRepo.findOne({ where: { email: dto.email } });
+    const exists = await this.memberRepo.findOne({
+      where: { email: dto.email },
+    });
     if (exists) {
       throw new ConflictException('Email already registered');
     }
@@ -32,21 +38,29 @@ export class MembersService {
   }
 
   async findOneByCompany(companyId: string, memberId: string): Promise<Member> {
-    const member = await this.memberRepo.findOne({ where: { id: memberId, companyId } });
+    const member = await this.memberRepo.findOne({
+      where: { id: memberId, companyId },
+    });
     if (!member) throw new NotFoundException('Member not found');
     return member;
   }
 
-  async updateByCompany(companyId: string, memberId: string, dto: UpdateMemberDto): Promise<Member> {
+  async updateByCompany(
+    companyId: string,
+    memberId: string,
+    dto: UpdateMemberDto,
+  ): Promise<Member> {
     const member = await this.findOneByCompany(companyId, memberId);
-    
+
     if (dto.email && dto.email !== member.email) {
-      const exists = await this.memberRepo.findOne({ where: { email: dto.email } });
+      const exists = await this.memberRepo.findOne({
+        where: { email: dto.email },
+      });
       if (exists) {
         throw new ConflictException('Email already in use');
       }
     }
-    
+
     Object.assign(member, dto);
     return this.memberRepo.save(member);
   }
@@ -67,14 +81,16 @@ export class MembersService {
     if (dto.isActive !== undefined) {
       delete dto.isActive; // Prevent self-activation
     }
-    
+
     if (dto.email && dto.email !== member.email) {
-      const exists = await this.memberRepo.findOne({ where: { email: dto.email } });
+      const exists = await this.memberRepo.findOne({
+        where: { email: dto.email },
+      });
       if (exists) {
         throw new ConflictException('Email already in use');
       }
     }
-    
+
     Object.assign(member, dto);
     return this.memberRepo.save(member);
   }

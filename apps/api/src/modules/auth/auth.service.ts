@@ -3,6 +3,7 @@ import {
   UnauthorizedException,
   ConflictException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -17,6 +18,8 @@ import { EmailVerificationToken } from './email-verification-token.entity';
 import { PasswordResetToken } from './password-reset-token.entity';
 import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { SubscriptionPlansService } from '../subscriptions/subscription-plans.service';
+import { BillingService } from '../billing/billing.service';
+import { PaymentGatewayService } from '../payment-gateway/payment-gateway.service';
 import {
   LoginDto,
   RegisterCompanyDto,
@@ -27,6 +30,8 @@ import {
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     @InjectRepository(Company) private companyRepo: Repository<Company>,
     @InjectRepository(User) private userRepo: Repository<User>,
@@ -40,51 +45,68 @@ export class AuthService {
     private dataSource: DataSource,
     private subscriptionsService: SubscriptionsService,
     private subscriptionPlansService: SubscriptionPlansService,
+    private billingService: BillingService,
+    private paymentGatewayService: PaymentGatewayService,
   ) {}
 
   async registerCompany(dto: RegisterCompanyDto) {
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
+    // Validate plan exists BEFORE starting transaction
+    const plan = await this.subscriptionPlansService.findOne(dto.planId);
+    if (!plan) {
+      throw new BadRequestException('Invalid subscription plan');
+    }
 
-    try {
-      // Check if company email exists
-      const existingCompany = await this.companyRepo.findOne({
-        where: { email: dto.companyEmail },
-      });
-      if (existingCompany) {
-        throw new ConflictException('Company email already registered');
-      }
+    // Get duration pricing BEFORE starting transaction
+    const durations = await this.subscriptionPlansService.getDurationsByPlan(
+      dto.planId,
+    );
+    const selectedDuration = durations.find(
+      (d) => d.durationMonths === dto.durationMonths,
+    );
 
-      // Check if user email exists
-      const existingUser = await this.userRepo.findOne({
-        where: { email: dto.ownerEmail },
+    if (!selectedDuration) {
+      throw new BadRequestException('Invalid duration selected');
+    }
+
+    // Check emails BEFORE creating anything
+    const existingCompany = await this.companyRepo.findOne({
+      where: { email: dto.companyEmail },
+      withDeleted: false,
+    });
+    if (existingCompany) {
+      throw new ConflictException('Company email already registered');
+    }
+
+    const existingUser = await this.userRepo.findOne({ where: { email: dto.ownerEmail } });
+    if (existingUser) {
+      const userCompany = await this.companyRepo.findOne({
+        where: { id: existingUser.companyId },
+        withDeleted: true,
       });
-      if (existingUser) {
+      if (!userCompany?.deletedAt) {
         throw new ConflictException('User email already registered');
       }
+      await this.userRepo.delete(existingUser.id);
+    }
 
-      // Create company
-      const slug = dto.companyName
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '');
-
-      const company = this.companyRepo.create({
+    // Create company
+    const slug = dto.companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const company = await this.companyRepo.save(
+      this.companyRepo.create({
         name: dto.companyName,
         slug,
         email: dto.companyEmail,
         phone: dto.companyPhone,
         address: dto.companyAddress,
-        status: 'active',
-        subscriptionStatus: 'trial',
-        trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days trial
-      });
-      await queryRunner.manager.save(company);
+        status: 'pending',
+        subscriptionStatus: 'pending',
+      })
+    );
 
-      // Create owner user
-      const hashedPassword = await bcrypt.hash(dto.password, 10);
-      const user = this.userRepo.create({
+    // Create owner user
+    const hashedPassword = await bcrypt.hash(dto.password, 10);
+    const user = await this.userRepo.save(
+      this.userRepo.create({
         companyId: company.id,
         name: dto.ownerName,
         email: dto.ownerEmail,
@@ -92,44 +114,93 @@ export class AuthService {
         passwordHash: hashedPassword,
         role: UserRole.OWNER,
         isActive: true,
-      });
-      await queryRunner.manager.save(user);
+      })
+    );
 
-      // Create trial subscription
-      const trialPlan = await this.subscriptionPlansService.findByCode('trial');
-      if (trialPlan) {
-        await this.subscriptionsService.createSubscription(
-          company.id,
-          trialPlan.id,
-        );
-      }
+    // Create pending subscription (no nested transaction)
+    const subscription = await this.subscriptionsService.create({
+      companyId: company.id,
+      planId: plan.id,
+      billingCycle: 'monthly' as any,
+      startTrial: false,
+    });
 
-      // Generate email verification token
-      const verificationToken = crypto.randomBytes(32).toString('hex');
-      const emailToken = this.emailTokenRepo.create({
+    // Generate invoice
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 7);
+    const discountAmount = selectedDuration.discountPercentage > 0
+      ? (plan.priceMonthly * dto.durationMonths * selectedDuration.discountPercentage) / 100
+      : 0;
+
+    const invoice = await this.billingService.createInvoice({
+      companyId: company.id,
+      subscriptionId: subscription.id,
+      subtotal: selectedDuration.finalPrice,
+      taxRate: 0,
+      taxAmount: 0,
+      discountAmount,
+      total: selectedDuration.finalPrice,
+      dueDate,
+      lineItems: [{
+        description: `${plan.name} - ${dto.durationMonths} month${dto.durationMonths > 1 ? 's' : ''}`,
+        quantity: 1,
+        unitPrice: selectedDuration.finalPrice,
+        amount: selectedDuration.finalPrice,
+        discount: selectedDuration.discountPercentage,
+      }],
+    });
+
+    // Generate email verification token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    await this.emailTokenRepo.save(
+      this.emailTokenRepo.create({
         userId: user.id,
         token: verificationToken,
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+      })
+    );
+
+    // Generate payment URL (non-blocking)
+    let paymentUrl = '';
+    let paymentToken = '';
+    try {
+      const frontendUrl = this.configService.get<string>('MEMBER_ADMIN_URL') || 'http://localhost:4403';
+      const paymentResponse = await this.paymentGatewayService.createPaymentUrl({
+        orderId: invoice.invoiceNumber,
+        amount: selectedDuration.finalPrice,
+        customerName: dto.ownerName,
+        customerEmail: dto.ownerEmail,
+        customerPhone: dto.ownerPhone,
+        successRedirectUrl: `${frontendUrl}/payment-callback?status=PAID`,
+        failureRedirectUrl: `${frontendUrl}/payment-callback?status=FAILED`,
+        itemDetails: [{
+          id: plan.id,
+          name: `${plan.name} - ${dto.durationMonths} month${dto.durationMonths > 1 ? 's' : ''}`,
+          price: selectedDuration.finalPrice,
+          quantity: 1,
+        }],
       });
-      await queryRunner.manager.save(emailToken);
-
-      await queryRunner.commitTransaction();
-
-      // TODO: Send verification email
-      // await this.emailService.sendVerificationEmail(user.email, verificationToken);
-
-      return {
-        message: 'Company registered successfully. Please verify your email.',
-        companyId: company.id,
-        userId: user.id,
-        verificationToken, // Remove in production
-      };
-    } catch (error) {
-      await queryRunner.rollbackTransaction();
-      throw error;
-    } finally {
-      await queryRunner.release();
+      paymentUrl = paymentResponse.redirectUrl;
+      paymentToken = paymentResponse.token || '';
+    } catch (paymentError) {
+      this.logger.warn(`Payment URL generation failed: ${paymentError.message}`);
     }
+
+    return {
+      message: 'Company registered successfully. Please complete payment to activate your account.',
+      companyId: company.id,
+      userId: user.id,
+      subscriptionId: subscription.id,
+      invoiceId: invoice.id,
+      invoiceNumber: invoice.invoiceNumber,
+      amount: selectedDuration.finalPrice,
+      durationMonths: dto.durationMonths,
+      discountPercentage: selectedDuration.discountPercentage,
+      paymentUrl,
+      paymentToken,
+      dueDate: invoice.dueDate,
+      verificationToken,
+    };
   }
 
   async verifyEmail(dto: VerifyEmailDto) {
@@ -188,8 +259,15 @@ export class AuthService {
       throw new UnauthorizedException('Account is deactivated');
     }
 
-    if (user.company.status !== 'active') {
+    if (user.company.status !== 'active' && user.company.status !== 'pending') {
       throw new UnauthorizedException('Company account is not active');
+    }
+
+    // Check subscription status - block if suspended
+    if (user.company.subscriptionStatus === 'suspended') {
+      throw new UnauthorizedException(
+        'Your subscription has been suspended. Please renew your subscription to continue. Visit your account settings to renew.',
+      );
     }
 
     // Update last login
@@ -299,6 +377,53 @@ export class AuthService {
     return { message: 'Password reset successfully' };
   }
 
+  async getMe(userId: string) {
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+      relations: ['company'],
+    });
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    // Try to get subscription separately
+    let subscription = null;
+    if (user.companyId) {
+      const subscriptionResult = await this.dataSource.query(
+        `SELECT s.*, sp.name as plan_name, sp.slug as plan_slug
+         FROM subscriptions s
+         LEFT JOIN subscription_plans sp ON s.plan_id = sp.id
+         WHERE s.company_id = ? AND s.status IN ('active', 'expired', 'suspended')
+         ORDER BY s.created_at DESC
+         LIMIT 1`,
+        [user.companyId]
+      );
+      subscription = subscriptionResult[0] || null;
+    }
+
+    return {
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        type: 'user',
+        companyId: user.companyId,
+      },
+      company: user.company ? {
+        id: user.company.id,
+        name: user.company.name,
+        slug: user.company.slug,
+        email: user.company.email,
+        phone: user.company.phone,
+        status: user.company.status,
+        subscriptionStatus: user.company.subscriptionStatus,
+      } : null,
+      subscription,
+    };
+  }
+
   async refreshToken(refreshToken: string) {
     try {
       const payload = this.jwtService.verify(refreshToken);
@@ -318,10 +443,11 @@ export class AuthService {
   }
 
   private generateTokens(user: User) {
+    const isCompanyAdmin = (user.company as any)?.slug === 'super-admin';
     const payload = {
       sub: user.id,
       email: user.email,
-      type: 'user',
+      type: isCompanyAdmin ? 'company_admin' : 'user',
       companyId: user.companyId,
       role: user.role,
     };

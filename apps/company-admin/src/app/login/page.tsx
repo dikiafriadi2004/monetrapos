@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { api } from '../../lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -9,6 +10,15 @@ export default function LoginPage() {
   const [password, setPassword] = useState('admin123');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
+
+  // Check if already logged in
+  useEffect(() => {
+    const token = localStorage.getItem('company_token');
+    if (token) {
+      router.push('/dashboard');
+    }
+  }, [router]);
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
@@ -16,39 +26,38 @@ export default function LoginPage() {
     setError('');
 
     try {
-      console.log('Attempting login with:', { email });
-      
-      const response = await fetch('http://localhost:4404/api/v1/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
+      // Use API client instead of fetch
+      const data: any = await api.post('/auth/login', { email, password });
 
-      console.log('Response status:', response.status);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Login failed');
-      }
-
-      const data = await response.json();
-      console.log('Login successful:', data);
-
-      // Store token
+      // Store token and user data
       localStorage.setItem('company_token', data.accessToken);
       localStorage.setItem('company_user', JSON.stringify(data.user));
+
+      // Store remember me preference
+      if (rememberMe) {
+        localStorage.setItem('company_remember_email', email);
+      } else {
+        localStorage.removeItem('company_remember_email');
+      }
 
       // Redirect to dashboard
       router.push('/dashboard');
     } catch (err: any) {
       console.error('Login error:', err);
-      setError(err.message || 'Login failed. Please try again.');
+      setError(err.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
   };
+
+  // Load remembered email on mount
+  useEffect(() => {
+    const rememberedEmail = localStorage.getItem('company_remember_email');
+    if (rememberedEmail) {
+      setEmail(rememberedEmail);
+      setRememberMe(true);
+    }
+  }, []);
 
   return (
     <div style={{
@@ -175,6 +184,37 @@ export default function LoginPage() {
               onFocus={(e) => e.target.style.borderColor = '#667eea'}
               onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
             />
+          </div>
+
+          {/* Remember Me */}
+          <div style={{ 
+            marginBottom: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            <input
+              type="checkbox"
+              id="rememberMe"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              style={{
+                width: '16px',
+                height: '16px',
+                cursor: 'pointer'
+              }}
+            />
+            <label 
+              htmlFor="rememberMe"
+              style={{
+                fontSize: '14px',
+                color: '#4a5568',
+                cursor: 'pointer',
+                userSelect: 'none'
+              }}
+            >
+              Remember me
+            </label>
           </div>
 
           <button

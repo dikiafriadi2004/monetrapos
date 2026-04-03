@@ -1,4 +1,13 @@
-import { IsString, IsOptional, IsNumber, IsBoolean, IsEnum, IsDateString, MaxLength, Min } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsNumber,
+  IsBoolean,
+  IsEnum,
+  IsDateString,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { DiscountType } from '../../../common/enums';
 
@@ -12,18 +21,27 @@ export class CreateDiscountDto {
   @IsEnum(DiscountType)
   type: DiscountType;
 
-  @ApiProperty({ example: 10, description: 'Discount value (percentage or fixed amount)' })
+  @ApiProperty({
+    example: 10,
+    description: 'Discount value (percentage or fixed amount)',
+  })
   @IsNumber()
   @Min(0)
   value: number;
 
-  @ApiPropertyOptional({ example: 50000, description: 'Minimum transaction amount' })
+  @ApiPropertyOptional({
+    example: 50000,
+    description: 'Minimum transaction amount',
+  })
   @IsOptional()
   @IsNumber()
   @Min(0)
   minTransaction?: number;
 
-  @ApiPropertyOptional({ example: 25000, description: 'Maximum discount amount (for percentage)' })
+  @ApiPropertyOptional({
+    example: 25000,
+    description: 'Maximum discount amount (for percentage)',
+  })
   @IsOptional()
   @IsNumber()
   @Min(0)

@@ -1,4 +1,12 @@
-import { IsString, IsOptional, IsNumber, IsBoolean, MaxLength, Min, Max } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsNumber,
+  IsBoolean,
+  MaxLength,
+  Min,
+  Max,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateTaxDto {
@@ -13,7 +21,10 @@ export class CreateTaxDto {
   @Max(100)
   rate: number;
 
-  @ApiPropertyOptional({ default: false, description: 'Whether tax is inclusive in price' })
+  @ApiPropertyOptional({
+    default: false,
+    description: 'Whether tax is inclusive in price',
+  })
   @IsOptional()
   @IsBoolean()
   isInclusive?: boolean;

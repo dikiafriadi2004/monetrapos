@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Role } from './role.entity';
@@ -9,7 +13,8 @@ import { CreateRoleDto, UpdateRoleDto } from './dto';
 export class RolesService {
   constructor(
     @InjectRepository(Role) private roleRepo: Repository<Role>,
-    @InjectRepository(Permission) private permissionRepo: Repository<Permission>,
+    @InjectRepository(Permission)
+    private permissionRepo: Repository<Permission>,
   ) {}
 
   async create(dto: CreateRoleDto): Promise<Role> {
@@ -20,7 +25,9 @@ export class RolesService {
     });
 
     if (dto.permissionIds?.length) {
-      role.permissions = await this.permissionRepo.findBy({ id: In(dto.permissionIds) });
+      role.permissions = await this.permissionRepo.findBy({
+        id: In(dto.permissionIds),
+      });
     }
 
     return this.roleRepo.save(role);
@@ -45,13 +52,16 @@ export class RolesService {
 
   async update(id: string, dto: UpdateRoleDto): Promise<Role> {
     const role = await this.findOne(id);
-    if (role.isSystemRole) throw new BadRequestException('Cannot modify system roles');
+    if (role.isSystemRole)
+      throw new BadRequestException('Cannot modify system roles');
 
     if (dto.name) role.name = dto.name;
     if (dto.description !== undefined) role.description = dto.description;
 
     if (dto.permissionIds) {
-      role.permissions = await this.permissionRepo.findBy({ id: In(dto.permissionIds) });
+      role.permissions = await this.permissionRepo.findBy({
+        id: In(dto.permissionIds),
+      });
     }
 
     return this.roleRepo.save(role);
@@ -59,63 +69,178 @@ export class RolesService {
 
   async remove(id: string): Promise<void> {
     const role = await this.findOne(id);
-    if (role.isSystemRole) throw new BadRequestException('Cannot delete system roles');
+    if (role.isSystemRole)
+      throw new BadRequestException('Cannot delete system roles');
     await this.roleRepo.remove(role);
   }
 
   async findAllPermissions(): Promise<Permission[]> {
-    return this.permissionRepo.find({ order: { category: 'ASC', code: 'ASC' } });
+    return this.permissionRepo.find({
+      order: { category: 'ASC', code: 'ASC' },
+    });
   }
 
   async createDefaultRoles(storeId: string): Promise<void> {
     const allPermissions = await this.permissionRepo.find();
 
-    const posPermissions = allPermissions.filter((p) => p.category === 'POS');
-    const productViewPerm = allPermissions.filter((p) => p.code === 'product.view');
+    // Helper to get permissions by codes
+    const getPermissionsByCodes = (codes: string[]) =>
+      allPermissions.filter((p) => codes.includes(p.code));
 
-    // Owner - all permissions
+    // Helper to get permissions by category
+    const getPermissionsByCategory = (category: string) =>
+      allPermissions.filter((p) => p.category === category);
+
+    // 1. Owner - Full access to all permissions
     const owner = this.roleRepo.create({
       name: 'Owner',
+      description:
+        'Full access to all features including subscription and billing',
       storeId,
       isSystemRole: true,
       permissions: allPermissions,
     });
 
-    // Admin - almost all except employee management
+    // 2. Admin - Almost all except subscription management
     const adminPermissions = allPermissions.filter(
-      (p) => !['employee.create', 'employee.delete', 'employee.manage_role'].includes(p.code),
+      (p) => p.code !== 'settings.subscription',
     );
     const admin = this.roleRepo.create({
       name: 'Admin',
+      description: 'Manage products, inventory, employees, and customers',
       storeId,
       isSystemRole: true,
       permissions: adminPermissions,
     });
 
-    // Manager - reports, void, discount, stock, shifts
+    // 3. Manager - Store operations, shifts, reports, approve transactions
     const managerCodes = [
-      'pos.create_transaction', 'pos.void_transaction', 'pos.refund', 'pos.apply_discount', 'pos.view_cart',
-      'product.view', 'product.manage_stock',
-      'employee.view', 'employee.manage_shift',
-      'finance.view_reports', 'finance.view_transactions', 'finance.manage_discount',
-      'customer.view', 'customer.create', 'customer.manage_loyalty',
+      'pos.create_transaction',
+      'pos.void_transaction',
+      'pos.refund',
+      'pos.apply_discount',
+      'pos.view_cart',
+      'product.view',
+      'inventory.view',
+      'employee.view',
+      'employee.manage_shift',
+      'finance.view_reports',
+      'finance.view_transactions',
+      'finance.manage_discount',
+      'store.view',
+      'customer.view',
+      'customer.create',
+      'customer.edit',
+      'customer.manage_loyalty',
+      'settings.manage_table',
     ];
-    const managerPermissions = allPermissions.filter((p) => managerCodes.includes(p.code));
     const manager = this.roleRepo.create({
       name: 'Manager',
+      description: 'Manage store operations, shifts, and view reports',
       storeId,
       isSystemRole: true,
-      permissions: managerPermissions,
+      permissions: getPermissionsByCodes(managerCodes),
     });
 
-    // Kasir - POS only + product view
-    const kasir = this.roleRepo.create({
-      name: 'Kasir',
+    // 4. Cashier - POS transactions and customer management
+    const cashierCodes = [
+      'pos.create_transaction',
+      'pos.view_cart',
+      'product.view',
+      'customer.view',
+      'customer.create',
+      'customer.edit',
+      'customer.manage_loyalty',
+      'employee.clock_in_out',
+    ];
+    const cashier = this.roleRepo.create({
+      name: 'Cashier',
+      description: 'Process POS transactions and manage customers',
       storeId,
       isSystemRole: true,
-      permissions: [...posPermissions.filter((p) => p.code === 'pos.create_transaction' || p.code === 'pos.view_cart'), ...productViewPerm],
+      permissions: getPermissionsByCodes(cashierCodes),
     });
 
-    await this.roleRepo.save([owner, admin, manager, kasir]);
+    // 5. Inventory Staff - Inventory and stock management
+    const inventoryStaffCodes = [
+      'product.view',
+      'product.create',
+      'product.edit',
+      'product.manage_stock',
+      'inventory.view',
+      'inventory.adjust',
+      'inventory.transfer',
+      'inventory.opname',
+      'employee.clock_in_out',
+    ];
+    const inventoryStaff = this.roleRepo.create({
+      name: 'Inventory Staff',
+      description: 'Manage inventory, stock levels, and transfers',
+      storeId,
+      isSystemRole: true,
+      permissions: getPermissionsByCodes(inventoryStaffCodes),
+    });
+
+    // 6. Kitchen Staff - View and update kitchen orders (FnB specific)
+    const kitchenStaffCodes = [
+      'kitchen.view_orders',
+      'kitchen.update_status',
+      'product.view',
+      'employee.clock_in_out',
+    ];
+    const kitchenStaff = this.roleRepo.create({
+      name: 'Kitchen Staff',
+      description: 'View and update kitchen order status (FnB)',
+      storeId,
+      isSystemRole: true,
+      permissions: getPermissionsByCodes(kitchenStaffCodes),
+    });
+
+    // 7. Laundry Staff - View and update laundry orders (Laundry specific)
+    const laundryStaffCodes = [
+      'laundry.view_orders',
+      'laundry.update_status',
+      'product.view',
+      'customer.view',
+      'employee.clock_in_out',
+    ];
+    const laundryStaff = this.roleRepo.create({
+      name: 'Laundry Staff',
+      description: 'View and update laundry order status',
+      storeId,
+      isSystemRole: true,
+      permissions: getPermissionsByCodes(laundryStaffCodes),
+    });
+
+    // 8. Accountant - View all financial reports and export data
+    const accountantCodes = [
+      'finance.view_reports',
+      'finance.view_transactions',
+      'finance.export_data',
+      'finance.manage_expenses',
+      'finance.manage_tax',
+      'product.view',
+      'inventory.view',
+      'customer.view',
+      'store.view',
+    ];
+    const accountant = this.roleRepo.create({
+      name: 'Accountant',
+      description: 'View financial reports, export data, and manage expenses',
+      storeId,
+      isSystemRole: true,
+      permissions: getPermissionsByCodes(accountantCodes),
+    });
+
+    await this.roleRepo.save([
+      owner,
+      admin,
+      manager,
+      cashier,
+      inventoryStaff,
+      kitchenStaff,
+      laundryStaff,
+      accountant,
+    ]);
   }
 }

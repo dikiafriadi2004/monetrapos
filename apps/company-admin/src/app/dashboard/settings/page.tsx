@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Settings, Save, Building, Mail, Phone, MapPin, Loader2, CheckCircle } from 'lucide-react';
+import { Settings, Save, Building, Mail, Phone, MapPin, Loader2, CheckCircle, Zap } from 'lucide-react';
+import Link from 'next/link';
 import { api } from '../../../lib/api';
 
 export default function PlatformSettingsPage() {
@@ -74,6 +75,23 @@ export default function PlatformSettingsPage() {
           <Settings size={20} color="var(--text-secondary)" />
         </div>
       </div>
+
+      {/* Payment Gateway Card */}
+      <Link href="/dashboard/settings/payment-gateway" style={{ textDecoration: 'none' }}>
+        <div className="glass-panel animate-fade-in" style={{ maxWidth: '800px', padding: 'var(--space-lg)', marginBottom: 'var(--space-lg)', display: 'flex', alignItems: 'center', gap: 'var(--space-md)', cursor: 'pointer', transition: 'border-color var(--transition-fast)', border: '1px solid var(--border-subtle)' }}
+          onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent-base)')}
+          onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border-subtle)')}
+        >
+          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-md)', background: 'rgba(99,102,241,0.15)', color: 'var(--accent-base)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Zap size={22} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, marginBottom: '2px' }}>Payment Gateway (Xendit)</div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Configure Xendit API credentials for subscription payment processing</div>
+          </div>
+          <span style={{ color: 'var(--text-tertiary)', fontSize: '1.2rem' }}>→</span>
+        </div>
+      </Link>
 
       <div className="glass-panel animate-fade-in" style={{ maxWidth: '800px' }}>
         <form onSubmit={handleSave}>

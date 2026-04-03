@@ -1,8 +1,21 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Request, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Request,
+  UseGuards,
+  Query,
+  HttpCode,
+  HttpStatus,
+} from '@nestjs/common';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { StoresService } from './stores.service';
-import { CreateStoreDto, UpdateStoreDto } from './dto';
+import { CreateStoreDto, UpdateStoreDto, AssignManagerDto } from './dto';
 
 @ApiTags('Stores')
 @ApiBearerAuth()
@@ -20,9 +33,30 @@ export class StoresController {
 
   @Get()
   @ApiOperation({ summary: 'Get all stores for current company' })
-  findAll(@Request() req: any) {
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  @ApiQuery({ name: 'isActive', required: false, type: Boolean })
+  @ApiQuery({ name: 'type', required: false, enum: ['retail', 'fnb', 'warehouse', 'service'] })
+  @ApiQuery({ name: 'managerId', required: false, type: String, description: 'Filter by manager ID' })
+  findAll(
+    @Request() req: any,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('search') search?: string,
+    @Query('isActive') isActive?: boolean,
+    @Query('type') type?: string,
+    @Query('managerId') managerId?: string,
+  ) {
     const companyId = req.user.companyId;
-    return this.storesService.findAll(companyId);
+    return this.storesService.findAll(companyId, {
+      page: page ? +page : undefined,
+      limit: limit ? +limit : undefined,
+      search,
+      isActive: isActive !== undefined ? (isActive === true || (isActive as any) === 'true') : undefined,
+      type,
+      managerId,
+    });
   }
 
   @Get(':id')
@@ -34,15 +68,57 @@ export class StoresController {
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update store' })
-  update(@Param('id') id: string, @Request() req: any, @Body() dto: UpdateStoreDto) {
+  update(
+    @Param('id') id: string,
+    @Request() req: any,
+    @Body() dto: UpdateStoreDto,
+  ) {
     const companyId = req.user.companyId;
     return this.storesService.update(id, dto, companyId);
   }
 
   @Delete(':id')
   @ApiOperation({ summary: 'Delete store' })
+  @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id') id: string, @Request() req: any) {
     const companyId = req.user.companyId;
     return this.storesService.remove(id, companyId);
+  }
+
+  @Post(':id/assign-manager')
+  @ApiOperation({ summary: 'Assign a manager to a store' })
+  @ApiParam({ name: 'id', description: 'Store ID' })
+  assignManager(
+    @Param('id') id: string,
+    @Body() dto: AssignManagerDto,
+    @Request() req: any,
+  ) {
+    const companyId = req.user.companyId;
+    return this.storesService.assignManager(id, dto.managerId, companyId);
+  }
+
+  @Delete(':id/manager')
+  @ApiOperation({ summary: 'Remove manager from a store' })
+  @ApiParam({ name: 'id', description: 'Store ID' })
+  @HttpCode(HttpStatus.OK)
+  removeManager(@Param('id') id: string, @Request() req: any) {
+    const companyId = req.user.companyId;
+    return this.storesService.removeManager(id, companyId);
+  }
+
+  @Get('manager/:managerId')
+  @ApiOperation({ summary: 'Get all stores managed by a specific user' })
+  @ApiParam({ name: 'managerId', description: 'Manager user ID' })
+  findByManager(@Param('managerId') managerId: string, @Request() req: any) {
+    const companyId = req.user.companyId;
+    return this.storesService.findByManager(managerId, companyId);
+  }
+
+  @Get(':id/stats')
+  @ApiOperation({ summary: 'Get store statistics' })
+  @ApiParam({ name: 'id', description: 'Store ID' })
+  getStats(@Param('id') id: string, @Request() req: any) {
+    const companyId = req.user.companyId;
+    return this.storesService.getStoreStats(id, companyId);
   }
 }

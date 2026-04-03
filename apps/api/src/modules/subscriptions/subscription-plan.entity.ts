@@ -1,6 +1,7 @@
 import { Entity, Column, OneToMany, DeleteDateColumn } from 'typeorm';
 import { BaseEntity } from '../../common/entities';
 import { Subscription } from './subscription.entity';
+import { SubscriptionDuration } from './subscription-duration.entity';
 
 @Entity('subscription_plans')
 export class SubscriptionPlan extends BaseEntity {
@@ -21,7 +22,13 @@ export class SubscriptionPlan extends BaseEntity {
   @Column({ type: 'decimal', precision: 12, scale: 2, name: 'price_yearly' })
   priceYearly: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, name: 'setup_fee' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    name: 'setup_fee',
+  })
   setupFee: number;
 
   // Trial
@@ -67,6 +74,9 @@ export class SubscriptionPlan extends BaseEntity {
   // Relations
   @OneToMany(() => Subscription, (subscription) => subscription.plan)
   subscriptions: Subscription[];
+
+  @OneToMany(() => SubscriptionDuration, (duration) => duration.plan)
+  durations: SubscriptionDuration[];
 
   // Soft Delete
   @DeleteDateColumn({ name: 'deleted_at' })

@@ -1,4 +1,12 @@
-import { IsString, IsNumber, IsBoolean, IsEnum, IsOptional, Min, Max } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsBoolean,
+  IsEnum,
+  IsOptional,
+  Min,
+  Max,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export enum TaxType {
@@ -15,7 +23,10 @@ export class CreateTaxDto {
   @IsEnum(TaxType)
   type: TaxType;
 
-  @ApiProperty({ example: 11, description: 'Tax rate (percentage or fixed amount)' })
+  @ApiProperty({
+    example: 11,
+    description: 'Tax rate (percentage or fixed amount)',
+  })
   @IsNumber()
   @Min(0)
   rate: number;

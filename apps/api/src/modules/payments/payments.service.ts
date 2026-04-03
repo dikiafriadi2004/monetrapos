@@ -4,20 +4,26 @@ import { Repository } from 'typeorm';
 import { PaymentMethod } from './payment-method.entity';
 import { QrisConfig } from './qris-config.entity';
 import {
-  CreatePaymentMethodDto, UpdatePaymentMethodDto,
-  CreateQrisConfigDto, UpdateQrisConfigDto,
+  CreatePaymentMethodDto,
+  UpdatePaymentMethodDto,
+  CreateQrisConfigDto,
+  UpdateQrisConfigDto,
 } from './dto';
 
 @Injectable()
 export class PaymentsService {
   constructor(
-    @InjectRepository(PaymentMethod) private paymentMethodRepo: Repository<PaymentMethod>,
-    @InjectRepository(QrisConfig) private qrisConfigRepo: Repository<QrisConfig>,
+    @InjectRepository(PaymentMethod)
+    private paymentMethodRepo: Repository<PaymentMethod>,
+    @InjectRepository(QrisConfig)
+    private qrisConfigRepo: Repository<QrisConfig>,
   ) {}
 
   // ────── Payment Methods ──────
 
-  async createPaymentMethod(dto: CreatePaymentMethodDto): Promise<PaymentMethod> {
+  async createPaymentMethod(
+    dto: CreatePaymentMethodDto,
+  ): Promise<PaymentMethod> {
     const pm = this.paymentMethodRepo.create(dto);
     return this.paymentMethodRepo.save(pm);
   }
@@ -42,7 +48,10 @@ export class PaymentsService {
     return pm;
   }
 
-  async updatePaymentMethod(id: string, dto: UpdatePaymentMethodDto): Promise<PaymentMethod> {
+  async updatePaymentMethod(
+    id: string,
+    dto: UpdatePaymentMethodDto,
+  ): Promise<PaymentMethod> {
     const pm = await this.findOnePaymentMethod(id);
     Object.assign(pm, dto);
     return this.paymentMethodRepo.save(pm);
@@ -73,7 +82,10 @@ export class PaymentsService {
     });
   }
 
-  async updateQrisConfig(id: string, dto: UpdateQrisConfigDto): Promise<QrisConfig> {
+  async updateQrisConfig(
+    id: string,
+    dto: UpdateQrisConfigDto,
+  ): Promise<QrisConfig> {
     const qris = await this.qrisConfigRepo.findOne({ where: { id } });
     if (!qris) throw new NotFoundException('QRIS config not found');
     Object.assign(qris, dto);

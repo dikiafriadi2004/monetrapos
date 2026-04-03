@@ -1,4 +1,12 @@
-import { IsString, IsOptional, IsNumber, IsBoolean, IsEnum, MaxLength, Min } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsNumber,
+  IsBoolean,
+  IsEnum,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateProductDto {
@@ -147,19 +155,38 @@ export class CreateCategoryDto {
   @MaxLength(100)
   name: string;
 
+  @ApiProperty({ example: 'makanan', maxLength: 255 })
+  @IsString()
+  @MaxLength(255)
+  slug: string;
+
   @ApiPropertyOptional({ example: 'Semua jenis makanan' })
   @IsOptional()
   @IsString()
   description?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 'https://example.com/image.jpg' })
   @IsOptional()
   @IsString()
-  image?: string;
+  imageUrl?: string;
+
+  @ApiPropertyOptional({ example: 0 })
+  @IsOptional()
+  @IsNumber()
+  sortOrder?: number;
+
+  @ApiProperty({ example: 'company-uuid' })
+  @IsString()
+  companyId: string;
 
   @ApiProperty({ example: 'store-uuid' })
   @IsString()
   storeId: string;
+
+  @ApiPropertyOptional({ example: 'parent-category-uuid' })
+  @IsOptional()
+  @IsString()
+  parentId?: string;
 }
 
 export class UpdateCategoryDto {
@@ -172,12 +199,18 @@ export class UpdateCategoryDto {
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
+  @MaxLength(255)
+  slug?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
   description?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
-  image?: string;
+  imageUrl?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -188,6 +221,11 @@ export class UpdateCategoryDto {
   @IsOptional()
   @IsNumber()
   sortOrder?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  parentId?: string;
 }
 
 export class CreateVariantDto {

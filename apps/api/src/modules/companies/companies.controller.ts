@@ -1,8 +1,15 @@
-import { Controller, Get, Patch, Body, Request, UseGuards, UnauthorizedException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Patch,
+  Body,
+  Request,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { CompaniesService } from './companies.service';
-import { UpdateCompanyDto } from './dto/update-company.dto';
+import { UpdateCompanyDto, UpdateCompanySettingsDto } from './dto';
 
 @ApiTags('Companies')
 @ApiBearerAuth()
@@ -14,18 +21,30 @@ export class CompaniesController {
   @Get('profile')
   @ApiOperation({ summary: 'Get current company profile' })
   getProfile(@Request() req: any) {
-    if (req.user.type !== 'company_admin') {
-      throw new UnauthorizedException('Only company admins can access this endpoint');
-    }
-    return this.companiesService.getProfile(req.user.id);
+    // Extract companyId from JWT token (set by tenant middleware)
+    const companyId = req.user.companyId || req.user.company_id;
+    return this.companiesService.getProfile(companyId);
   }
 
   @Patch('profile')
   @ApiOperation({ summary: 'Update company profile' })
   updateProfile(@Request() req: any, @Body() dto: UpdateCompanyDto) {
-    if (req.user.type !== 'company_admin') {
-      throw new UnauthorizedException('Only company admins can access this endpoint');
-    }
-    return this.companiesService.updateProfile(req.user.id, dto);
+    // Extract companyId from JWT token (set by tenant middleware)
+    const companyId = req.user.companyId || req.user.company_id;
+    return this.companiesService.updateProfile(companyId, dto);
+  }
+
+  @Get('settings')
+  @ApiOperation({ summary: 'Get company settings' })
+  getSettings(@Request() req: any) {
+    const companyId = req.user.companyId || req.user.company_id;
+    return this.companiesService.getSettings(companyId);
+  }
+
+  @Patch('settings')
+  @ApiOperation({ summary: 'Update company settings' })
+  updateSettings(@Request() req: any, @Body() dto: UpdateCompanySettingsDto) {
+    const companyId = req.user.companyId || req.user.company_id;
+    return this.companiesService.updateSettings(companyId, dto);
   }
 }

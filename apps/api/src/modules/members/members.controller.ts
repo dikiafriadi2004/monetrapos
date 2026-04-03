@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Patch, Delete, Body, Request, UseGuards, Param, UnauthorizedException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Request,
+  UseGuards,
+  Param,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { MembersService } from './members.service';
@@ -16,7 +27,9 @@ export class MembersController {
   @ApiOperation({ summary: 'Get current member profile' })
   getProfile(@Request() req: any) {
     if (req.user.type !== 'member') {
-      throw new UnauthorizedException('Only members can access their profile directly');
+      throw new UnauthorizedException(
+        'Only members can access their profile directly',
+      );
     }
     return this.membersService.getProfile(req.user.id);
   }
@@ -25,7 +38,9 @@ export class MembersController {
   @ApiOperation({ summary: 'Update member profile' })
   updateProfile(@Request() req: any, @Body() dto: UpdateMemberDto) {
     if (req.user.type !== 'member') {
-      throw new UnauthorizedException('Only members can update their own profile');
+      throw new UnauthorizedException(
+        'Only members can update their own profile',
+      );
     }
     return this.membersService.updateProfile(req.user.id, dto);
   }
@@ -45,7 +60,9 @@ export class MembersController {
   @ApiOperation({ summary: 'List all members under this company' })
   findAll(@Request() req: any) {
     if (req.user.type !== 'company_admin') {
-      throw new UnauthorizedException('Only company admins can access this list');
+      throw new UnauthorizedException(
+        'Only company admins can access this list',
+      );
     }
     return this.membersService.findAllByCompany(req.user.id);
   }
@@ -54,14 +71,20 @@ export class MembersController {
   @ApiOperation({ summary: 'Get a specific member by ID' })
   findOne(@Request() req: any, @Param('id') id: string) {
     if (req.user.type !== 'company_admin') {
-      throw new UnauthorizedException('Only company admins can get member details');
+      throw new UnauthorizedException(
+        'Only company admins can get member details',
+      );
     }
     return this.membersService.findOneByCompany(req.user.id, id);
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Update a specific member' })
-  update(@Request() req: any, @Param('id') id: string, @Body() dto: UpdateMemberDto) {
+  update(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Body() dto: UpdateMemberDto,
+  ) {
     if (req.user.type !== 'company_admin') {
       throw new UnauthorizedException('Only company admins can update members');
     }

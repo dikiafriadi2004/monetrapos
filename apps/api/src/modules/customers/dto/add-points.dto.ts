@@ -17,11 +17,21 @@ export class AddPointsDto {
   amount?: number;
 
   @ApiProperty({ example: 'Purchase reward' })
-  @IsString()
-  reason: string;
-
-  @ApiProperty({ required: false, example: '123e4567-e89b-12d3-a456-426614174000' })
   @IsOptional()
-  @IsUUID()
-  transactionId?: string;
+  @IsString()
+  description?: string;
+
+  @ApiProperty({ example: 'transaction', description: 'Reference type' })
+  @IsOptional()
+  @IsString()
+  referenceType?: string;
+
+  @ApiProperty({
+    required: false,
+    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: 'Reference ID (e.g., transaction ID)',
+  })
+  @IsOptional()
+  @IsString()
+  referenceId?: string;
 }

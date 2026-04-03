@@ -1,5 +1,17 @@
-import api from '@/lib/api';
-import { Transaction, TransactionItem, PaymentMethodType } from '@/types';
+import apiClient from '@/lib/api-client';
+import { Transaction, TransactionItem } from '@/types';
+
+export type PaymentMethodType = 'cash' | 'card' | 'transfer' | 'qris';
+
+export interface CreateTransactionItemRequest {
+  productId: string;
+  productName: string;
+  quantity: number;
+  price: number;
+  subtotal: number;
+  discount?: number;
+  total?: number;
+}
 
 export interface CreateTransactionRequest {
   storeId: string;
@@ -15,29 +27,29 @@ export interface CreateTransactionRequest {
   employeeId?: string;
   employeeName?: string;
   notes?: string;
-  items: TransactionItem[];
+  items: CreateTransactionItemRequest[];
 }
 
 export const transactionService = {
   async createTransaction(data: CreateTransactionRequest): Promise<Transaction> {
-    const response = await api.post<Transaction>('/transactions', data);
+    const response = await apiClient.post<Transaction>('/transactions', data);
     return response.data;
   },
 
   async getTransactions(storeId: string, page = 1, limit = 20) {
-    const response = await api.get('/transactions', {
+    const response = await apiClient.get('/transactions', {
       params: { storeId, page, limit },
     });
     return response.data;
   },
 
   async getTransaction(id: string): Promise<Transaction> {
-    const response = await api.get<Transaction>(`/transactions/${id}`);
+    const response = await apiClient.get<Transaction>(`/transactions/${id}`);
     return response.data;
   },
 
   async voidTransaction(id: string, reason: string): Promise<Transaction> {
-    const response = await api.patch<Transaction>(`/transactions/${id}/void`, { reason });
+    const response = await apiClient.patch<Transaction>(`/transactions/${id}/void`, { reason });
     return response.data;
   },
 };

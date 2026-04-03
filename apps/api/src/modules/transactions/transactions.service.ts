@@ -1,18 +1,26 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, DataSource } from 'typeorm';
 import { Transaction } from './transaction.entity';
 import { TransactionItem } from './transaction-item.entity';
 import { Product } from '../products/product.entity';
+import { Customer } from '../customers/customer.entity';
 import { TransactionStatus } from '../../common/enums';
 import { CreateTransactionDto, VoidTransactionDto } from './dto';
 
 @Injectable()
 export class TransactionsService {
   constructor(
-    @InjectRepository(Transaction) private transactionRepo: Repository<Transaction>,
-    @InjectRepository(TransactionItem) private transactionItemRepo: Repository<TransactionItem>,
+    @InjectRepository(Transaction)
+    private transactionRepo: Repository<Transaction>,
+    @InjectRepository(TransactionItem)
+    private transactionItemRepo: Repository<TransactionItem>,
     @InjectRepository(Product) private productRepo: Repository<Product>,
+    @InjectRepository(Customer) private customerRepo: Repository<Customer>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -22,12 +30,29 @@ export class TransactionsService {
     await queryRunner.startTransaction();
 
     try {
-      const invoiceNumber = await this.generateInvoiceNumber(dto.storeId);
+      // Generate unique transaction number
+      const transactionNumber = await this.generateTransactionNumber(
+        dto.storeId,
+      );
+
+      // Calculate totals to verify client calculations
+      const calculatedTotals = this.calculateTotal(dto);
+
+      // Validate calculations (allow small rounding differences)
+      if (Math.abs(calculatedTotals.total - dto.total) > 0.01) {
+        throw new BadRequestException(
+          `Total mismatch. Expected: ${calculatedTotals.total}, Received: ${dto.total}`,
+        );
+      }
 
       // Validate and update stock for each item
+      const productUpdates: { product: Product; quantity: number }[] = [];
       for (const item of dto.items) {
+        if (!item.productId) continue;
+
         const product = await queryRunner.manager.findOne(Product, {
           where: { id: item.productId },
+          lock: { mode: 'pessimistic_write' }, // Lock row to prevent race conditions
         });
 
         if (!product) {
@@ -41,31 +66,78 @@ export class TransactionsService {
           );
         }
 
-        // Deduct stock
+        // Deduct stock atomically
         product.stock = currentStock - item.quantity;
         await queryRunner.manager.save(Product, product);
+        productUpdates.push({ product, quantity: item.quantity });
+      }
+
+      // Update customer loyalty points if customer provided
+      let loyaltyPointsEarned = 0;
+      if (dto.customerId) {
+        const customer = await queryRunner.manager.findOne(Customer, {
+          where: { id: dto.customerId },
+        });
+
+        if (customer) {
+          // Calculate loyalty points: 1 point per 10,000 IDR spent
+          loyaltyPointsEarned = Math.floor(dto.total / 10000);
+          customer.loyaltyPoints = (customer.loyaltyPoints || 0) + loyaltyPointsEarned;
+          await queryRunner.manager.save(Customer, customer);
+        }
       }
 
       // Create transaction
       const transaction = queryRunner.manager.create(Transaction, {
-        invoiceNumber,
+        transactionNumber,
         storeId: dto.storeId,
+        customerId: dto.customerId,
+        customerName: dto.customerName,
+        customerPhone: dto.customerPhone,
         paymentMethod: dto.paymentMethod as any,
-        subtotal: dto.subtotal,
-        taxAmount: dto.taxAmount || 0,
-        discountAmount: dto.discountAmount || 0,
-        total: dto.total,
+        subtotal: calculatedTotals.subtotal,
+        taxAmount: calculatedTotals.taxAmount,
+        discountAmount: calculatedTotals.discountAmount,
+        total: calculatedTotals.total,
         paidAmount: dto.paidAmount,
         changeAmount: dto.changeAmount || 0,
         notes: dto.notes,
         employeeId: dto.employeeId,
+        shiftId: dto.shiftId,
         status: TransactionStatus.COMPLETED,
+        metadata: {
+          loyaltyPointsEarned,
+          paymentMethods: dto.paymentMethods || [
+            { method: dto.paymentMethod, amount: dto.paidAmount },
+          ],
+        },
       } as any);
 
-      const savedTransaction = await queryRunner.manager.save(Transaction, transaction);
+      const savedTransaction = await queryRunner.manager.save(
+        Transaction,
+        transaction,
+      );
+
+      // Create transaction items
+      for (const item of dto.items) {
+        const transactionItem = queryRunner.manager.create(TransactionItem, {
+          transactionId: savedTransaction.id,
+          productId: item.productId,
+          productName: item.productName,
+          variantName: item.variantName,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          discountAmount: item.discountAmount || 0,
+          subtotal: item.subtotal,
+          notes: item.notes,
+        });
+        await queryRunner.manager.save(TransactionItem, transactionItem);
+      }
 
       await queryRunner.commitTransaction();
-      return savedTransaction;
+
+      // Reload with relations
+      return this.findOne(savedTransaction.id);
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -74,13 +146,61 @@ export class TransactionsService {
     }
   }
 
+  /**
+   * Calculate transaction totals with proper rounding
+   * Formula:
+   * 1. Calculate item subtotals: (unitPrice * quantity) - itemDiscount
+   * 2. Sum all item subtotals = subtotal
+   * 3. Apply transaction-level discount
+   * 4. Calculate tax on discounted subtotal
+   * 5. Total = subtotal - transactionDiscount + tax
+   */
+  calculateTotal(dto: CreateTransactionDto): {
+    subtotal: number;
+    discountAmount: number;
+    taxAmount: number;
+    total: number;
+  } {
+    // Calculate subtotal from items
+    let subtotal = 0;
+    for (const item of dto.items) {
+      const itemSubtotal = item.quantity * item.unitPrice - (item.discountAmount || 0);
+      subtotal += itemSubtotal;
+    }
+
+    // Round to 2 decimal places
+    subtotal = Math.round(subtotal * 100) / 100;
+
+    // Transaction-level discount
+    const discountAmount = dto.discountAmount || 0;
+
+    // Calculate tax on discounted amount
+    const taxableAmount = subtotal - discountAmount;
+    const taxAmount = dto.taxAmount || 0;
+
+    // Calculate total
+    const total = Math.round((taxableAmount + taxAmount) * 100) / 100;
+
+    return {
+      subtotal,
+      discountAmount,
+      taxAmount,
+      total,
+    };
+  }
+
   async findAllByStore(
     storeId: string,
     startDate?: string,
     endDate?: string,
     page = 1,
     limit = 20,
-  ): Promise<{ data: Transaction[]; total: number; page: number; limit: number }> {
+  ): Promise<{
+    data: Transaction[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     const where: any = { storeId };
 
     if (startDate && endDate) {
@@ -116,23 +236,162 @@ export class TransactionsService {
     return transaction;
   }
 
-  async voidTransaction(id: string, dto: VoidTransactionDto): Promise<Transaction> {
-    const transaction = await this.findOne(id);
-    if (transaction.status !== TransactionStatus.COMPLETED) {
-      throw new BadRequestException('Only completed transactions can be voided');
+  async voidTransaction(
+    id: string,
+    dto: VoidTransactionDto,
+  ): Promise<Transaction> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const transaction = await queryRunner.manager.findOne(Transaction, {
+        where: { id },
+        relations: ['items'],
+      });
+
+      if (!transaction) {
+        throw new NotFoundException('Transaction not found');
+      }
+
+      if (transaction.status === TransactionStatus.VOIDED) {
+        throw new BadRequestException('Transaction is already voided');
+      }
+
+      if (transaction.status !== TransactionStatus.COMPLETED) {
+        throw new BadRequestException(
+          'Only completed transactions can be voided',
+        );
+      }
+
+      // Restore inventory for each item
+      for (const item of transaction.items) {
+        if (!item.productId) continue;
+
+        const product = await queryRunner.manager.findOne(Product, {
+          where: { id: item.productId },
+          lock: { mode: 'pessimistic_write' },
+        });
+
+        if (product) {
+          product.stock = (product.stock || 0) + item.quantity;
+          await queryRunner.manager.save(Product, product);
+        }
+      }
+
+      // Restore customer loyalty points if applicable
+      if (transaction.customerId && transaction.metadata?.loyaltyPointsEarned) {
+        const customer = await queryRunner.manager.findOne(Customer, {
+          where: { id: transaction.customerId },
+        });
+
+        if (customer) {
+          customer.loyaltyPoints = Math.max(
+            0,
+            (customer.loyaltyPoints || 0) - transaction.metadata.loyaltyPointsEarned,
+          );
+          await queryRunner.manager.save(Customer, customer);
+        }
+      }
+
+      // Update transaction status
+      transaction.status = TransactionStatus.VOIDED;
+      transaction.voidReason = dto.reason;
+      transaction.voidedAt = new Date();
+      if (dto.voidedBy) {
+        transaction.voidedBy = dto.voidedBy;
+      }
+
+      const updated = await queryRunner.manager.save(Transaction, transaction);
+
+      await queryRunner.commitTransaction();
+      return updated;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
-    transaction.status = TransactionStatus.VOIDED;
-    transaction.voidReason = dto.reason;
-    return this.transactionRepo.save(transaction);
   }
 
-  async refundTransaction(id: string): Promise<Transaction> {
-    const transaction = await this.findOne(id);
-    if (transaction.status !== TransactionStatus.COMPLETED) {
-      throw new BadRequestException('Only completed transactions can be refunded');
+  async refundTransaction(
+    id: string,
+    dto?: VoidTransactionDto,
+  ): Promise<Transaction> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const transaction = await queryRunner.manager.findOne(Transaction, {
+        where: { id },
+        relations: ['items'],
+      });
+
+      if (!transaction) {
+        throw new NotFoundException('Transaction not found');
+      }
+
+      if (transaction.status === TransactionStatus.REFUNDED) {
+        throw new BadRequestException('Transaction is already refunded');
+      }
+
+      if (transaction.status !== TransactionStatus.COMPLETED) {
+        throw new BadRequestException(
+          'Only completed transactions can be refunded',
+        );
+      }
+
+      // Restore inventory for each item
+      for (const item of transaction.items) {
+        if (!item.productId) continue;
+
+        const product = await queryRunner.manager.findOne(Product, {
+          where: { id: item.productId },
+          lock: { mode: 'pessimistic_write' },
+        });
+
+        if (product) {
+          product.stock = (product.stock || 0) + item.quantity;
+          await queryRunner.manager.save(Product, product);
+        }
+      }
+
+      // Restore customer loyalty points if applicable
+      if (transaction.customerId && transaction.metadata?.loyaltyPointsEarned) {
+        const customer = await queryRunner.manager.findOne(Customer, {
+          where: { id: transaction.customerId },
+        });
+
+        if (customer) {
+          customer.loyaltyPoints = Math.max(
+            0,
+            (customer.loyaltyPoints || 0) - transaction.metadata.loyaltyPointsEarned,
+          );
+          await queryRunner.manager.save(Customer, customer);
+        }
+      }
+
+      // Update transaction status
+      transaction.status = TransactionStatus.REFUNDED;
+      if (dto) {
+        transaction.voidReason = dto.reason;
+        if (dto.voidedBy) {
+          transaction.voidedBy = dto.voidedBy;
+        }
+      }
+      transaction.voidedAt = new Date();
+
+      const updated = await queryRunner.manager.save(Transaction, transaction);
+
+      await queryRunner.commitTransaction();
+      return updated;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
-    transaction.status = TransactionStatus.REFUNDED;
-    return this.transactionRepo.save(transaction);
   }
 
   async getSalesReport(storeId: string, startDate: string, endDate: string) {
@@ -147,7 +406,10 @@ export class TransactionsService {
       ])
       .where('tx.storeId = :storeId', { storeId })
       .andWhere('tx.status = :status', { status: TransactionStatus.COMPLETED })
-      .andWhere('tx.createdAt BETWEEN :startDate AND :endDate', { startDate, endDate })
+      .andWhere('tx.createdAt BETWEEN :startDate AND :endDate', {
+        startDate,
+        endDate,
+      })
       .getRawOne();
 
     return result;
@@ -166,5 +428,72 @@ export class TransactionsService {
 
     const seq = String(count + 1).padStart(4, '0');
     return `${prefix}-${seq}`;
+  }
+
+  /**
+   * Generate unique transaction number
+   * Format: TRX-YYYYMMDD-XXXX
+   */
+  private async generateTransactionNumber(storeId: string): Promise<string> {
+    const today = new Date();
+    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+    const prefix = `TRX-${dateStr}`;
+
+    const count = await this.transactionRepo
+      .createQueryBuilder('tx')
+      .where('tx.transactionNumber LIKE :prefix', { prefix: `${prefix}%` })
+      .andWhere('tx.storeId = :storeId', { storeId })
+      .getCount();
+
+    const seq = String(count + 1).padStart(4, '0');
+    return `${prefix}-${seq}`;
+  }
+
+  /**
+   * Generate receipt data for printing
+   */
+  async getReceipt(id: string): Promise<any> {
+    const transaction = await this.transactionRepo.findOne({
+      where: { id },
+      relations: ['items', 'store', 'employee', 'customer'],
+    });
+
+    if (!transaction) {
+      throw new NotFoundException('Transaction not found');
+    }
+
+    return {
+      transactionNumber: transaction.transactionNumber,
+      invoiceNumber: transaction.invoiceNumber,
+      date: transaction.createdAt,
+      store: {
+        name: transaction.store?.name,
+        address: transaction.store?.address,
+        phone: transaction.store?.phone,
+      },
+      employee: transaction.employee?.name,
+      customer: {
+        name: transaction.customerName || transaction.customer?.name,
+        phone: transaction.customerPhone || transaction.customer?.phone,
+      },
+      items: transaction.items.map((item) => ({
+        name: item.productName,
+        variant: item.variantName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        discount: item.discountAmount,
+        subtotal: item.subtotal,
+      })),
+      subtotal: transaction.subtotal,
+      discount: transaction.discountAmount,
+      tax: transaction.taxAmount,
+      total: transaction.total,
+      paymentMethod: transaction.paymentMethod,
+      paidAmount: transaction.paidAmount,
+      changeAmount: transaction.changeAmount,
+      status: transaction.status,
+      notes: transaction.notes,
+      loyaltyPointsEarned: transaction.metadata?.loyaltyPointsEarned || 0,
+    };
   }
 }

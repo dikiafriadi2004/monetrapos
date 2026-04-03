@@ -1,148 +1,212 @@
-"use client";
+'use client';
 
-import { useEffect } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import Link from 'next/link';
-import { 
-  Store, LayoutDashboard, Package, 
-  Users, Settings, LogOut, Banknote, ShieldAlert,
-  Percent, Wallet, Receipt, Clock, ChefHat, Warehouse, CreditCard
-} from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import SubscriptionStatusBanner from '@/components/SubscriptionStatusBanner';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { 
+  LayoutDashboard, 
+  Package, 
+  Users, 
+  Receipt, 
+  CreditCard, 
+  Settings, 
+  LogOut,
+  Menu,
+  X,
+  FolderTree,
+  ShoppingCart,
+  Warehouse,
+  FileText,
+  Store,
+  UserCog,
+  ChevronRight,
+  Puzzle
+} from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { subscriptionService } from '@/services/subscription.service';
+import { Subscription } from '@/types/subscription.types';
+
+const navigation = [
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, section: 'main' },
+  { name: 'POS', href: '/dashboard/pos', icon: ShoppingCart, section: 'sales' },
+  { name: 'Transactions', href: '/dashboard/transactions', icon: Receipt, section: 'sales' },
+  { name: 'Products', href: '/dashboard/products', icon: Package, section: 'inventory' },
+  { name: 'Categories', href: '/dashboard/categories', icon: FolderTree, section: 'inventory' },
+  { name: 'Inventory', href: '/dashboard/inventory', icon: Warehouse, section: 'inventory' },
+  { name: 'Customers', href: '/dashboard/customers', icon: Users, section: 'customers' },
+  { name: 'Employees', href: '/dashboard/employees', icon: UserCog, section: 'management' },
+  { name: 'Stores', href: '/dashboard/stores', icon: Store, section: 'management' },
+  { name: 'Reports', href: '/dashboard/reports', icon: FileText, section: 'reports' },
+  { name: 'Add-ons', href: '/dashboard/add-ons', icon: Puzzle, section: 'settings' },
+  { name: 'Subscription', href: '/dashboard/subscription', icon: CreditCard, section: 'settings' },
+  { name: 'Settings', href: '/dashboard/settings', icon: Settings, section: 'settings' },
+];
+
+const sections = [
+  { id: 'main', title: 'Main' },
+  { id: 'sales', title: 'Sales' },
+  { id: 'inventory', title: 'Inventory' },
+  { id: 'customers', title: 'Customers' },
+  { id: 'management', title: 'Management' },
+  { id: 'reports', title: 'Reports' },
+  { id: 'settings', title: 'Settings' },
+];
 
 export default function DashboardLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
-  const router = useRouter();
+  const { user, company, logout } = useAuth();
   const pathname = usePathname();
-  const { user, isAuthenticated, loading, logout } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
 
+  // Fetch subscription status on mount
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      router.push('/login');
-    }
-  }, [loading, isAuthenticated, router]);
+    const fetchSubscription = async () => {
+      try {
+        const data = await subscriptionService.getCurrentSubscription();
+        setSubscription(data);
+      } catch (error) {
+        console.error('Failed to fetch subscription:', error);
+      }
+    };
 
-  const handleLogout = () => {
-    logout();
-  };
+    fetchSubscription();
+  }, []);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
+  const renderNavigation = () => {
+    return sections.map((section) => {
+      const sectionItems = navigation.filter((item) => item.section === section.id);
+      if (sectionItems.length === 0) return null;
 
-  if (!isAuthenticated) {
-    return null;
-  }
-
-  const menuItems = [
-    { name: 'Analytics', href: '/dashboard', icon: LayoutDashboard },
-    { name: 'POS / Cashier', href: '/dashboard/pos', icon: Banknote },
-    { name: 'Cashier Shifts', href: '/dashboard/shifts', icon: Clock },
-    { name: 'Kitchen Display', href: '/dashboard/kds', icon: ChefHat },
-    { name: 'Products & Inventory', href: '/dashboard/products', icon: Package },
-    { name: 'Stock Management', href: '/dashboard/inventory', icon: Warehouse },
-    { name: 'Taxes & Discounts', href: '/dashboard/taxes', icon: Percent },
-    { name: 'Payment Methods', href: '/dashboard/payments', icon: Wallet },
-    { name: 'Transactions', href: '/dashboard/transactions', icon: Receipt },
-    { name: 'Employees & Roles', href: '/dashboard/employees', icon: ShieldAlert },
-    { name: 'Customers', href: '/dashboard/customers', icon: Users },
-    { name: 'Billing', href: '/dashboard/billing', icon: CreditCard },
-    { name: 'Store Settings', href: '/dashboard/settings', icon: Settings },
-  ];
-
-  return (
-    <div className="dashboard-layout">
-      {/* Sidebar */}
-      <aside className="dashboard-sidebar">
-        <div style={{ padding: 'var(--space-lg)', borderBottom: '1px solid var(--border-subtle)', marginBottom: 'var(--space-md)' }}>
-          <div className="flex-center" style={{ gap: 'var(--space-sm)' }}>
-            <div style={{ 
-              width: '32px', height: '32px', borderRadius: 'var(--radius-sm)', 
-              background: 'var(--success)', color: 'white', display: 'flex', 
-              alignItems: 'center', justifyContent: 'center'
-            }}>
-              <Store size={18} />
-            </div>
-            <h3 style={{ fontSize: '1.25rem', margin: 0 }}>MonetRAPOS</h3>
-          </div>
-          <p style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem', textAlign: 'center', marginTop: '4px' }}>
-            Store Management
-          </p>
-        </div>
-
-        <nav style={{ flex: 1, padding: '0 var(--space-xs)' }}>
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = pathname === item.href;
-            
+      return (
+        <div key={section.id} className="nav-section">
+          <div className="nav-section-title">{section.title}</div>
+          {sectionItems.map((item) => {
+            const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
             return (
-              <Link 
-                key={item.name} 
+              <Link
+                key={item.name}
                 href={item.href}
                 className={`nav-link ${isActive ? 'active' : ''}`}
-                style={isActive ? { background: 'rgba(16, 185, 129, 0.15)', color: 'var(--success)' } : {}}
+                onClick={() => setSidebarOpen(false)}
               >
-                <Icon />
+                <item.icon />
                 <span>{item.name}</span>
+                {isActive && <ChevronRight className="ml-auto" size={16} />}
               </Link>
-            )
+            );
           })}
-        </nav>
-
-        <div style={{ padding: 'var(--space-md)' }}>
-          <button 
-            onClick={handleLogout}
-            className="nav-link" 
-            style={{ width: '100%', border: 'none', background: 'transparent', color: 'var(--danger)', cursor: 'pointer', justifyContent: 'flex-start' }}
-          >
-            <LogOut />
-            <span>Sign Out</span>
-          </button>
         </div>
-      </aside>
+      );
+    });
+  };
 
-      {/* Main Content */}
-      <main className="dashboard-main">
-        <header className="dashboard-header flex-between">
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 500 }}>
-            {menuItems.find(m => m.href === pathname)?.name || 'Dashboard'}
-          </h2>
-          
-          <div className="flex-center" style={{ gap: 'var(--space-md)' }}>
-            <div className="badge badge-success">Premium Plan Active</div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>
-                {user?.name || 'User'}
+  return (
+    <ProtectedRoute>
+      <div className="dashboard-layout">
+        {/* Mobile sidebar overlay */}
+        {sidebarOpen && (
+          <div 
+            className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+
+        {/* Sidebar */}
+        <aside 
+          className={`dashboard-sidebar ${sidebarOpen ? 'open' : ''}`}
+          style={{
+            position: sidebarOpen ? 'fixed' : undefined,
+            zIndex: sidebarOpen ? 50 : undefined,
+          }}
+        >
+          {/* Logo */}
+          <div className="flex items-center justify-between h-16 px-6 border-b" style={{ borderColor: 'var(--border-color)' }}>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: 'var(--accent-base)' }}>
+                <ShoppingCart size={20} color="white" />
               </div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-                {user?.email || ''}
-              </div>
+              <span className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>MonetRAPOS</span>
             </div>
-            <div style={{ 
-              width: '40px', height: '40px', borderRadius: 'var(--radius-full)', 
-              background: 'linear-gradient(135deg, var(--success), #059669)', 
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontWeight: 600, color: 'white'
-            }}>
-              {user?.name?.charAt(0).toUpperCase() || 'U'}
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden text-gray-500 hover:text-gray-700"
+            >
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* Navigation */}
+          <nav className="flex-1 overflow-y-auto py-4">
+            {renderNavigation()}
+          </nav>
+
+          {/* User Profile */}
+          <div className="flex-shrink-0 p-4 border-t" style={{ borderColor: 'var(--border-color)' }}>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-white" style={{ background: 'var(--accent-base)' }}>
+                {user?.firstName?.charAt(0)}{user?.lastName?.charAt(0)}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                  {user?.firstName} {user?.lastName}
+                </p>
+                <p className="text-xs truncate" style={{ color: 'var(--text-secondary)' }}>
+                  {company?.name}
+                </p>
+              </div>
+              <button
+                onClick={logout}
+                className="text-gray-400 hover:text-red-600 transition-colors"
+                title="Logout"
+              >
+                <LogOut size={18} />
+              </button>
             </div>
           </div>
-        </header>
+        </aside>
 
-        <div className="dashboard-content animate-fade-in">
-          {children}
+        {/* Main content */}
+        <div className="dashboard-main">
+          {/* Top bar (mobile) */}
+          <div className="dashboard-header lg:hidden">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="text-gray-600 hover:text-gray-900"
+            >
+              <Menu size={24} />
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'var(--accent-base)' }}>
+                <ShoppingCart size={16} color="white" />
+              </div>
+              <span className="font-bold" style={{ color: 'var(--text-primary)' }}>MonetRAPOS</span>
+            </div>
+            <button
+              onClick={logout}
+              className="text-gray-400 hover:text-red-600"
+              title="Logout"
+            >
+              <LogOut size={20} />
+            </button>
+          </div>
+
+          {/* Page content */}
+          <main className="flex-1 overflow-y-auto">
+            {/* Subscription Status Banner */}
+            <SubscriptionStatusBanner subscription={subscription} />
+            
+            <div className="dashboard-content">
+              {children}
+            </div>
+          </main>
         </div>
-      </main>
-    </div>
+      </div>
+    </ProtectedRoute>
   );
 }

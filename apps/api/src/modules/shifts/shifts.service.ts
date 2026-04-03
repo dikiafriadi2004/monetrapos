@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Shift, ShiftStatus } from './shift.entity';
@@ -15,16 +19,27 @@ export class ShiftsService {
     private readonly transactionRepo: Repository<Transaction>,
   ) {}
 
-  async openShift(companyId: string, employeeId: string, dto: OpenShiftDto): Promise<Shift> {
+  async openShift(
+    companyId: string,
+    employeeId: string,
+    dto: OpenShiftDto,
+  ): Promise<Shift> {
     const existing = await this.shiftRepo.findOne({
-      where: { companyId, employeeId, storeId: dto.storeId, status: ShiftStatus.OPEN }
+      where: {
+        companyId,
+        employeeId,
+        storeId: dto.storeId,
+        status: ShiftStatus.OPEN,
+      },
     });
     if (existing) {
-      throw new BadRequestException('Cashier already has an open shift in this store.');
+      throw new BadRequestException(
+        'Cashier already has an open shift in this store.',
+      );
     }
 
     let openingAmount = dto.openingAmount || 0;
-    
+
     // If cash declaration provided, calculate total
     if (dto.openingCash) {
       openingAmount = dto.openingCash.calculateTotal();
@@ -38,16 +53,21 @@ export class ShiftsService {
       expectedCash: openingAmount,
       openedAt: new Date(),
       status: ShiftStatus.OPEN,
-      openingNotes: dto.openingCash 
-        ? `Opening cash breakdown: ${JSON.stringify(dto.openingCash)}` 
+      openingNotes: dto.openingCash
+        ? `Opening cash breakdown: ${JSON.stringify(dto.openingCash)}`
         : undefined,
     });
     return this.shiftRepo.save(shift);
   }
 
-  async closeShift(id: string, companyId: string, employeeId: string, dto: CloseShiftDto): Promise<Shift> {
-    const shift = await this.shiftRepo.findOne({ 
-      where: { id, companyId, employeeId, status: ShiftStatus.OPEN } 
+  async closeShift(
+    id: string,
+    companyId: string,
+    employeeId: string,
+    dto: CloseShiftDto,
+  ): Promise<Shift> {
+    const shift = await this.shiftRepo.findOne({
+      where: { id, companyId, employeeId, status: ShiftStatus.OPEN },
     });
     if (!shift) throw new NotFoundException('Active shift not found');
 
@@ -60,7 +80,7 @@ export class ShiftsService {
     shift.cashDifference = 0;
     shift.closedAt = new Date();
     shift.status = ShiftStatus.CLOSED;
-    
+
     if (dto.notes) {
       shift.closingNotes = dto.notes;
     }
@@ -68,11 +88,14 @@ export class ShiftsService {
     return this.shiftRepo.save(shift);
   }
 
-  async reconcileShift(companyId: string, dto: ShiftReconciliationDto): Promise<Shift> {
-    const shift = await this.shiftRepo.findOne({ 
-      where: { id: dto.shiftId, companyId } 
+  async reconcileShift(
+    companyId: string,
+    dto: ShiftReconciliationDto,
+  ): Promise<Shift> {
+    const shift = await this.shiftRepo.findOne({
+      where: { id: dto.shiftId, companyId },
     });
-    
+
     if (!shift) {
       throw new NotFoundException('Shift not found');
     }
@@ -83,25 +106,33 @@ export class ShiftsService {
 
     // Calculate actual totals
     const actualCashTotal = dto.actualCash.calculateTotal();
-    const actualTotal = actualCashTotal + dto.actualQris + dto.actualEdc + 
-                       dto.actualBankTransfer + dto.actualEwallet;
+    const actualTotal =
+      actualCashTotal +
+      dto.actualQris +
+      dto.actualEdc +
+      dto.actualBankTransfer +
+      dto.actualEwallet;
 
     // Get expected amounts from transactions
     const expectedAmounts = await this.calculateExpectedByPaymentMethod(shift);
-    const expectedTotal = Object.values(expectedAmounts).reduce((sum, val) => sum + val, 0);
+    const expectedTotal = Object.values(expectedAmounts).reduce(
+      (sum, val) => sum + val,
+      0,
+    );
 
     // Calculate variances
     const cashVariance = actualCashTotal - expectedAmounts.cash;
     const qrisVariance = dto.actualQris - expectedAmounts.qris;
     const edcVariance = dto.actualEdc - expectedAmounts.edc;
-    const bankTransferVariance = dto.actualBankTransfer - expectedAmounts.bankTransfer;
+    const bankTransferVariance =
+      dto.actualBankTransfer - expectedAmounts.bankTransfer;
     const ewalletVariance = dto.actualEwallet - expectedAmounts.ewallet;
     const totalVariance = actualTotal - expectedTotal;
 
     // Update shift with reconciliation data
     shift.closingCash = actualCashTotal;
     shift.cashDifference = totalVariance;
-    shift.closingNotes = shift.closingNotes 
+    shift.closingNotes = shift.closingNotes
       ? `${shift.closingNotes} | Reconciliation: ${JSON.stringify({
           expected: expectedAmounts,
           actual: {
@@ -126,28 +157,32 @@ export class ShiftsService {
     return this.shiftRepo.save(shift);
   }
 
-  async getActiveShift(companyId: string, employeeId: string, storeId: string): Promise<Shift | null> {
+  async getActiveShift(
+    companyId: string,
+    employeeId: string,
+    storeId: string,
+  ): Promise<Shift | null> {
     return this.shiftRepo.findOne({
-      where: { companyId, employeeId, storeId, status: ShiftStatus.OPEN }
+      where: { companyId, employeeId, storeId, status: ShiftStatus.OPEN },
     });
   }
 
   async findAll(companyId: string, storeId?: string): Promise<Shift[]> {
     const where: any = { companyId };
     if (storeId) where.storeId = storeId;
-    return this.shiftRepo.find({ 
-      where, 
-      order: { openedAt: 'DESC' }, 
-      relations: ['employee'] 
+    return this.shiftRepo.find({
+      where,
+      order: { openedAt: 'DESC' },
+      relations: ['employee'],
     });
   }
 
   async getShiftReport(shiftId: string, companyId: string): Promise<any> {
-    const shift = await this.shiftRepo.findOne({ 
+    const shift = await this.shiftRepo.findOne({
       where: { id: shiftId, companyId },
       relations: ['employee'],
     });
-    
+
     if (!shift) {
       throw new NotFoundException('Shift not found');
     }
@@ -163,7 +198,7 @@ export class ShiftsService {
     });
 
     // Filter transactions by shift time
-    const shiftTransactions = transactions.filter(tx => {
+    const shiftTransactions = transactions.filter((tx) => {
       const txTime = new Date(tx.createdAt);
       const openTime = new Date(shift.openedAt);
       const closeTime = shift.closedAt ? new Date(shift.closedAt) : new Date();
@@ -175,7 +210,10 @@ export class ShiftsService {
       totalTransactions: shiftTransactions.length,
       totalRevenue: shiftTransactions.reduce((sum, tx) => sum + tx.total, 0),
       totalTax: shiftTransactions.reduce((sum, tx) => sum + tx.taxAmount, 0),
-      totalDiscount: shiftTransactions.reduce((sum, tx) => sum + tx.discountAmount, 0),
+      totalDiscount: shiftTransactions.reduce(
+        (sum, tx) => sum + tx.discountAmount,
+        0,
+      ),
       paymentMethods: this.groupByPaymentMethod(shiftTransactions),
     };
 
@@ -205,18 +243,23 @@ export class ShiftsService {
     });
 
     // Filter by shift time
-    const shiftTransactions = transactions.filter(tx => {
+    const shiftTransactions = transactions.filter((tx) => {
       const txTime = new Date(tx.createdAt);
       const openTime = new Date(shift.openedAt);
       const closeTime = shift.closedAt ? new Date(shift.closedAt) : new Date();
       return txTime >= openTime && txTime <= closeTime;
     });
 
-    const cashFromTransactions = shiftTransactions.reduce((sum, tx) => sum + tx.total, 0);
+    const cashFromTransactions = shiftTransactions.reduce(
+      (sum, tx) => sum + tx.total,
+      0,
+    );
     return shift.openingCash + cashFromTransactions;
   }
 
-  private async calculateExpectedByPaymentMethod(shift: Shift): Promise<Record<string, number>> {
+  private async calculateExpectedByPaymentMethod(
+    shift: Shift,
+  ): Promise<Record<string, number>> {
     const transactions = await this.transactionRepo.find({
       where: {
         storeId: shift.storeId,
@@ -226,7 +269,7 @@ export class ShiftsService {
     });
 
     // Filter by shift time
-    const shiftTransactions = transactions.filter(tx => {
+    const shiftTransactions = transactions.filter((tx) => {
       const txTime = new Date(tx.createdAt);
       const openTime = new Date(shift.openedAt);
       const closeTime = shift.closedAt ? new Date(shift.closedAt) : new Date();
@@ -241,7 +284,7 @@ export class ShiftsService {
       ewallet: 0,
     };
 
-    shiftTransactions.forEach(tx => {
+    shiftTransactions.forEach((tx) => {
       const method = tx.paymentMethod as string;
       switch (method) {
         case 'cash':
@@ -266,10 +309,12 @@ export class ShiftsService {
     return amounts;
   }
 
-  private groupByPaymentMethod(transactions: Transaction[]): Record<string, any> {
+  private groupByPaymentMethod(
+    transactions: Transaction[],
+  ): Record<string, any> {
     const grouped: Record<string, any> = {};
 
-    transactions.forEach(tx => {
+    transactions.forEach((tx) => {
       const method = tx.paymentMethod;
       if (!grouped[method]) {
         grouped[method] = {

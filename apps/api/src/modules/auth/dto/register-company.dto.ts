@@ -4,6 +4,8 @@ import {
   MinLength,
   IsOptional,
   IsPhoneNumber,
+  IsNumber,
+  IsIn,
 } from 'class-validator';
 
 export class RegisterCompanyDto {
@@ -39,8 +41,12 @@ export class RegisterCompanyDto {
   @IsPhoneNumber('ID')
   ownerPhone?: string;
 
-  // Optional: Plan selection (default to trial)
-  @IsOptional()
+  // Subscription Plan Selection (REQUIRED for payment flow)
   @IsString()
-  planId?: string;
+  planId: string;
+
+  // Subscription Duration (REQUIRED for payment flow)
+  @IsNumber()
+  @IsIn([1, 3, 6, 12])
+  durationMonths: number;
 }

@@ -24,10 +24,20 @@ export default function TransactionsPage() {
 
   const fetchTransactions = async () => {
     try {
-      const data: any = await api.get('/transactions');
-      setTransactions(Array.isArray(data) ? data : []);
+      const data: any = await api.get('/billing/admin/invoices');
+      const items = Array.isArray(data) ? data : (data?.data || []);
+      setTransactions(items.map((inv: any) => ({
+        id: inv.id,
+        orderNumber: inv.invoiceNumber,
+        totalAmount: inv.total || inv.subtotal || 0,
+        paymentMethod: inv.paymentMethod || 'transfer',
+        status: inv.status === 'paid' ? 'completed' : inv.status,
+        store: { name: inv.company?.name || '—' },
+        createdAt: inv.createdAt,
+      })));
     } catch (err) {
       console.error('Failed to fetch transactions', err);
+      setTransactions([]);
     } finally {
       setLoading(false);
     }

@@ -1,11 +1,20 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
 export const PERMISSIONS_KEY = 'permissions';
 
 export const RequirePermissions = (...permissions: string[]) => {
   return (target: any, key?: string, descriptor?: any) => {
-    Reflect.defineMetadata(PERMISSIONS_KEY, permissions, descriptor ? descriptor.value : target);
+    Reflect.defineMetadata(
+      PERMISSIONS_KEY,
+      permissions,
+      descriptor ? descriptor.value : target,
+    );
     return descriptor ? descriptor : target;
   };
 };
@@ -15,10 +24,10 @@ export class PermissionGuard implements CanActivate {
   constructor(private reflector: Reflector) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const requiredPermissions = this.reflector.getAllAndOverride<string[]>(PERMISSIONS_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const requiredPermissions = this.reflector.getAllAndOverride<string[]>(
+      PERMISSIONS_KEY,
+      [context.getHandler(), context.getClass()],
+    );
 
     if (!requiredPermissions || requiredPermissions.length === 0) {
       return true;
@@ -30,8 +39,12 @@ export class PermissionGuard implements CanActivate {
       throw new ForbiddenException('User not authenticated');
     }
 
-    // Company admins and member owners have all permissions
-    if (user.type === 'company_admin' || user.type === 'member') {
+    // Company admins, member owners, and users with 'owner' role have all permissions
+    if (
+      user.type === 'company_admin' ||
+      user.type === 'member' ||
+      user.role === 'owner'
+    ) {
       return true;
     }
 

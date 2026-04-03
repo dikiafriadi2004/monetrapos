@@ -1,4 +1,10 @@
-import { IsString, IsOptional, IsArray, IsBoolean, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsArray,
+  IsBoolean,
+  MaxLength,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateRoleDto {
@@ -16,7 +22,9 @@ export class CreateRoleDto {
   @IsString()
   storeId: string;
 
-  @ApiPropertyOptional({ example: ['pos.create_transaction', 'pos.void_transaction'] })
+  @ApiPropertyOptional({
+    example: ['pos.create_transaction', 'pos.void_transaction'],
+  })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })

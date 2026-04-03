@@ -20,7 +20,9 @@ export class AdminSeeder implements OnModuleInit {
     // Check if any company exists
     const companyCount = await this.companyRepo.count();
     if (companyCount > 0) {
-      this.logger.log(`Company and Admin already seeded (${companyCount} found)`);
+      this.logger.log(
+        `Company and Admin already seeded (${companyCount} found)`,
+      );
       return;
     }
 

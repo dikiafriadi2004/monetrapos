@@ -21,12 +21,18 @@ export class FeaturesService {
   }
 
   async findOne(companyId: string, id: string): Promise<Feature> {
-    const feature = await this.featureRepo.findOne({ where: { id, companyId } });
+    const feature = await this.featureRepo.findOne({
+      where: { id, companyId },
+    });
     if (!feature) throw new NotFoundException('Feature not found');
     return feature;
   }
 
-  async update(companyId: string, id: string, dto: UpdateFeatureDto): Promise<Feature> {
+  async update(
+    companyId: string,
+    id: string,
+    dto: UpdateFeatureDto,
+  ): Promise<Feature> {
     const feature = await this.findOne(companyId, id);
     Object.assign(feature, dto);
     return this.featureRepo.save(feature);

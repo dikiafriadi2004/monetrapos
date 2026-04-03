@@ -1,360 +1,426 @@
-"use client";
+'use client';
 
+import { useAuth } from '@/contexts/AuthContext';
+import { Package, Users, Receipt, TrendingUp, ArrowUp, ArrowDown, ShoppingCart, DollarSign } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import apiClient from '@/lib/api-client';
+import { format } from 'date-fns';
+import Link from 'next/link';
+
+interface DashboardMetrics {
+  period: {
+    startDate: string;
+    endDate: string;
+  };
+  metrics: {
+    totalRevenue: number;
+    totalTransactions: number;
+    averageTransaction: number;
+    totalProducts: number;
+    activeProducts: number;
+    totalCustomers: number;
+    newCustomers: number;
+    lowStockProducts: number;
+    totalInventoryValue: number;
+  };
+  topProducts: Array<{
+    productId: string;
+    productName: string;
+    quantitySold: number;
+    revenue: number;
+  }>;
+  lowStockAlerts: Array<{
+    productId: string;
+    productName: string;
+    sku: string;
+    currentStock: number;
+    lowStockThreshold: number;
+  }>;
+  revenueChart: Array<{
+    date: string;
+    revenue: number;
+    transactions: number;
+  }>;
+}
 
 export default function DashboardPage() {
-  const router = useRouter();
-  const [user, setUser] = useState<any>(null);
+  const { user } = useAuth();
+  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('member_token');
-    const userData = localStorage.getItem('member_user');
+    fetchDashboardMetrics();
+  }, []);
 
-    if (!token || !userData) {
-      router.push('/login');
-      return;
-    }
-
+  const fetchDashboardMetrics = async () => {
     try {
-      setUser(JSON.parse(userData));
-    } catch (err) {
-      console.error('Error parsing user data:', err);
-      router.push('/login');
+      setLoading(true);
+      const response = await apiClient.get<DashboardMetrics>('/reports/dashboard');
+      setMetrics(response.data);
+      setError(null);
+    } catch (err: any) {
+      console.error('Failed to fetch dashboard metrics:', err);
+      setError(err.response?.data?.message || 'Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
-  }, [router]);
-
-  const handleLogout = () => {
-    localStorage.removeItem('member_token');
-    localStorage.removeItem('member_user');
-    router.push('/login');
   };
 
-  if (loading) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#f7fafc'
-      }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: '48px',
-            height: '48px',
-            border: '4px solid #e2e8f0',
-            borderTopColor: '#3b82f6',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-            margin: '0 auto 16px'
-          }} />
-          <p style={{ color: '#718096' }}>Loading...</p>
-        </div>
-        <style dangerouslySetInnerHTML={{__html: `
-          @keyframes spin {
-            to { transform: rotate(360deg); }
-          }
-        `}} />
-      </div>
-    );
-  }
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('id-ID', {
+      style: 'currency',
+      currency: 'IDR',
+      minimumFractionDigits: 0,
+    }).format(amount);
+  };
 
-  const isEmployee = user?.type === 'employee';
+  const stats = [
+    {
+      name: 'Total Revenue',
+      value: loading ? 'Loading...' : formatCurrency(metrics?.metrics.totalRevenue || 0),
+      icon: DollarSign,
+      change: '+12.5%',
+      changeType: 'positive',
+      color: 'var(--success)',
+      bgColor: 'var(--success-light)',
+    },
+    {
+      name: 'Transactions',
+      value: loading ? 'Loading...' : (metrics?.metrics.totalTransactions || 0).toString(),
+      icon: Receipt,
+      change: '+8.2%',
+      changeType: 'positive',
+      color: 'var(--accent-base)',
+      bgColor: 'var(--accent-light)',
+    },
+    {
+      name: 'Products',
+      value: loading ? 'Loading...' : (metrics?.metrics.totalProducts || 0).toString(),
+      icon: Package,
+      change: '+3',
+      changeType: 'positive',
+      color: 'var(--info)',
+      bgColor: 'var(--info-light)',
+    },
+    {
+      name: 'Customers',
+      value: loading ? 'Loading...' : (metrics?.metrics.totalCustomers || 0).toString(),
+      icon: Users,
+      change: `+${metrics?.metrics.newCustomers || 0} new`,
+      changeType: 'positive',
+      color: 'var(--warning)',
+      bgColor: 'var(--warning-light)',
+    },
+  ];
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f7fafc' }}>
-      {/* Header */}
-      <header style={{
-        background: 'white',
-        borderBottom: '1px solid #e2e8f0',
-        padding: '16px 24px'
-      }}>
-        <div style={{
-          maxWidth: '1200px',
-          margin: '0 auto',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{
-              width: '40px',
-              height: '40px',
-              background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
-              borderRadius: '8px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '20px'
-            }}>
-              👥
-            </div>
-            <div>
-              <h1 style={{ 
-                fontSize: '20px', 
-                fontWeight: 'bold', 
-                color: '#1a202c',
-                margin: 0
-              }}>
-                MonetRAPOS
-              </h1>
-              <p style={{ 
-                fontSize: '12px', 
-                color: '#718096',
-                margin: 0
-              }}>
-                Member Admin
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={handleLogout}
-            style={{
-              padding: '8px 16px',
-              background: '#e53e3e',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              fontSize: '14px',
-              fontWeight: '500',
-              cursor: 'pointer',
-              transition: 'background 0.2s'
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.background = '#c53030'}
-            onMouseLeave={(e) => e.currentTarget.style.background = '#e53e3e'}
-          >
-            Logout
-          </button>
-        </div>
-      </header>
+    <div className="space-y-6">
+      {/* Welcome Section */}
+      <div>
+        <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
+          Welcome back, {user?.firstName || 'User'}! 👋
+        </h1>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+          Here&apos;s what&apos;s happening with your business today.
+        </p>
+      </div>
 
-      {/* Main Content */}
-      <main style={{
-        maxWidth: '1200px',
-        margin: '0 auto',
-        padding: '24px'
-      }}>
-        {/* Welcome Card */}
-        <div style={{
-          background: 'linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)',
-          borderRadius: '12px',
-          padding: '32px',
-          color: 'white',
-          marginBottom: '24px'
-        }}>
-          <h2 style={{ 
-            fontSize: '28px', 
-            fontWeight: 'bold',
-            margin: '0 0 8px 0'
-          }}>
-            Welcome, {user?.name}! 👋
-          </h2>
-          <p style={{ 
-            fontSize: '16px',
-            opacity: 0.9,
-            margin: 0
-          }}>
-            {isEmployee ? `Employee at Store` : `Logged in as ${user?.role || 'member'}`}
-          </p>
+      {/* Error Message */}
+      {error && (
+        <div className="alert alert-danger">
+          <div style={{ fontSize: '0.875rem' }}>{error}</div>
         </div>
+      )}
 
-        {/* User Info Card */}
-        <div style={{
-          background: 'white',
-          borderRadius: '12px',
-          padding: '24px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-          marginBottom: '24px'
-        }}>
-          <h3 style={{
-            fontSize: '18px',
-            fontWeight: '600',
-            color: '#1a202c',
-            margin: '0 0 16px 0'
-          }}>
-            Your Information
-          </h3>
-          <div style={{ display: 'grid', gap: '12px' }}>
-            <div style={{
-              display: 'flex',
-              padding: '12px',
-              background: '#f7fafc',
-              borderRadius: '8px'
-            }}>
-              <span style={{
-                fontWeight: '500',
-                color: '#4a5568',
-                width: '120px'
-              }}>
-                Name:
-              </span>
-              <span style={{ color: '#1a202c' }}>
-                {user?.name}
-              </span>
-            </div>
-            <div style={{
-              display: 'flex',
-              padding: '12px',
-              background: '#f7fafc',
-              borderRadius: '8px'
-            }}>
-              <span style={{
-                fontWeight: '500',
-                color: '#4a5568',
-                width: '120px'
-              }}>
-                Email:
-              </span>
-              <span style={{ color: '#1a202c' }}>
-                {user?.email}
-              </span>
-            </div>
-            <div style={{
-              display: 'flex',
-              padding: '12px',
-              background: '#f7fafc',
-              borderRadius: '8px'
-            }}>
-              <span style={{
-                fontWeight: '500',
-                color: '#4a5568',
-                width: '120px'
-              }}>
-                Type:
-              </span>
-              <span style={{
-                color: 'white',
-                background: isEmployee ? '#f59e0b' : '#3b82f6',
-                padding: '4px 12px',
-                borderRadius: '12px',
-                fontSize: '12px',
-                fontWeight: '600',
-                textTransform: 'uppercase'
-              }}>
-                {isEmployee ? 'Employee' : user?.role || 'Member'}
-              </span>
-            </div>
-            {isEmployee && user?.storeId && (
-              <div style={{
-                display: 'flex',
-                padding: '12px',
-                background: '#f7fafc',
-                borderRadius: '8px'
-              }}>
-                <span style={{
-                  fontWeight: '500',
-                  color: '#4a5568',
-                  width: '120px'
-                }}>
-                  Store ID:
-                </span>
-                <span style={{ 
-                  color: '#718096',
-                  fontSize: '14px',
-                  fontFamily: 'monospace'
-                }}>
-                  {user.storeId}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div style={{
-          background: 'white',
-          borderRadius: '12px',
-          padding: '24px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-        }}>
-          <h3 style={{
-            fontSize: '18px',
-            fontWeight: '600',
-            color: '#1a202c',
-            margin: '0 0 16px 0'
-          }}>
-            Quick Actions
-          </h3>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-            gap: '16px'
-          }}>
-            {[
-              { icon: '🛒', title: 'POS', desc: 'Point of Sale' },
-              { icon: '📦', title: 'Inventory', desc: 'Check stock' },
-              { icon: '👥', title: 'Customers', desc: 'Manage customers' },
-              { icon: '⏰', title: 'Shifts', desc: 'Clock in/out' },
-              { icon: '📊', title: 'Reports', desc: 'Daily reports' },
-              { icon: '⚙️', title: 'Settings', desc: 'Store settings' }
-            ].map((action, index) => (
-              <div
-                key={index}
-                style={{
-                  padding: '20px',
-                  background: '#f7fafc',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  border: '2px solid transparent'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = '#edf2f7';
-                  e.currentTarget.style.borderColor = '#3b82f6';
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = '#f7fafc';
-                  e.currentTarget.style.borderColor = 'transparent';
-                  e.currentTarget.style.transform = 'translateY(0)';
+      {/* Stats Grid */}
+      <div className="grid-cols-4" style={{ display: 'grid', gap: 'var(--space-lg)' }}>
+        {stats.map((stat) => (
+          <div key={stat.name} className="stat-card">
+            <div className="flex-between" style={{ marginBottom: 'var(--space-md)' }}>
+              <div 
+                className="flex-center" 
+                style={{ 
+                  width: '48px', 
+                  height: '48px', 
+                  borderRadius: 'var(--radius-lg)',
+                  background: stat.bgColor 
                 }}
               >
-                <div style={{ fontSize: '32px', marginBottom: '8px' }}>
-                  {action.icon}
-                </div>
-                <h4 style={{
-                  fontSize: '16px',
-                  fontWeight: '600',
-                  color: '#1a202c',
-                  margin: '0 0 4px 0'
-                }}>
-                  {action.title}
-                </h4>
-                <p style={{
-                  fontSize: '14px',
-                  color: '#718096',
-                  margin: 0
-                }}>
-                  {action.desc}
-                </p>
+                <stat.icon size={24} style={{ color: stat.color }} />
               </div>
-            ))}
+            </div>
+            <div className="stat-label">{stat.name}</div>
+            <div className="stat-value">{stat.value}</div>
+            <div className={`stat-change ${stat.changeType}`}>
+              {stat.changeType === 'positive' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
+              <span>{stat.change}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Charts and Data */}
+      {!loading && metrics && (
+        <div className="grid-cols-2" style={{ display: 'grid', gap: 'var(--space-lg)' }}>
+          {/* Revenue Trend */}
+          <div className="card">
+            <div className="card-header">
+              <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Revenue Trend
+              </h3>
+            </div>
+            <div className="card-body">
+              {metrics.revenueChart.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+                  {metrics.revenueChart.slice(0, 7).map((item) => {
+                    const maxRevenue = Math.max(...metrics.revenueChart.map(r => r.revenue));
+                    const percentage = maxRevenue > 0 ? (item.revenue / maxRevenue) * 100 : 0;
+                    
+                    return (
+                      <div key={item.date} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
+                        <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', minWidth: '60px' }}>
+                          {format(new Date(item.date), 'dd MMM')}
+                        </span>
+                        <div style={{ flex: 1, height: '8px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
+                          <div
+                            style={{
+                              height: '100%',
+                              width: `${percentage}%`,
+                              background: 'var(--accent-base)',
+                              borderRadius: 'var(--radius-full)',
+                              transition: 'width 0.3s ease',
+                            }}
+                          />
+                        </div>
+                        <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)', minWidth: '100px', textAlign: 'right' }}>
+                          {formatCurrency(item.revenue)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <TrendingUp className="empty-state-icon" />
+                  <p className="empty-state-description">No revenue data available yet</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Top Products */}
+          <div className="card">
+            <div className="card-header">
+              <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Top Selling Products
+              </h3>
+            </div>
+            <div className="card-body">
+              {metrics.topProducts.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+                  {metrics.topProducts.slice(0, 5).map((product, index) => (
+                    <div key={product.productId} className="flex-between">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
+                        <div 
+                          className="flex-center" 
+                          style={{ 
+                            width: '32px', 
+                            height: '32px', 
+                            borderRadius: 'var(--radius-full)',
+                            background: 'var(--accent-light)',
+                            color: 'var(--accent-base)',
+                            fontSize: '0.8125rem',
+                            fontWeight: 700
+                          }}
+                        >
+                          {index + 1}
+                        </div>
+                        <div>
+                          <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                            {product.productName}
+                          </p>
+                          <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                            {product.quantitySold} sold
+                          </p>
+                        </div>
+                      </div>
+                      <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        {formatCurrency(product.revenue)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <Package className="empty-state-icon" />
+                  <p className="empty-state-description">No sales data available yet</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
+      )}
 
-        {/* Success Message */}
-        <div style={{
-          marginTop: '24px',
-          padding: '16px',
-          background: '#c6f6d5',
-          border: '1px solid #9ae6b4',
-          borderRadius: '8px',
-          textAlign: 'center'
-        }}>
-          <p style={{
-            color: '#22543d',
-            fontSize: '14px',
-            fontWeight: '500',
-            margin: 0
-          }}>
-            ✅ Login berhasil! Aplikasi berfungsi dengan baik.
-          </p>
+      {/* Low Stock Alerts */}
+      {!loading && metrics && metrics.lowStockAlerts.length > 0 && (
+        <div className="card">
+          <div className="card-header flex-between">
+            <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+              Low Stock Alerts
+            </h3>
+            <span className="badge badge-danger">
+              {metrics.lowStockAlerts.length} items
+            </span>
+          </div>
+          <div className="card-body">
+            <div className="table-container">
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>SKU</th>
+                    <th>Current Stock</th>
+                    <th>Threshold</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {metrics.lowStockAlerts.slice(0, 5).map((alert) => (
+                    <tr key={alert.productId}>
+                      <td style={{ fontWeight: 600 }}>{alert.productName}</td>
+                      <td>{alert.sku}</td>
+                      <td style={{ color: 'var(--danger)', fontWeight: 600 }}>
+                        {alert.currentStock}
+                      </td>
+                      <td>{alert.lowStockThreshold}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-      </main>
+      )}
+
+      {/* Quick Actions */}
+      <div className="card">
+        <div className="card-header">
+          <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+            Quick Actions
+          </h3>
+        </div>
+        <div className="card-body">
+          <div className="grid-cols-4" style={{ display: 'grid', gap: 'var(--space-md)' }}>
+            <Link
+              href="/dashboard/pos"
+              className="card"
+              style={{ 
+                padding: 'var(--space-lg)', 
+                textAlign: 'center',
+                cursor: 'pointer',
+                textDecoration: 'none'
+              }}
+            >
+              <div 
+                className="flex-center" 
+                style={{ 
+                  width: '56px', 
+                  height: '56px', 
+                  borderRadius: 'var(--radius-lg)',
+                  background: 'var(--accent-light)',
+                  margin: '0 auto var(--space-md)'
+                }}
+              >
+                <ShoppingCart size={28} style={{ color: 'var(--accent-base)' }} />
+              </div>
+              <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                New Sale
+              </p>
+            </Link>
+
+            <Link
+              href="/dashboard/products"
+              className="card"
+              style={{ 
+                padding: 'var(--space-lg)', 
+                textAlign: 'center',
+                cursor: 'pointer',
+                textDecoration: 'none'
+              }}
+            >
+              <div 
+                className="flex-center" 
+                style={{ 
+                  width: '56px', 
+                  height: '56px', 
+                  borderRadius: 'var(--radius-lg)',
+                  background: 'var(--info-light)',
+                  margin: '0 auto var(--space-md)'
+                }}
+              >
+                <Package size={28} style={{ color: 'var(--info)' }} />
+              </div>
+              <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Add Product
+              </p>
+            </Link>
+
+            <Link
+              href="/dashboard/customers"
+              className="card"
+              style={{ 
+                padding: 'var(--space-lg)', 
+                textAlign: 'center',
+                cursor: 'pointer',
+                textDecoration: 'none'
+              }}
+            >
+              <div 
+                className="flex-center" 
+                style={{ 
+                  width: '56px', 
+                  height: '56px', 
+                  borderRadius: 'var(--radius-lg)',
+                  background: 'var(--warning-light)',
+                  margin: '0 auto var(--space-md)'
+                }}
+              >
+                <Users size={28} style={{ color: 'var(--warning)' }} />
+              </div>
+              <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Add Customer
+              </p>
+            </Link>
+
+            <Link
+              href="/dashboard/reports"
+              className="card"
+              style={{ 
+                padding: 'var(--space-lg)', 
+                textAlign: 'center',
+                cursor: 'pointer',
+                textDecoration: 'none'
+              }}
+            >
+              <div 
+                className="flex-center" 
+                style={{ 
+                  width: '56px', 
+                  height: '56px', 
+                  borderRadius: 'var(--radius-lg)',
+                  background: 'var(--success-light)',
+                  margin: '0 auto var(--space-md)'
+                }}
+              >
+                <TrendingUp size={28} style={{ color: 'var(--success)' }} />
+              </div>
+              <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                View Reports
+              </p>
+            </Link>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

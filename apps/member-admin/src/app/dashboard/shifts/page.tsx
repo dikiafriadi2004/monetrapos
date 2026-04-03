@@ -7,7 +7,8 @@ import { shiftService } from '@/services/shift.service';
 import { Shift } from '@/types';
 
 export default function ShiftsPage() {
-  const { storeId, user } = useAuth();
+  const { company, user } = useAuth();
+  const storeId = company?.id;
   const [activeShift, setActiveShift] = useState<Shift | null>(null);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [loading, setLoading] = useState(true);
@@ -118,7 +119,7 @@ export default function ShiftsPage() {
                 <h2 className="text-xl font-bold">Active Shift</h2>
               </div>
               <p className="text-green-100">
-                Started: {new Date(activeShift.openTime).toLocaleString('id-ID')}
+                Started: {new Date(activeShift.startTime).toLocaleString('id-ID')}
               </p>
               <p className="text-green-100 mt-1">
                 Opening Cash: Rp {activeShift.startingCash.toLocaleString('id-ID')}
@@ -170,16 +171,16 @@ export default function ShiftsPage() {
                     #{shift.id.slice(0, 8)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                    {new Date(shift.openTime).toLocaleString('id-ID')}
+                    {new Date(shift.startTime).toLocaleString('id-ID')}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                    {shift.closeTime ? new Date(shift.closeTime).toLocaleString('id-ID') : '-'}
+                    {shift.endTime ? new Date(shift.endTime).toLocaleString('id-ID') : '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     Rp {shift.startingCash.toLocaleString('id-ID')}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {shift.actualCash ? `Rp ${shift.actualCash.toLocaleString('id-ID')}` : '-'}
+                    {shift.endingCash ? `Rp ${shift.endingCash.toLocaleString('id-ID')}` : '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span

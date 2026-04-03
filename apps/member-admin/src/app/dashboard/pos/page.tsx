@@ -1,28 +1,48 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ShoppingCart, Receipt, AlertCircle, Scan, Tag } from 'lucide-react';
+import { ShoppingCart, Receipt, AlertCircle, Scan, Tag, CreditCard } from 'lucide-react';
 import ProductSearch from '@/components/pos/ProductSearch';
 import Cart from '@/components/pos/Cart';
 import CustomerSelect from '@/components/pos/CustomerSelect';
 import PaymentModal from '@/components/pos/PaymentModal';
+import SplitPaymentModal from '@/components/pos/SplitPaymentModal';
 import DiscountModal from '@/components/pos/DiscountModal';
+import ItemDiscountModal from '@/components/pos/ItemDiscountModal';
 import BarcodeScanner from '@/components/pos/BarcodeScanner';
+import ReceiptPreview from '@/components/pos/ReceiptPreview';
 import { Product, Customer, CartItem, PaymentMethodType } from '@/types';
 import { transactionService } from '@/services/transaction.service';
 import { shiftService } from '@/services/shift.service';
 import { customerService } from '@/services/customer.service';
+import { paymentMethodService } from '@/services/payment-method.service';
 import { useAuth } from '@/contexts/AuthContext';
+import { PaymentMethod } from '@/types/payment-method.types';
 
 export default function POSPage() {
-  const { storeId, user } = useAuth();
+  const { company, user } = useAuth();
+  const storeId = company?.id; // Use company ID as store ID
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isSplitPaymentModalOpen, setIsSplitPaymentModalOpen] = useState(false);
   const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
+  const [isItemDiscountModalOpen, setIsItemDiscountModalOpen] = useState(false);
+  const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null);
   const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
+  const [isReceiptPreviewOpen, setIsReceiptPreviewOpen] = useState(false);
+  const [lastTransaction, setLastTransaction] = useState<any>(null);
   const [activeShift, setActiveShift] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [heldTransactions, setHeldTransactions] = useState<Array<{
+    id: string;
+    items: CartItem[];
+    customer: Customer | null;
+    discount: number;
+    discountInfo: any;
+    timestamp: Date;
+  }>>([]);
 
   // Tax and discount
   const taxRate = 0.11; // 11% PPN
@@ -35,6 +55,7 @@ export default function POSPage() {
   useEffect(() => {
     if (storeId) {
       checkActiveShift(storeId);
+      fetchPaymentMethods();
     }
 
     // Keyboard shortcuts
@@ -63,6 +84,13 @@ export default function POSPage() {
           setIsPaymentModalOpen(true);
         }
       }
+      // F5 - Hold Transaction
+      if (e.key === 'F5') {
+        e.preventDefault();
+        if (cartItems.length > 0) {
+          handleHoldTransaction();
+        }
+      }
     };
 
     window.addEventListener('keydown', handleKeyPress);
@@ -78,6 +106,15 @@ export default function POSPage() {
       }
     } catch (error) {
       console.error('Failed to check active shift:', error);
+    }
+  };
+
+  const fetchPaymentMethods = async () => {
+    try {
+      const methods = await paymentMethodService.getActive();
+      setPaymentMethods(methods);
+    } catch (error) {
+      console.error('Failed to fetch payment methods:', error);
     }
   };
 
@@ -148,6 +185,53 @@ export default function POSPage() {
     setDiscountInfo(null);
   };
 
+  const handleItemDiscount = (index: number) => {
+    setSelectedItemIndex(index);
+    setIsItemDiscountModalOpen(true);
+  };
+
+  const handleApplyItemDiscount = (discountAmount: number, discountType: 'percentage' | 'fixed', discountValue: number) => {
+    if (selectedItemIndex === null) return;
+
+    const newItems = [...cartItems];
+    const item = newItems[selectedItemIndex];
+    const originalSubtotal = item.price * item.quantity;
+    item.subtotal = originalSubtotal - discountAmount;
+    setCartItems(newItems);
+    setSelectedItemIndex(null);
+  };
+
+  const handleHoldTransaction = () => {
+    if (cartItems.length === 0) {
+      alert('Cart is empty');
+      return;
+    }
+
+    const heldTransaction = {
+      id: Date.now().toString(),
+      items: [...cartItems],
+      customer: selectedCustomer,
+      discount: discountAmount,
+      discountInfo,
+      timestamp: new Date(),
+    };
+
+    setHeldTransactions([...heldTransactions, heldTransaction]);
+    setCartItems([]);
+    setSelectedCustomer(null);
+    setDiscountAmount(0);
+    setDiscountInfo(null);
+    alert('Transaction held successfully');
+  };
+
+  const handleResumeTransaction = (heldTransaction: any) => {
+    setCartItems(heldTransaction.items);
+    setSelectedCustomer(heldTransaction.customer);
+    setDiscountAmount(heldTransaction.discount);
+    setDiscountInfo(heldTransaction.discountInfo);
+    setHeldTransactions(heldTransactions.filter(t => t.id !== heldTransaction.id));
+  };
+
   const calculateTotals = () => {
     const subtotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
     const tax = subtotal * taxRate;
@@ -186,7 +270,7 @@ export default function POSPage() {
         customerName: selectedCustomer?.name,
         customerId: selectedCustomer?.id,
         employeeId: user?.id,
-        employeeName: user?.name,
+        employeeName: `${user?.firstName} ${user?.lastName}`,
         items: cartItems.map((item) => ({
           productId: item.product.id,
           productName: item.product.name,
@@ -210,7 +294,19 @@ export default function POSPage() {
       }
 
       // Success
-      alert(`Transaction successful!\nInvoice: ${transaction.invoiceNumber}\nChange: Rp ${changeAmount.toLocaleString('id-ID')}`);
+      setLastTransaction({
+        transactionNumber: transaction.transactionNumber,
+        items: cartItems,
+        subtotal,
+        tax,
+        discount: discountAmount,
+        total,
+        paidAmount,
+        changeAmount,
+        paymentMethod,
+        customerName: selectedCustomer?.name,
+        employeeName: `${user?.firstName} ${user?.lastName}`,
+      });
 
       // Reset cart
       setCartItems([]);
@@ -219,7 +315,8 @@ export default function POSPage() {
       setDiscountInfo(null);
       setIsPaymentModalOpen(false);
 
-      // TODO: Print receipt
+      // Show receipt preview
+      setIsReceiptPreviewOpen(true);
     } catch (error: any) {
       console.error('Transaction failed:', error);
       alert(error.response?.data?.message || 'Transaction failed. Please try again.');
@@ -302,7 +399,7 @@ export default function POSPage() {
             </div>
 
             {/* Quick Actions */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <button
                 onClick={() => setIsBarcodeScannerOpen(true)}
                 className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors"
@@ -320,7 +417,49 @@ export default function POSPage() {
                 <div className="text-sm font-medium text-gray-700">Apply Discount</div>
                 <div className="text-xs text-gray-500 mt-1">Press F3</div>
               </button>
+              <button
+                onClick={handleHoldTransaction}
+                disabled={cartItems.length === 0}
+                className="p-4 border-2 border-gray-200 rounded-lg hover:border-yellow-300 hover:bg-yellow-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Receipt size={24} className="mx-auto mb-2 text-gray-600" />
+                <div className="text-sm font-medium text-gray-700">Hold Transaction</div>
+                <div className="text-xs text-gray-500 mt-1">Press F5</div>
+              </button>
             </div>
+
+            {/* Held Transactions */}
+            {heldTransactions.length > 0 && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <div className="text-sm font-medium text-yellow-900 mb-2">
+                  Held Transactions ({heldTransactions.length})
+                </div>
+                <div className="space-y-2">
+                  {heldTransactions.map((held) => (
+                    <button
+                      key={held.id}
+                      onClick={() => handleResumeTransaction(held)}
+                      className="w-full p-3 bg-white border border-yellow-200 rounded-lg hover:bg-yellow-50 transition-colors text-left"
+                    >
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {held.items.length} items
+                            {held.customer && ` - ${held.customer.name}`}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {new Date(held.timestamp).toLocaleTimeString('id-ID')}
+                          </div>
+                        </div>
+                        <div className="text-sm font-semibold text-gray-900">
+                          Rp {held.items.reduce((sum, item) => sum + item.subtotal, 0).toLocaleString('id-ID')}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Discount Info */}
             {discountInfo && (
@@ -353,6 +492,7 @@ export default function POSPage() {
               items={cartItems}
               onUpdateQuantity={handleUpdateQuantity}
               onRemoveItem={handleRemoveItem}
+              onItemDiscount={handleItemDiscount}
               subtotal={subtotal}
               tax={tax}
               discount={discountAmount}
@@ -361,7 +501,7 @@ export default function POSPage() {
           </div>
 
           {/* Checkout Button */}
-          <div className="p-6 border-t border-gray-200">
+          <div className="p-6 border-t border-gray-200 space-y-2">
             <button
               onClick={() => setIsPaymentModalOpen(true)}
               disabled={cartItems.length === 0 || loading}
@@ -369,6 +509,14 @@ export default function POSPage() {
             >
               <Receipt size={24} />
               <span>Checkout</span>
+            </button>
+            <button
+              onClick={() => setIsSplitPaymentModalOpen(true)}
+              disabled={cartItems.length === 0 || loading}
+              className="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
+            >
+              <CreditCard size={20} />
+              <span>Split Payment</span>
             </button>
           </div>
         </div>
@@ -379,7 +527,19 @@ export default function POSPage() {
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
         total={total}
+        paymentMethods={paymentMethods}
         onConfirm={handlePayment}
+      />
+
+      <SplitPaymentModal
+        isOpen={isSplitPaymentModalOpen}
+        onClose={() => setIsSplitPaymentModalOpen(false)}
+        total={total}
+        onConfirm={async (payments) => {
+          // Handle split payment - use first payment method for now
+          // In production, you'd send all payment methods to the API
+          await handlePayment(payments[0].method, total);
+        }}
       />
 
       <DiscountModal
@@ -389,11 +549,37 @@ export default function POSPage() {
         onApply={handleApplyDiscount}
       />
 
+      <ItemDiscountModal
+        isOpen={isItemDiscountModalOpen}
+        onClose={() => {
+          setIsItemDiscountModalOpen(false);
+          setSelectedItemIndex(null);
+        }}
+        itemName={selectedItemIndex !== null ? cartItems[selectedItemIndex]?.product.name : ''}
+        itemPrice={selectedItemIndex !== null ? cartItems[selectedItemIndex]?.price : 0}
+        itemQuantity={selectedItemIndex !== null ? cartItems[selectedItemIndex]?.quantity : 0}
+        onApply={handleApplyItemDiscount}
+      />
+
       <BarcodeScanner
         isOpen={isBarcodeScannerOpen}
         onClose={() => setIsBarcodeScannerOpen(false)}
         storeId={storeId}
         onProductFound={handleAddProduct}
+      />
+
+      <ReceiptPreview
+        isOpen={isReceiptPreviewOpen}
+        onClose={() => setIsReceiptPreviewOpen(false)}
+        transaction={lastTransaction}
+        onPrint={() => {
+          // TODO: Implement print functionality
+          alert('Print functionality coming soon');
+        }}
+        onEmail={() => {
+          // TODO: Implement email functionality
+          alert('Email functionality coming soon');
+        }}
       />
     </div>
   );
