@@ -37,8 +37,9 @@ export class RolesController {
   @Get()
   @RequirePermissions('employee.view')
   @ApiOperation({ summary: 'Get all roles for a store' })
-  @ApiQuery({ name: 'storeId', required: true })
+  @ApiQuery({ name: 'storeId', required: false })
   findAll(@Query('storeId') storeId: string) {
+    if (!storeId) return [];
     return this.rolesService.findAllByStore(storeId);
   }
 

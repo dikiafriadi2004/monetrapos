@@ -89,4 +89,13 @@ export class UnifiedPaymentService {
     const enabled = await this.xenditService.isEnabled();
     return [{ gateway: 'xendit', name: 'Xendit', enabled }];
   }
+
+  async getXenditInvoice(xenditInvoiceId: string): Promise<{ externalId: string; status: string } | null> {
+    try {
+      const invoice = await this.xenditService.getInvoice(xenditInvoiceId);
+      return { externalId: (invoice as any).externalId || (invoice as any).external_id, status: invoice.status };
+    } catch {
+      return null;
+    }
+  }
 }

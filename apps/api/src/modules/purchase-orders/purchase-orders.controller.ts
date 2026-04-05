@@ -6,20 +6,19 @@ import {
   Patch,
   Param,
   Delete,
-  // UseGuards,
+  UseGuards,
   Request,
   Query,
 } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { PurchaseOrdersService } from './purchase-orders.service';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { UpdatePurchaseOrderDto } from './dto/update-purchase-order.dto';
 import { ReceivePurchaseOrderDto } from './dto/receive-purchase-order.dto';
 import { PurchaseOrderStatus } from './purchase-order.entity';
-// TODO: Import actual guards when auth module is updated
-// import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('purchase-orders')
-// @UseGuards(JwtAuthGuard)
+@UseGuards(AuthGuard('jwt'))
 export class PurchaseOrdersController {
   constructor(
     private readonly purchaseOrdersService: PurchaseOrdersService,
@@ -28,7 +27,7 @@ export class PurchaseOrdersController {
   @Post()
   create(@Request() req, @Body() createDto: CreatePurchaseOrderDto) {
     return this.purchaseOrdersService.create(
-      req.user.company_id,
+      req.user.companyId,
       req.user.id,
       createDto,
     );
@@ -51,12 +50,12 @@ export class PurchaseOrdersController {
     if (fromDate) filters.from_date = new Date(fromDate);
     if (toDate) filters.to_date = new Date(toDate);
 
-    return this.purchaseOrdersService.findAll(req.user.company_id, filters);
+    return this.purchaseOrdersService.findAll(req.user.companyId, filters);
   }
 
   @Get(':id')
   findOne(@Request() req, @Param('id') id: string) {
-    return this.purchaseOrdersService.findOne(req.user.company_id, id);
+    return this.purchaseOrdersService.findOne(req.user.companyId, id);
   }
 
   @Patch(':id')
@@ -66,7 +65,7 @@ export class PurchaseOrdersController {
     @Body() updateDto: UpdatePurchaseOrderDto,
   ) {
     return this.purchaseOrdersService.update(
-      req.user.company_id,
+      req.user.companyId,
       id,
       updateDto,
     );
@@ -79,7 +78,7 @@ export class PurchaseOrdersController {
     @Body('status') status: PurchaseOrderStatus,
   ) {
     return this.purchaseOrdersService.updateStatus(
-      req.user.company_id,
+      req.user.companyId,
       id,
       status,
     );
@@ -92,7 +91,7 @@ export class PurchaseOrdersController {
     @Body() receiveDto: ReceivePurchaseOrderDto,
   ) {
     return this.purchaseOrdersService.receivePurchaseOrder(
-      req.user.company_id,
+      req.user.companyId,
       id,
       req.user.id,
       receiveDto,
@@ -101,6 +100,6 @@ export class PurchaseOrdersController {
 
   @Post(':id/cancel')
   cancel(@Request() req, @Param('id') id: string) {
-    return this.purchaseOrdersService.cancel(req.user.company_id, id);
+    return this.purchaseOrdersService.cancel(req.user.companyId, id);
   }
 }

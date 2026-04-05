@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Plus, Edit, Trash2, Tag, Loader2, X } from 'lucide-react';
 import { formatCurrency } from '../../../../lib/utils';
+import toast from 'react-hot-toast';
 
 export function DiscountsTab({ discounts, onSave, onDelete }: { discounts: any[], onSave: (d: any) => Promise<void>, onDelete: (i: string) => Promise<void> }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -33,8 +34,9 @@ export function DiscountsTab({ discounts, onSave, onDelete }: { discounts: any[]
         isActive: true
       });
       setIsModalOpen(false);
-    } catch {
-      alert("Failed to save discount");
+    } catch (err: any) {
+      console.error('Failed to save discount:', err);
+      toast.error(err?.response?.data?.message || 'Failed to save discount');
     }
     setLoading(false);
   };

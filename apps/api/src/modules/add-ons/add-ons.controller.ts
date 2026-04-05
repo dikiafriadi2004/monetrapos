@@ -6,23 +6,20 @@ import {
   Patch,
   Param,
   Delete,
-  // UseGuards,
+  UseGuards,
   Query,
   Request,
 } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { AddOnsService } from './add-ons.service';
 import { CompanyAddOnsService } from './company-add-ons.service';
 import { CreateAddOnDto } from './dto/create-add-on.dto';
 import { UpdateAddOnDto } from './dto/update-add-on.dto';
 import { PurchaseAddOnDto } from './dto/purchase-add-on.dto';
 import { AddOnStatus } from './add-on.entity';
-// TODO: Import actual guards when auth module is updated
-// import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-// import { RolesGuard } from '../auth/guards/roles.guard';
-// import { Roles } from '../auth/decorators/roles.decorator';
 
 @Controller('add-ons')
-// @UseGuards(JwtAuthGuard)
+@UseGuards(AuthGuard('jwt'))
 export class AddOnsController {
   constructor(
     private readonly addOnsService: AddOnsService,
@@ -30,6 +27,14 @@ export class AddOnsController {
   ) {}
 
   // ==================== Super Admin Endpoints ====================
+
+  /**
+   * Get all add-ons including inactive (Super Admin only)
+   */
+  @Get('admin/all')
+  async findAllAdmin() {
+    return await this.addOnsService.findAll({});
+  }
 
   /**
    * Create new add-on (Super Admin only)

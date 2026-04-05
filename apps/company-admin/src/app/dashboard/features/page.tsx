@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { PackageSearch, Plus, Edit, Trash2, Search, ToggleLeft, ToggleRight, X, Zap, Star, Code } from 'lucide-react';
 import { api } from '../../../lib/api';
+import toast from 'react-hot-toast';
+import ConfirmModal from '../../../components/ConfirmModal';
 
 interface Feature {
   id: string;
@@ -19,11 +21,12 @@ export default function FeaturesPage() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Modal
   const [isModalOpen, setModalOpen] = useState(false);
   const [editingFeature, setEditingFeature] = useState<Feature | null>(null);
   const [form, setForm] = useState({ name: '', code: '', description: '', icon: '' });
   const [submitting, setSubmitting] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; feature: Feature | null }>({ open: false, feature: null });
+  const [deleting, setDeleting] = useState(false);
 
   const fetchFeatures = async () => {
     try {
@@ -61,20 +64,25 @@ export default function FeaturesPage() {
       }
       await fetchFeatures();
       setModalOpen(false);
-    } catch (err) {
-      alert('Failed to save feature');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to save feature');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Delete this feature? Members using it may lose access.')) return;
+  const handleDelete = async () => {
+    if (!deleteConfirm.feature) return;
+    setDeleting(true);
     try {
-      await api.delete(`/features/${id}`);
-      setFeatures(prev => prev.filter(f => f.id !== id));
-    } catch {
-      alert('Failed to delete feature');
+      await api.delete(`/features/${deleteConfirm.feature.id}`);
+      setFeatures(prev => prev.filter(f => f.id !== deleteConfirm.feature!.id));
+      toast.success('Feature deleted');
+      setDeleteConfirm({ open: false, feature: null });
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to delete feature');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -82,8 +90,8 @@ export default function FeaturesPage() {
     try {
       await api.patch(`/features/${feature.id}`, { isActive: !feature.isActive });
       setFeatures(prev => prev.map(f => f.id === feature.id ? { ...f, isActive: !f.isActive } : f));
-    } catch {
-      alert('Failed to update feature');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update feature');
     }
   };
 
@@ -231,7 +239,7 @@ export default function FeaturesPage() {
                   <button onClick={() => openEditModal(feature)} className="btn btn-outline" style={{ flex: 1, height: '34px', fontSize: '0.8rem' }}>
                     <Edit size={14} /> Edit
                   </button>
-                  <button onClick={() => handleDelete(feature.id)} className="btn btn-outline" style={{ height: '34px', padding: '0 12px', color: 'var(--danger)' }}>
+                  <button onClick={() => setDeleteConfirm({ open: true, feature })} className="btn btn-outline" style={{ height: '34px', padding: '0 12px', color: 'var(--danger)' }}>
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -243,9 +251,9 @@ export default function FeaturesPage() {
 
       {/* Modal */}
       {isModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div onClick={() => setModalOpen(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
-          <div className="glass-panel animate-fade-in" style={{ position: 'relative', width: '520px', maxWidth: '90vw', padding: 'var(--space-xl)', zIndex: 101 }}>
+          <div className="glass-panel animate-fade-in" style={{ position: 'relative', width: '520px', maxWidth: '90vw', padding: 'var(--space-xl)', zIndex: 9001 }}>
             <div className="flex-between" style={{ marginBottom: 'var(--space-xl)' }}>
               <h3 style={{ fontSize: '1.25rem' }}>{editingFeature ? 'Edit Feature' : 'New Feature'}</h3>
               <button onClick={() => setModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}><X size={20} /></button>
@@ -323,6 +331,16 @@ export default function FeaturesPage() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        open={deleteConfirm.open}
+        title="Hapus Feature"
+        description={`Hapus feature "${deleteConfirm.feature?.name}"? Member yang menggunakan feature ini mungkin kehilangan akses.`}
+        confirmLabel="Hapus Feature"
+        loading={deleting}
+        onConfirm={handleDelete}
+        onClose={() => setDeleteConfirm({ open: false, feature: null })}
+      />
     </div>
   );
 }

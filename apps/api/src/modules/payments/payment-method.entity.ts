@@ -3,7 +3,7 @@ import { BaseEntity } from '../../common/entities';
 import { PaymentMethodType } from '../../common/enums';
 import { Store } from '../stores/store.entity';
 
-@Entity('payment_methods')
+@Entity('store_payment_methods')
 export class PaymentMethod extends BaseEntity {
   @Column({ type: 'enum', enum: PaymentMethodType })
   type: PaymentMethodType;

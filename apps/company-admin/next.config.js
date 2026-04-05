@@ -1,9 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
-  env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4404/api/v1',
-  },
-}
+  allowedDevOrigins: ['10.1.2.254', '192.168.56.1'],
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;

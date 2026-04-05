@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+﻿import { Controller, Get } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
@@ -98,7 +98,7 @@ export class HealthController {
     };
 
     /* Uncomment when Sentry packages are installed
-    Sentry.captureMessage('Test message from MonetRAPOS API', {
+    Sentry.captureMessage('Test message from MonetraPOS API', {
       level: 'info',
       tags: {
         test: 'true',
@@ -116,3 +116,4 @@ export class HealthController {
     */
   }
 }
+

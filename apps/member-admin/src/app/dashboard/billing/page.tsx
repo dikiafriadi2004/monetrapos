@@ -1,125 +1,126 @@
-"use client";
+'use client';
 
 import { useState, useEffect } from 'react';
-import { CreditCard, Calendar, CheckCircle, AlertCircle, Clock, FileText } from 'lucide-react';
-import { api } from '../../../lib/api';
+import { FileText, Download, CreditCard, Loader2, RefreshCcw, CheckCircle, Clock, XCircle, RotateCcw } from 'lucide-react';
+import apiClient from '@/lib/api-client';
+import toast from 'react-hot-toast';
+import { PageHeader, StatusBadge, EmptyState, LoadingSpinner } from '@/components/ui';
+
+interface Invoice {
+  id: string; invoiceNumber: string;
+  status: 'pending' | 'paid' | 'overdue' | 'cancelled';
+  subtotal: number; taxAmount: number; discountAmount: number; total: number;
+  dueDate: string; paidAt?: string; invoicePdfUrl?: string; paymentUrl?: string; createdAt: string;
+}
+
+const STATUS_ICON: Record<string, React.ElementType> = {
+  paid: CheckCircle, pending: Clock, overdue: XCircle, cancelled: XCircle,
+};
 
 export default function BillingPage() {
-  const [subscription, setSubscription] = useState<any>(null);
-  const [invoices, setInvoices] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [paying, setPaying] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState<string | null>(null);
 
-  useEffect(() => { fetchBilling(); }, []);
+  useEffect(() => { load(); }, []);
 
-  const fetchBilling = async () => {
+  const load = async () => {
+    setLoading(true);
     try {
-      // Simulate fetching billing data
-      // In production this calls /subscriptions/my and /invoices
-      setSubscription({
-        plan: 'Premium',
-        status: 'ACTIVE',
-        startDate: '2026-01-01',
-        endDate: '2027-01-01',
-        price: 299000,
-        features: ['Unlimited Products', 'Multi-Store', 'KDS Access', 'Priority Support', 'Advanced Reports']
-      });
-      setInvoices([
-        { id: 'INV-2026-001', date: '2026-01-01', amount: 299000, status: 'PAID', method: 'Bank Transfer' },
-        { id: 'INV-2026-002', date: '2026-02-01', amount: 299000, status: 'PAID', method: 'QRIS' },
-        { id: 'INV-2026-003', date: '2026-03-01', amount: 299000, status: 'PAID', method: 'Virtual Account' },
-        { id: 'INV-2026-004', date: '2026-04-01', amount: 299000, status: 'PENDING', method: '-' },
-      ]);
-    } catch (err) { console.error(err); }
+      const res = await apiClient.get('/billing/invoices');
+      setInvoices(Array.isArray(res.data) ? res.data : (res.data?.data || []));
+    } catch { toast.error('Failed to load invoices'); }
     finally { setLoading(false); }
   };
 
-  if (loading) return <div style={{ padding: 'var(--space-2xl)', textAlign: 'center' }}>Loading billing...</div>;
+  const handlePay = async (invoice: Invoice) => {
+    setPaying(invoice.id);
+    try {
+      // If invoice already has a payment URL, go to checkout directly
+      if (invoice.paymentUrl) {
+        window.location.href = `/checkout?invoice=${invoice.invoiceNumber}&amount=${invoice.total}&paymentUrl=${encodeURIComponent(invoice.paymentUrl)}`;
+        return;
+      }
+      // Otherwise generate new payment URL
+      const res = await apiClient.post(`/billing/invoices/${invoice.id}/pay`, { gateway: 'xendit' });
+      const url = (res.data as any)?.paymentUrl;
+      if (url) {
+        window.location.href = `/checkout?invoice=${invoice.invoiceNumber}&amount=${invoice.total}&paymentUrl=${encodeURIComponent(url)}`;
+      } else {
+        window.location.href = `/checkout?invoice=${invoice.invoiceNumber}&amount=${invoice.total}`;
+      }
+    } catch (err: any) { toast.error(err?.response?.data?.message || 'Failed to initiate payment'); }
+    finally { setPaying(null); }
+  };
+
+  const handleDownload = async (invoice: Invoice) => {
+    try {
+      const res = await apiClient.get(`/billing/invoices/${invoice.id}/download`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data as any]));
+      const a = document.createElement('a'); a.href = url; a.download = `${invoice.invoiceNumber}.pdf`;
+      document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); document.body.removeChild(a);
+    } catch { toast.error('Failed to download invoice'); }
+  };
+
+  const handleRegenerate = async (invoice: Invoice) => {
+    setRegenerating(invoice.id);
+    try {
+      await apiClient.post(`/billing/invoices/${invoice.id}/regenerate-pdf`);
+      toast.success('PDF regenerated');
+      await load();
+    } catch { toast.error('Failed to regenerate PDF'); }
+    finally { setRegenerating(null); }
+  };
+
+  const fmt = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n || 0);
+  const fmtDate = (d: string) => new Date(d).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
 
   return (
     <div>
-      <div className="flex-between" style={{ marginBottom: 'var(--space-xl)' }}>
-        <div>
-          <h1 style={{ fontSize: '1.75rem', marginBottom: 'var(--space-xs)' }}>Billing & Subscription</h1>
-          <p style={{ color: 'var(--text-secondary)' }}>Manage your active plan, view invoices, and payment history.</p>
-        </div>
-      </div>
+      <PageHeader title="Billing & Invoices" description="View and pay your subscription invoices"
+        action={<button onClick={load} className="btn btn-outline btn-sm"><RefreshCcw size={14} /> Refresh</button>} />
 
-      {/* Active Plan Card */}
-      {subscription && (
-        <div className="glass-panel animate-fade-in" style={{ marginBottom: 'var(--space-xl)', background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(56, 189, 248, 0.05))', borderColor: 'var(--success)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: 'var(--space-md)' }}>
-                <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.15)', color: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <CreditCard size={24} />
-                </div>
-                <div>
-                  <h2 style={{ fontSize: '1.5rem', marginBottom: '2px' }}>{subscription.plan} Plan</h2>
-                  <span className="badge badge-success">
-                    <CheckCircle size={12} style={{ marginRight: '4px' }} /> {subscription.status}
-                  </span>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 'var(--space-xl)', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Calendar size={14} /> Started: {new Date(subscription.startDate).toLocaleDateString()}</span>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Clock size={14} /> Renews: {new Date(subscription.endDate).toLocaleDateString()}</span>
-              </div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: '4px' }}>Monthly Fee</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--success)' }}>Rp {subscription.price.toLocaleString('id-ID')}</div>
-            </div>
-          </div>
-
-          {/* Plan Features */}
-          <div style={{ marginTop: 'var(--space-lg)', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-            {subscription.features.map((f: string) => (
-              <span key={f} className="badge" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', padding: '4px 10px' }}>
-                ✓ {f}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Invoice History */}
-      <h2 style={{ fontSize: '1.25rem', marginBottom: 'var(--space-md)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <FileText size={18} color="var(--text-tertiary)" /> Invoice History
-      </h2>
-      <div className="glass-panel" style={{ padding: 0 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1fr', gap: 'var(--space-md)', padding: 'var(--space-sm) var(--space-lg)', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)', fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase' }}>
-          <div>Invoice #</div><div>Date</div><div>Amount</div><div>Method</div><div style={{ textAlign: 'right' }}>Status</div>
-        </div>
-        {invoices.map(inv => (
-          <div key={inv.id} className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr 1fr', gap: 'var(--space-md)', padding: 'var(--space-md) var(--space-lg)', borderBottom: '1px solid var(--border-subtle)', alignItems: 'center' }}>
-            <div style={{ fontWeight: 600 }}>{inv.id}</div>
-            <div style={{ color: 'var(--text-secondary)' }}>{new Date(inv.date).toLocaleDateString()}</div>
-            <div style={{ fontWeight: 500 }}>Rp {inv.amount.toLocaleString('id-ID')}</div>
-            <div style={{ color: 'var(--text-secondary)' }}>{inv.method}</div>
-            <div style={{ textAlign: 'right' }}>
-              <span className={`badge ${inv.status === 'PAID' ? 'badge-success' : 'badge-warning'}`}>
-                {inv.status === 'PAID' ? <CheckCircle size={12} style={{ marginRight: '4px' }} /> : <AlertCircle size={12} style={{ marginRight: '4px' }} />}
-                {inv.status}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Payment Notice for Pending */}
-      {invoices.some(i => i.status === 'PENDING') && (
-        <div className="glass-panel" style={{ marginTop: 'var(--space-lg)', background: 'rgba(245, 158, 11, 0.05)', borderColor: 'var(--warning)' }}>
-          <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: 'var(--space-sm)', color: 'var(--warning)' }}>
-            <AlertCircle size={18} /> Payment Instructions
-          </h3>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: 'var(--space-sm)' }}>
-            To pay your pending invoice, please transfer to the following virtual account:
-          </p>
-          <div style={{ background: 'rgba(0,0,0,0.2)', padding: 'var(--space-md)', borderRadius: 'var(--radius-sm)', fontFamily: 'monospace', color: 'var(--text-primary)' }}>
-            <div>Bank: BCA Virtual Account</div>
-            <div>VA Number: <strong>8800 1234 5678 9012</strong></div>
-            <div>Amount: <strong>Rp 299.000</strong></div>
-            <div style={{ marginTop: '8px', fontSize: '0.85rem', color: 'var(--text-tertiary)' }}>Your subscription will be auto-activated upon successful payment confirmation.</div>
+      {loading ? <LoadingSpinner /> : invoices.length === 0 ? (
+        <EmptyState icon={FileText} title="No invoices found" description="Your billing history will appear here." />
+      ) : (
+        <div className="card">
+          <div className="table-container border-0">
+            <table className="table">
+              <thead>
+                <tr><th>Invoice</th><th>Date</th><th>Due Date</th><th>Amount</th><th>Status</th><th className="text-right">Actions</th></tr>
+              </thead>
+              <tbody>
+                {invoices.map(inv => {
+                  const isOverdue = inv.status === 'pending' && new Date(inv.dueDate) < new Date();
+                  const StatusIcon = STATUS_ICON[inv.status] || Clock;
+                  return (
+                    <tr key={inv.id}>
+                      <td className="font-semibold text-indigo-600">{inv.invoiceNumber}</td>
+                      <td className="text-gray-500 text-sm">{fmtDate(inv.createdAt)}</td>
+                      <td className={`text-sm ${isOverdue ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                        {fmtDate(inv.dueDate)}{isOverdue && <span className="ml-1 badge badge-danger text-xs">OVERDUE</span>}
+                      </td>
+                      <td className="font-bold">{fmt(inv.total)}</td>
+                      <td><StatusBadge status={inv.status} /></td>
+                      <td>
+                        <div className="flex justify-end gap-1">
+                          <button onClick={() => handleDownload(inv)} className="btn btn-outline btn-sm"><Download size={13} /> PDF</button>
+                          <button onClick={() => handleRegenerate(inv)} disabled={regenerating === inv.id} className="btn btn-ghost btn-icon btn-sm" title="Regenerate PDF">
+                            {regenerating === inv.id ? <Loader2 size={13} className="animate-spin"/> : <RotateCcw size={13}/>}
+                          </button>
+                          {(inv.status === 'pending' || inv.status === 'overdue') && (
+                            <button onClick={() => handlePay(inv)} disabled={paying === inv.id} className="btn btn-primary btn-sm">
+                              {paying === inv.id ? <Loader2 size={13} className="animate-spin"/> : <CreditCard size={13}/>} Pay
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

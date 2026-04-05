@@ -12,7 +12,7 @@ export class AddPaymentGatewayPreference1711659970000
         type: 'varchar',
         length: '20',
         isNullable: true,
-        default: "'midtrans'",
+        default: "'xendit'",
       }),
     );
 

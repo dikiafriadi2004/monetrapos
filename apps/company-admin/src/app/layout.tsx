@@ -1,9 +1,10 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import "./globals.css";
+import { Toaster } from "react-hot-toast";
 
 export const metadata: Metadata = {
-  title: "MonetRAPOS - Company Admin",
-  description: "Company Admin Portal for MonetRAPOS",
+  title: "MonetraPOS - Company Admin",
+  description: "Company Admin Portal for MonetraPOS",
 };
 
 export default function RootLayout({
@@ -13,7 +14,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {children}
+        <Toaster position="top-right" toastOptions={{ duration: 3000 }} />
+      </body>
     </html>
   );
 }
+

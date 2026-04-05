@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { QrCode, Banknote, Loader2, CheckCircle2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 export function PaymentsTab({ payments, onSave }: { payments: any[], onSave: (d: any) => Promise<void> }) {
   const [loading, setLoading] = useState(false);
@@ -26,8 +27,9 @@ export function PaymentsTab({ payments, onSave }: { payments: any[], onSave: (d:
       });
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch {
-      alert("Failed to update QRIS configuration");
+    } catch (err: any) {
+      console.error('Failed to update QRIS configuration:', err);
+      toast.error(err?.response?.data?.message || 'Failed to update QRIS configuration');
     }
     setLoading(false);
   };

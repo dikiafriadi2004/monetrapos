@@ -6,9 +6,12 @@ import { ProductFormModal } from './components/ProductFormModal';
 import { ProductTableRow } from './components/ProductTableRow';
 import { BulkImportModal } from './components/BulkImportModal';
 import { useAuth } from '@/contexts/AuthContext';
+import { useStore } from '@/hooks/useStore';
 import apiClient from '@/lib/api-client';
 import API_ENDPOINTS from '@/lib/api-endpoints';
 import toast from 'react-hot-toast';
+import PermissionGate from '@/components/PermissionGate';
+import { PERMISSIONS } from '@/hooks/usePermission';
 
 interface Product {
   id: string;
@@ -42,12 +45,15 @@ interface Category {
 
 export default function ProductsPage() {
   const { company } = useAuth();
+  const { storeId } = useStore();
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkModal, setBulkModal] = useState<'price' | 'stock' | 'activate' | null>(null);
   
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -73,11 +79,11 @@ export default function ProductsPage() {
     if (company?.id) {
       fetchProducts();
     }
-  }, [company, currentPage, searchTerm, selectedCategory, showInactive, showLowStock]);
+  }, [company, storeId, currentPage, searchTerm, selectedCategory, showInactive, showLowStock]);
 
   const fetchCategories = async () => {
     try {
-      const response = await apiClient.get(API_ENDPOINTS.PRODUCTS.CATEGORIES, {
+      const response = await apiClient.get(API_ENDPOINTS.CATEGORIES.BASE, {
         params: { companyId: company?.id }
       });
       setCategories(response.data || []);
@@ -90,14 +96,15 @@ export default function ProductsPage() {
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      // Get storeId from localStorage or use company ID as fallback
-      const storeId = localStorage.getItem('currentStoreId') || company?.id || 'default';
+      const activeStoreId = storeId || '';
       
       const params: any = {
-        storeId,
         page: currentPage,
         limit: itemsPerPage,
       };
+
+      // Only add storeId if we have one
+      if (activeStoreId) params.storeId = activeStoreId;
 
       if (searchTerm) params.search = searchTerm;
       if (selectedCategory) params.categoryId = selectedCategory;
@@ -106,9 +113,12 @@ export default function ProductsPage() {
 
       const response = await apiClient.get(API_ENDPOINTS.PRODUCTS.BASE, { params });
       
-      setProducts(response.data.items || response.data || []);
-      setTotalPages(response.data.totalPages || 1);
-      setTotalItems(response.data.total || response.data.length || 0);
+      // API returns { data: [...], total, page, limit }
+      const responseData = response.data;
+      const productList = responseData?.data || responseData?.items || (Array.isArray(responseData) ? responseData : []);
+      setProducts(productList);
+      setTotalPages(responseData?.totalPages || Math.ceil((responseData?.total || productList.length) / itemsPerPage) || 1);
+      setTotalItems(responseData?.total || productList.length || 0);
     } catch (error: any) {
       console.error('Failed to fetch products:', error);
       toast.error('Failed to load products');
@@ -118,48 +128,37 @@ export default function ProductsPage() {
     }
   };
 
-  const handleCreateProduct = async (data: any) => {
-    try {
-      const storeId = localStorage.getItem('currentStoreId') || company?.id || 'default';
-      await apiClient.post(API_ENDPOINTS.PRODUCTS.BASE, {
-        ...data,
-        companyId: company?.id,
-        storeId,
-      });
-      toast.success('Product created successfully');
-      fetchProducts();
-      setIsModalOpen(false);
-    } catch (error: any) {
-      console.error('Failed to create product:', error);
-      throw error;
+  const handleCreateProduct = async (data: any): Promise<any> => {
+    const activeStoreId = storeId || '';
+    if (!activeStoreId) {
+      toast.error('Tidak ada toko aktif. Pastikan subscription sudah aktif.');
+      throw new Error('No store');
     }
+    const res = await apiClient.post(API_ENDPOINTS.PRODUCTS.BASE, {
+      ...data,
+      storeId: activeStoreId,
+    });
+    toast.success('Produk berhasil ditambahkan');
+    fetchProducts();
+    return res.data; // Return created product with ID for image upload
   };
 
-  const handleUpdateProduct = async (data: any) => {
+  const handleUpdateProduct = async (data: any): Promise<any> => {
     if (!editingProduct) return;
-    
-    try {
-      await apiClient.patch(API_ENDPOINTS.PRODUCTS.BY_ID(editingProduct.id), data);
-      toast.success('Product updated successfully');
-      fetchProducts();
-      setIsModalOpen(false);
-      setEditingProduct(null);
-    } catch (error: any) {
-      console.error('Failed to update product:', error);
-      throw error;
-    }
+    const res = await apiClient.patch(API_ENDPOINTS.PRODUCTS.BY_ID(editingProduct.id), data);
+    toast.success('Produk berhasil diperbarui');
+    fetchProducts();
+    return res.data;
   };
 
   const handleDeleteProduct = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this product?')) return;
-    
+    if (!confirm('Hapus produk ini? Tindakan tidak bisa dibatalkan.')) return;
     try {
       await apiClient.delete(API_ENDPOINTS.PRODUCTS.BY_ID(id));
-      toast.success('Product deleted successfully');
+      toast.success('Produk berhasil dihapus');
       fetchProducts();
     } catch (error: any) {
-      console.error('Failed to delete product:', error);
-      toast.error('Failed to delete product');
+      toast.error(error?.response?.data?.message || 'Gagal menghapus produk');
     }
   };
 
@@ -168,14 +167,70 @@ export default function ProductsPage() {
     setIsModalOpen(true);
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === products.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(products.map(p => p.id)));
+    }
+  };
+
+  const handleBulkPrice = async (price: number) => {
+    try {
+      await apiClient.post(API_ENDPOINTS.PRODUCTS.BASE + '/bulk/prices', {
+        productIds: Array.from(selectedIds),
+        price,
+      });
+      toast.success(`Updated price for ${selectedIds.size} products`);
+      setSelectedIds(new Set());
+      setBulkModal(null);
+      fetchProducts();
+    } catch { toast.error('Failed to update prices'); }
+  };
+
+  const handleBulkStock = async (quantity: number, type: 'set' | 'add') => {
+    try {
+      await apiClient.post(API_ENDPOINTS.PRODUCTS.BASE + '/bulk/stock', {
+        productIds: Array.from(selectedIds),
+        quantity,
+        type,
+      });
+      toast.success(`Updated stock for ${selectedIds.size} products`);
+      setSelectedIds(new Set());
+      setBulkModal(null);
+      fetchProducts();
+    } catch { toast.error('Failed to update stock'); }
+  };
+
+  const handleBulkActivate = async (isActive: boolean) => {
+    try {
+      await apiClient.post(API_ENDPOINTS.PRODUCTS.BASE + '/bulk/activate', {
+        productIds: Array.from(selectedIds),
+        isActive,
+      });
+      toast.success(`${isActive ? 'Activated' : 'Deactivated'} ${selectedIds.size} products`);
+      setSelectedIds(new Set());
+      setBulkModal(null);
+      fetchProducts();
+    } catch { toast.error('Failed to update products'); }
+  };
+
   const handleExport = async () => {
     try {
       toast.loading('Exporting products...');
-      const storeId = localStorage.getItem('currentStoreId') || company?.id || 'default';
+      const activeStoreId = storeId || company?.id || '';
       
       // Fetch all products without pagination
       const response = await apiClient.get(API_ENDPOINTS.PRODUCTS.BASE, {
-        params: { storeId, limit: 10000 }
+        params: { storeId: activeStoreId, limit: 10000 }
       });
       
       const allProducts = response.data.items || response.data || [];
@@ -239,12 +294,12 @@ export default function ProductsPage() {
       // Find category IDs
       const productsWithCategories = products.map(p => {
         const category = categories.find(c => c.name.toLowerCase() === p.categoryName?.toLowerCase());
-        const storeId = localStorage.getItem('currentStoreId') || company?.id || 'default';
+        const activeStoreId = storeId || company?.id || '';
         return {
           ...p,
           categoryId: category?.id,
           companyId: company?.id,
-          storeId,
+          storeId: activeStoreId,
         };
       });
 
@@ -290,25 +345,27 @@ export default function ProductsPage() {
             <Download size={18} />
             Export
           </button>
-          <button 
-            onClick={() => setIsBulkImportOpen(true)}
-            className="btn btn-outline"
-            style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}
-          >
-            <Upload size={18} />
-            Import
-          </button>
-          <button 
-            onClick={() => {
-              setEditingProduct(null);
-              setIsModalOpen(true);
-            }}
-            className="btn btn-primary"
-            style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}
-          >
-            <Plus size={18} />
-            Add Product
-          </button>
+          <PermissionGate permission={PERMISSIONS.PRODUCT_CREATE}>
+            <button 
+              onClick={() => setIsBulkImportOpen(true)}
+              className="btn btn-outline"
+              style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}
+            >
+              <Upload size={18} />
+              Import
+            </button>
+            <button 
+              onClick={() => {
+                setEditingProduct(null);
+                setIsModalOpen(true);
+              }}
+              className="btn btn-primary"
+              style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}
+            >
+              <Plus size={18} />
+              Add Product
+            </button>
+          </PermissionGate>
         </div>
       </div>
 
@@ -389,11 +446,25 @@ export default function ProductsPage() {
           color: 'var(--text-secondary)',
           textTransform: 'uppercase'
         }}>
-          <div style={{ flex: 2 }}>Product</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 2 }}>
+            <input type="checkbox" checked={selectedIds.size === products.length && products.length > 0} onChange={toggleSelectAll} style={{ width: 16, height: 16 }} />
+            Product
+          </div>
           <div style={{ flex: 1 }}>Price</div>
           <div style={{ flex: 1 }}>Stock</div>
           <div style={{ width: '120px', textAlign: 'right' }}>Actions</div>
         </div>
+
+        {/* Bulk Action Bar */}
+        {selectedIds.size > 0 && (
+          <div style={{ padding: 'var(--space-sm) var(--space-lg)', background: 'rgba(99,102,241,0.08)', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--primary)' }}>{selectedIds.size} selected</span>
+            <button onClick={() => setBulkModal('price')} className="btn btn-outline" style={{ height: 28, padding: '0 10px', fontSize: '0.8rem' }}>Bulk Price</button>
+            <button onClick={() => setBulkModal('stock')} className="btn btn-outline" style={{ height: 28, padding: '0 10px', fontSize: '0.8rem' }}>Bulk Stock</button>
+            <button onClick={() => setBulkModal('activate')} className="btn btn-outline" style={{ height: 28, padding: '0 10px', fontSize: '0.8rem' }}>Activate/Deactivate</button>
+            <button onClick={() => setSelectedIds(new Set())} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', marginLeft: 'auto', fontSize: '0.8rem' }}>Clear</button>
+          </div>
+        )}
 
         {/* Loading State */}
         {loading && (
@@ -433,6 +504,8 @@ export default function ProductsPage() {
                 product={product}
                 onEdit={handleEdit}
                 onDelete={handleDeleteProduct}
+                selected={selectedIds.has(product.id)}
+                onToggleSelect={toggleSelect}
               />
             ))}
           </>
@@ -478,6 +551,7 @@ export default function ProductsPage() {
         onClose={() => {
           setIsModalOpen(false);
           setEditingProduct(null);
+          fetchProducts(); // refresh after modal closes
         }}
         onSubmit={editingProduct ? handleUpdateProduct : handleCreateProduct}
         initialData={editingProduct}
@@ -494,6 +568,82 @@ export default function ProductsPage() {
         @keyframes spin { 100% { transform: rotate(360deg); } }
         .animate-spin { animation: spin 1s linear infinite; }
       `}} />
+    </div>
+  );
+}
+
+// ── Bulk Price Modal ──────────────────────────────────────────────────────────
+function BulkPriceModal({ count, onClose, onConfirm }: { count: number; onClose: () => void; onConfirm: (price: number) => void }) {
+  const [price, setPrice] = useState('');
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
+      <div className="glass-panel animate-fade-in" style={{ position: 'relative', width: 400, maxWidth: '90vw', padding: 'var(--space-xl)', zIndex: 101 }}>
+        <h3 style={{ fontSize: '1.1rem', marginBottom: 'var(--space-md)' }}>Bulk Update Price</h3>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: 'var(--space-lg)' }}>
+          Set new base price for <strong>{count}</strong> selected products.
+        </p>
+        <div className="form-group">
+          <label className="form-label">New Price (IDR) *</label>
+          <input type="number" className="form-input" value={price} onChange={e => setPrice(e.target.value)} placeholder="e.g. 50000" min="0" autoFocus />
+        </div>
+        <div style={{ display: 'flex', gap: 'var(--space-md)', justifyContent: 'flex-end', marginTop: 'var(--space-lg)' }}>
+          <button onClick={onClose} className="btn btn-outline">Cancel</button>
+          <button onClick={() => price && onConfirm(Number(price))} disabled={!price} className="btn btn-primary">Update Price</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Bulk Stock Modal ──────────────────────────────────────────────────────────
+function BulkStockModal({ count, onClose, onConfirm }: { count: number; onClose: () => void; onConfirm: (qty: number, type: 'set' | 'add') => void }) {
+  const [qty, setQty] = useState('');
+  const [type, setType] = useState<'set' | 'add'>('set');
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
+      <div className="glass-panel animate-fade-in" style={{ position: 'relative', width: 400, maxWidth: '90vw', padding: 'var(--space-xl)', zIndex: 101 }}>
+        <h3 style={{ fontSize: '1.1rem', marginBottom: 'var(--space-md)' }}>Bulk Update Stock</h3>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: 'var(--space-lg)' }}>
+          Update stock for <strong>{count}</strong> selected products.
+        </p>
+        <div className="form-group">
+          <label className="form-label">Operation</label>
+          <select className="form-input" value={type} onChange={e => setType(e.target.value as 'set' | 'add')}>
+            <option value="set">Set stock to value</option>
+            <option value="add">Add to current stock</option>
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Quantity *</label>
+          <input type="number" className="form-input" value={qty} onChange={e => setQty(e.target.value)} placeholder="e.g. 100" min="0" autoFocus />
+        </div>
+        <div style={{ display: 'flex', gap: 'var(--space-md)', justifyContent: 'flex-end', marginTop: 'var(--space-lg)' }}>
+          <button onClick={onClose} className="btn btn-outline">Cancel</button>
+          <button onClick={() => qty !== '' && onConfirm(Number(qty), type)} disabled={qty === ''} className="btn btn-primary">Update Stock</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Bulk Activate Modal ───────────────────────────────────────────────────────
+function BulkActivateModal({ count, onClose, onConfirm }: { count: number; onClose: () => void; onConfirm: (isActive: boolean) => void }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
+      <div className="glass-panel animate-fade-in" style={{ position: 'relative', width: 400, maxWidth: '90vw', padding: 'var(--space-xl)', zIndex: 101 }}>
+        <h3 style={{ fontSize: '1.1rem', marginBottom: 'var(--space-md)' }}>Activate / Deactivate</h3>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: 'var(--space-xl)' }}>
+          What do you want to do with <strong>{count}</strong> selected products?
+        </p>
+        <div style={{ display: 'flex', gap: 'var(--space-md)', justifyContent: 'center' }}>
+          <button onClick={onClose} className="btn btn-outline">Cancel</button>
+          <button onClick={() => onConfirm(false)} className="btn btn-outline" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}>Deactivate All</button>
+          <button onClick={() => onConfirm(true)} className="btn btn-primary">Activate All</button>
+        </div>
+      </div>
     </div>
   );
 }

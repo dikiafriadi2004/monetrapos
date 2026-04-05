@@ -9,10 +9,14 @@ import {
 } from 'class-validator';
 
 export class RegisterCompanyDto {
-  // Company Info
+  // Info Usaha
   @IsString()
   @MinLength(2)
   companyName: string;
+
+  @IsOptional()
+  @IsIn(['retail', 'fnb', 'laundry', 'service', 'other'])
+  businessType?: string; // retail, fnb, laundry - menentukan fitur yang tersedia
 
   @IsEmail()
   companyEmail: string;
@@ -25,7 +29,7 @@ export class RegisterCompanyDto {
   @IsString()
   companyAddress?: string;
 
-  // Owner/Admin User Info
+  // Info Pemilik
   @IsString()
   @MinLength(2)
   ownerName: string;
@@ -41,11 +45,11 @@ export class RegisterCompanyDto {
   @IsPhoneNumber('ID')
   ownerPhone?: string;
 
-  // Subscription Plan Selection (REQUIRED for payment flow)
+  // Pilihan Paket (wajib untuk alur pembayaran)
   @IsString()
   planId: string;
 
-  // Subscription Duration (REQUIRED for payment flow)
+  // Durasi Langganan (wajib untuk alur pembayaran)
   @IsNumber()
   @IsIn([1, 3, 6, 12])
   durationMonths: number;

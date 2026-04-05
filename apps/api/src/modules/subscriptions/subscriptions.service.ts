@@ -34,6 +34,36 @@ export class SubscriptionsService {
   ) {}
 
   /**
+   * Saat downgrade paket, nonaktifkan cabang yang melebihi limit baru
+   * Cabang yang dibuat paling awal tetap aktif, sisanya dinonaktifkan
+   */
+  private async enforceStoreLimit(companyId: string, maxStores: number): Promise<void> {
+    try {
+      const result = await this.companyRepository.manager.query(
+        `SELECT id, name, is_active, created_at FROM stores WHERE company_id = ? AND deleted_at IS NULL ORDER BY created_at ASC`,
+        [companyId]
+      );
+      const stores = result as Array<{ id: string; name: string; is_active: boolean; created_at: Date }>;
+      const activeStores = stores.filter(s => s.is_active);
+
+      if (activeStores.length > maxStores) {
+        // Nonaktifkan cabang yang melebihi limit (yang paling baru dibuat)
+        const storesToDeactivate = activeStores.slice(maxStores);
+        for (const store of storesToDeactivate) {
+          await this.companyRepository.manager.query(
+            `UPDATE stores SET is_active = 0 WHERE id = ?`,
+            [store.id]
+          );
+          this.logger.warn(`Store ${store.name} (${store.id}) dinonaktifkan karena downgrade paket`);
+        }
+        this.logger.log(`Downgrade: ${storesToDeactivate.length} cabang dinonaktifkan untuk company ${companyId}`);
+      }
+    } catch (e) {
+      this.logger.error('enforceStoreLimit error:', e.message);
+    }
+  }
+
+  /**
    * Create new subscription (trial or paid)
    */
   async create(data: {
@@ -41,6 +71,7 @@ export class SubscriptionsService {
     planId: string;
     billingCycle: BillingCycle;
     startTrial?: boolean;
+    durationMonths?: number;
   }): Promise<Subscription> {
     // Check if company already has active subscription
     const existing = await this.subscriptionRepository.findOne({
@@ -98,6 +129,7 @@ export class SubscriptionsService {
         billingCycle: data.billingCycle,
         status: SubscriptionStatus.PENDING,
         price,
+        durationMonths: data.durationMonths || 1,
       });
     }
 
@@ -219,6 +251,11 @@ export class SubscriptionsService {
 
     // Determine if upgrade or downgrade
     const isUpgrade = newPrice > oldPrice;
+
+    // Jika downgrade: nonaktifkan cabang yang melebihi limit baru
+    if (!isUpgrade && newPlan.maxStores !== -1) {
+      await this.enforceStoreLimit(companyId, newPlan.maxStores);
+    }
     const action = isUpgrade
       ? SubscriptionHistoryAction.UPGRADED
       : SubscriptionHistoryAction.DOWNGRADED;
@@ -783,12 +820,12 @@ export class SubscriptionsService {
     const paymentTransaction = await billingService.createPaymentTransaction({
       invoiceId: invoice.id,
       companyId,
-      gateway: 'midtrans' as any,
+      gateway: 'xendit' as any,
       amount: total,
       currency: 'IDR',
     });
 
-    // Generate payment URL via Midtrans
+    // Generate payment URL via Xendit
     const paymentResponse = await paymentGatewayService.createPaymentUrl({
       orderId: paymentTransaction.id,
       amount: total,

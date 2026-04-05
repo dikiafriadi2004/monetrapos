@@ -87,57 +87,101 @@ export class TransactionsService {
         }
       }
 
-      // Create transaction
-      const transaction = queryRunner.manager.create(Transaction, {
-        transactionNumber,
-        storeId: dto.storeId,
-        customerId: dto.customerId,
-        customerName: dto.customerName,
-        customerPhone: dto.customerPhone,
-        paymentMethod: dto.paymentMethod as any,
-        subtotal: calculatedTotals.subtotal,
-        taxAmount: calculatedTotals.taxAmount,
-        discountAmount: calculatedTotals.discountAmount,
-        total: calculatedTotals.total,
-        paidAmount: dto.paidAmount,
-        changeAmount: dto.changeAmount || 0,
-        notes: dto.notes,
-        employeeId: dto.employeeId,
-        shiftId: dto.shiftId,
-        status: TransactionStatus.COMPLETED,
-        metadata: {
-          loyaltyPointsEarned,
-          paymentMethods: dto.paymentMethods || [
-            { method: dto.paymentMethod, amount: dto.paidAmount },
-          ],
-        },
-      } as any);
+      // Validate shiftId if provided — set null if shift doesn't exist
+      let validShiftId: string | null = null;
+      if (dto.shiftId) {
+        const shiftExists = await queryRunner.manager.query(
+          `SELECT id FROM shifts WHERE id = ? LIMIT 1`,
+          [dto.shiftId]
+        );
+        if (shiftExists?.length > 0) validShiftId = dto.shiftId;
+      }
 
-      const savedTransaction = await queryRunner.manager.save(
-        Transaction,
-        transaction,
+      // Get companyId from store using DataSource directly
+      const storeRows = await this.dataSource.query(
+        `SELECT company_id FROM stores WHERE id = ? LIMIT 1`,
+        [dto.storeId]
+      );
+      const companyId: string = storeRows?.[0]?.company_id || storeRows?.[0]?.companyId || '';
+      if (!companyId) {
+        throw new BadRequestException(`Store ${dto.storeId} not found`);
+      }
+
+      // Generate invoice number
+      const invoiceNumber = await this.generateInvoiceNumber(dto.storeId);
+
+      // Normalize payment method — map frontend values to entity enum
+      const paymentMethodMap: Record<string, string> = {
+        cash: 'cash',
+        qris: 'qris',
+        edc: 'edc',
+        card: 'edc',
+        bank_transfer: 'bank_transfer',
+        transfer: 'bank_transfer',
+        ewallet: 'e_wallet',
+        e_wallet: 'e_wallet',
+      };
+      const normalizedPaymentMethod = paymentMethodMap[dto.paymentMethod?.toLowerCase()] || 'cash';
+
+      // Create transaction using raw SQL to avoid TypeORM mapping issues
+      const txId = (require('crypto') as any).randomUUID();
+      await queryRunner.query(
+        `INSERT INTO transactions (id, company_id, store_id, shift_id, transaction_number, invoice_number, subtotal, tax_amount, discount_amount, service_charge, total, payment_method, paid_amount, change_amount, customer_id, customer_name, customer_phone, status, notes, metadata, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, NOW(), NOW())`,
+        [
+          txId,
+          companyId,
+          dto.storeId,
+          validShiftId,
+          transactionNumber,
+          invoiceNumber,
+          calculatedTotals.subtotal,
+          calculatedTotals.taxAmount,
+          calculatedTotals.discountAmount,
+          calculatedTotals.total,
+          normalizedPaymentMethod,
+          dto.paidAmount,
+          dto.changeAmount || 0,
+          dto.customerId || null,
+          dto.customerName || null,
+          dto.customerPhone || null,
+          dto.notes || null,
+          JSON.stringify({
+            loyaltyPointsEarned,
+            orderType: (dto as any).orderType,
+            tableId: (dto as any).tableId,
+            employeeId: dto.employeeId,
+            employeeName: (dto as any).employeeName,
+            paymentMethods: dto.paymentMethods || [{ method: dto.paymentMethod, amount: dto.paidAmount }],
+          }),
+        ]
       );
 
       // Create transaction items
       for (const item of dto.items) {
-        const transactionItem = queryRunner.manager.create(TransactionItem, {
-          transactionId: savedTransaction.id,
-          productId: item.productId,
-          productName: item.productName,
-          variantName: item.variantName,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          discountAmount: item.discountAmount || 0,
-          subtotal: item.subtotal,
-          notes: item.notes,
-        });
-        await queryRunner.manager.save(TransactionItem, transactionItem);
+        const itemId = (require('crypto') as any).randomUUID();
+        await queryRunner.query(
+          `INSERT INTO transaction_items (id, transaction_id, productId, productName, variantName, quantity, unitPrice, discountAmount, subtotal, notes, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+          [
+            itemId,
+            txId,
+            item.productId || null,
+            item.productName,
+            item.variantName || null,
+            item.quantity,
+            item.unitPrice,
+            item.discountAmount || 0,
+            item.subtotal,
+            item.notes || null,
+          ]
+        );
       }
 
       await queryRunner.commitTransaction();
 
       // Reload with relations
-      return this.findOne(savedTransaction.id);
+      return this.findOne(txId);
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -420,12 +464,11 @@ export class TransactionsService {
     const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
     const prefix = `INV-${dateStr}`;
 
-    const count = await this.transactionRepo
-      .createQueryBuilder('tx')
-      .where('tx.invoiceNumber LIKE :prefix', { prefix: `${prefix}%` })
-      .andWhere('tx.storeId = :storeId', { storeId })
-      .getCount();
-
+    const rows = await this.dataSource.query(
+      `SELECT COUNT(*) as cnt FROM transactions WHERE invoice_number LIKE ? AND store_id = ?`,
+      [`${prefix}%`, storeId]
+    );
+    const count = parseInt(rows?.[0]?.cnt || '0', 10);
     const seq = String(count + 1).padStart(4, '0');
     return `${prefix}-${seq}`;
   }
@@ -439,12 +482,11 @@ export class TransactionsService {
     const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
     const prefix = `TRX-${dateStr}`;
 
-    const count = await this.transactionRepo
-      .createQueryBuilder('tx')
-      .where('tx.transactionNumber LIKE :prefix', { prefix: `${prefix}%` })
-      .andWhere('tx.storeId = :storeId', { storeId })
-      .getCount();
-
+    const rows = await this.dataSource.query(
+      `SELECT COUNT(*) as cnt FROM transactions WHERE transaction_number LIKE ? AND store_id = ?`,
+      [`${prefix}%`, storeId]
+    );
+    const count = parseInt(rows?.[0]?.cnt || '0', 10);
     const seq = String(count + 1).padStart(4, '0');
     return `${prefix}-${seq}`;
   }

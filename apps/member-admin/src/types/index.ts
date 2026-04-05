@@ -15,13 +15,23 @@ export interface Product {
   barcode?: string;
   description?: string;
   categoryId: string;
+  categoryName?: string;
   price: number;
   cost: number;
+  costPrice?: number;
   stock: number;
   minStock: number;
-  unit: string;
+  lowStockThreshold?: number;
+  unit?: string;
   isActive: boolean;
   companyId: string;
+  storeId?: string;
+  imageUrl?: string;
+  image?: string;
+  trackStock?: boolean;
+  trackInventory?: boolean;
+  hasVariants?: boolean;
+  variants?: any[];
   createdAt: string;
   updatedAt: string;
 }
@@ -99,7 +109,15 @@ export interface TransactionItem {
 export interface Shift {
   id: string;
   companyId: string;
-  userId: string;
+  employeeId?: string;
+  userId?: string;
+  storeId?: string;
+  // Backend fields
+  openedAt?: string;
+  closedAt?: string;
+  openingCash?: number;
+  closingCash?: number;
+  // Frontend alias fields (mapped from backend)
   startTime: string;
   endTime?: string;
   startingCash: number;

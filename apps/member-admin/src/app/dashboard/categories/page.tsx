@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, ChevronRight, ChevronDown, Folder, FolderOpen } from 'lucide-react';
+import { Plus, Edit2, Trash2, ChevronRight, ChevronDown, Folder, FolderOpen, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import apiClient from '@/lib/api-client';
 import { toast } from 'react-hot-toast';
@@ -28,408 +28,137 @@ export default function CategoriesPage() {
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    if (user?.companyId) {
-      fetchCategories();
-    }
-  }, [user]);
+  useEffect(() => { if (user?.companyId) fetchCategories(); }, [user]);
 
   const fetchCategories = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get('/categories/tree', {
-        params: { companyId: user?.companyId }
-      });
-      setCategories(response.data || []);
-    } catch (error: any) {
-      console.error('Error fetching categories:', error);
-      toast.error(error.response?.data?.message || 'Failed to load categories');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleCreate = () => {
-    setEditingCategory(null);
-    setIsModalOpen(true);
-  };
-
-  const handleEdit = (category: Category) => {
-    setEditingCategory(category);
-    setIsModalOpen(true);
+      const res = await apiClient.get('/categories/tree', { params: { companyId: user?.companyId } });
+      setCategories(res.data || []);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to load categories');
+    } finally { setLoading(false); }
   };
 
   const handleDelete = async (category: Category) => {
-    if (!confirm(`Are you sure you want to delete "${category.name}"?${category.children?.length ? '\n\nThis will also delete all subcategories.' : ''}`)) {
-      return;
-    }
-
+    if (!confirm(`Delete "${category.name}"?${category.children?.length ? '\n\nThis will also delete all subcategories.' : ''}`)) return;
     try {
-      await apiClient.delete(`/categories/${category.id}`, {
-        params: { companyId: user?.companyId }
-      });
-      toast.success('Category deleted successfully');
+      await apiClient.delete(`/categories/${category.id}`, { params: { companyId: user?.companyId } });
+      toast.success('Category deleted');
       fetchCategories();
-    } catch (error: any) {
-      console.error('Error deleting category:', error);
-      toast.error(error.response?.data?.message || 'Failed to delete category');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to delete');
     }
   };
 
-  const handleSubmit = async (data: any) => {
+  const handleSubmit = async (data: any): Promise<any> => {
     try {
+      let result: any;
       if (editingCategory) {
-        await apiClient.patch(`/categories/${editingCategory.id}`, data, {
-          params: { companyId: user?.companyId }
-        });
-        toast.success('Category updated successfully');
+        const res = await apiClient.patch(`/categories/${editingCategory.id}`, data, { params: { companyId: user?.companyId } });
+        result = res.data;
+        toast.success('Kategori berhasil diperbarui');
       } else {
-        await apiClient.post('/categories', {
-          ...data,
-          companyId: user?.companyId
-        });
-        toast.success('Category created successfully');
+        const res = await apiClient.post('/categories', { ...data, companyId: user?.companyId });
+        result = res.data;
+        toast.success('Kategori berhasil ditambahkan');
       }
       setIsModalOpen(false);
       fetchCategories();
-    } catch (error: any) {
-      console.error('Error saving category:', error);
-      throw error;
+      return result;
+    } catch (err: any) {
+      throw err;
     }
   };
 
   const toggleExpand = (id: string) => {
-    const newExpanded = new Set(expandedIds);
-    if (newExpanded.has(id)) {
-      newExpanded.delete(id);
-    } else {
-      newExpanded.add(id);
-    }
-    setExpandedIds(newExpanded);
-  };
-
-  const expandAll = () => {
-    const allIds = new Set<string>();
-    const collectIds = (cats: Category[]) => {
-      cats.forEach(cat => {
-        if (cat.children && cat.children.length > 0) {
-          allIds.add(cat.id);
-          collectIds(cat.children);
-        }
-      });
-    };
-    collectIds(categories);
-    setExpandedIds(allIds);
-  };
-
-  const collapseAll = () => {
-    setExpandedIds(new Set());
-  };
-
-  const renderCategoryTree = (cats: Category[], level = 0) => {
-    return cats.map(category => {
-      const hasChildren = category.children && category.children.length > 0;
-      const isExpanded = expandedIds.has(category.id);
-
-      return (
-        <div key={category.id} style={{ marginLeft: level > 0 ? '24px' : '0' }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              padding: '12px 16px',
-              backgroundColor: 'white',
-              border: '1px solid #e5e7eb',
-              borderRadius: '8px',
-              marginBottom: '8px',
-              transition: 'all 0.2s',
-              cursor: hasChildren ? 'pointer' : 'default'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#f9fafb';
-              e.currentTarget.style.borderColor = '#d1d5db';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'white';
-              e.currentTarget.style.borderColor = '#e5e7eb';
-            }}
-          >
-            {/* Expand/Collapse Button */}
-            <div
-              onClick={() => hasChildren && toggleExpand(category.id)}
-              style={{
-                width: '24px',
-                height: '24px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginRight: '8px',
-                cursor: hasChildren ? 'pointer' : 'default',
-                opacity: hasChildren ? 1 : 0.3
-              }}
-            >
-              {hasChildren ? (
-                isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />
-              ) : (
-                <div style={{ width: '18px' }} />
-              )}
-            </div>
-
-            {/* Folder Icon */}
-            <div style={{ marginRight: '12px', color: '#6b7280' }}>
-              {hasChildren ? (
-                isExpanded ? <FolderOpen size={20} /> : <Folder size={20} />
-              ) : (
-                <Folder size={20} />
-              )}
-            </div>
-
-            {/* Category Info */}
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontWeight: 500, fontSize: '14px' }}>{category.name}</span>
-                {!category.isActive && (
-                  <span style={{
-                    padding: '2px 8px',
-                    backgroundColor: '#fee2e2',
-                    color: '#991b1b',
-                    borderRadius: '4px',
-                    fontSize: '11px',
-                    fontWeight: 500
-                  }}>
-                    Inactive
-                  </span>
-                )}
-                {category.productCount !== undefined && (
-                  <span style={{
-                    padding: '2px 8px',
-                    backgroundColor: '#e0e7ff',
-                    color: '#3730a3',
-                    borderRadius: '4px',
-                    fontSize: '11px',
-                    fontWeight: 500
-                  }}>
-                    {category.productCount} products
-                  </span>
-                )}
-              </div>
-              {category.description && (
-                <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px', marginBottom: 0 }}>
-                  {category.description}
-                </p>
-              )}
-            </div>
-
-            {/* Actions */}
-            <div style={{ display: 'flex', gap: '8px', marginLeft: '16px' }}>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleEdit(category);
-                }}
-                style={{
-                  padding: '6px 12px',
-                  backgroundColor: '#f3f4f6',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  fontSize: '13px',
-                  color: '#374151',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#e5e7eb';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = '#f3f4f6';
-                }}
-              >
-                <Edit2 size={14} />
-                Edit
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDelete(category);
-                }}
-                style={{
-                  padding: '6px 12px',
-                  backgroundColor: '#fee2e2',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  fontSize: '13px',
-                  color: '#991b1b',
-                  transition: 'all 0.2s'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#fecaca';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = '#fee2e2';
-                }}
-              >
-                <Trash2 size={14} />
-                Delete
-              </button>
-            </div>
-          </div>
-
-          {/* Render children if expanded */}
-          {hasChildren && isExpanded && renderCategoryTree(category.children!, level + 1)}
-        </div>
-      );
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
     });
   };
 
-  if (loading) {
+  const expandAll = () => {
+    const ids = new Set<string>();
+    const collect = (cats: Category[]) => cats.forEach(c => { if (c.children?.length) { ids.add(c.id); collect(c.children); } });
+    collect(categories);
+    setExpandedIds(ids);
+  };
+
+  const renderTree = (cats: Category[], level = 0): React.ReactNode => cats.map(cat => {
+    const hasChildren = !!cat.children?.length;
+    const isExpanded = expandedIds.has(cat.id);
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div className="spinner" style={{ margin: '0 auto 16px' }} />
-          <p style={{ color: '#6b7280' }}>Loading categories...</p>
+      <div key={cat.id} style={{ marginLeft: level > 0 ? 24 : 0 }}>
+        <div className="glass-panel animate-fade-in" style={{ display: 'flex', alignItems: 'center', padding: 'var(--space-md) var(--space-lg)', marginBottom: 'var(--space-sm)', cursor: hasChildren ? 'pointer' : 'default', opacity: cat.isActive ? 1 : 0.6 }}
+          onClick={() => hasChildren && toggleExpand(cat.id)}>
+          <div style={{ width: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 8, opacity: hasChildren ? 1 : 0.2 }}>
+            {hasChildren ? (isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />) : <div style={{ width: 16 }} />}
+          </div>
+          <div style={{ marginRight: 12, color: 'var(--text-tertiary)' }}>
+            {hasChildren && isExpanded ? <FolderOpen size={18} /> : <Folder size={18} />}
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontWeight: 500 }}>{cat.name}</span>
+              {!cat.isActive && <span style={{ padding: '2px 8px', background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', borderRadius: 4, fontSize: '0.75rem', fontWeight: 500 }}>Inactive</span>}
+              {cat.productCount !== undefined && <span style={{ padding: '2px 8px', background: 'rgba(99,102,241,0.1)', color: 'var(--primary)', borderRadius: 4, fontSize: '0.75rem', fontWeight: 500 }}>{cat.productCount} products</span>}
+            </div>
+            {cat.description && <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', margin: '2px 0 0' }}>{cat.description}</p>}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }} onClick={e => e.stopPropagation()}>
+            <button onClick={() => { setEditingCategory(cat); setIsModalOpen(true); }} className="btn btn-outline" style={{ height: 30, padding: '0 10px', fontSize: '0.8rem' }}>
+              <Edit2 size={13} /> Edit
+            </button>
+            <button onClick={() => handleDelete(cat)} style={{ height: 30, padding: '0 10px', fontSize: '0.8rem', background: 'rgba(239,68,68,0.1)', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Trash2 size={13} /> Delete
+            </button>
+          </div>
         </div>
+        {hasChildren && isExpanded && renderTree(cat.children!, level + 1)}
       </div>
     );
-  }
+  });
+
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 400 }}>
+      <Loader2 size={40} style={{ animation: 'spin 1s linear infinite', color: 'var(--primary)' }} />
+    </div>
+  );
 
   return (
-    <div style={{ padding: '24px' }}>
-      {/* Header */}
-      <div style={{ marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          <h1 style={{ fontSize: '24px', fontWeight: 'bold', color: '#111827', margin: 0 }}>
-            Categories
-          </h1>
-          <button
-            onClick={handleCreate}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#3b82f6',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '14px',
-              fontWeight: 500,
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#2563eb';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#3b82f6';
-            }}
-          >
-            <Plus size={18} />
-            Add Category
-          </button>
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-xl)' }}>
+        <div>
+          <h1 style={{ fontSize: '1.75rem', marginBottom: 'var(--space-xs)' }}>Categories</h1>
+          <p style={{ color: 'var(--text-secondary)' }}>Organize your products with categories and subcategories</p>
         </div>
-        <p style={{ color: '#6b7280', fontSize: '14px', margin: 0 }}>
-          Organize your products with categories and subcategories
-        </p>
+        <button onClick={() => { setEditingCategory(null); setIsModalOpen(true); }} className="btn btn-primary">
+          <Plus size={16} /> Add Category
+        </button>
       </div>
 
-      {/* Tree Controls */}
       {categories.length > 0 && (
-        <div style={{ marginBottom: '16px', display: 'flex', gap: '8px' }}>
-          <button
-            onClick={expandAll}
-            style={{
-              padding: '6px 12px',
-              backgroundColor: '#f3f4f6',
-              border: '1px solid #e5e7eb',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '13px',
-              color: '#374151',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#e5e7eb';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#f3f4f6';
-            }}
-          >
-            Expand All
-          </button>
-          <button
-            onClick={collapseAll}
-            style={{
-              padding: '6px 12px',
-              backgroundColor: '#f3f4f6',
-              border: '1px solid #e5e7eb',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '13px',
-              color: '#374151',
-              transition: 'all 0.2s'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#e5e7eb';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#f3f4f6';
-            }}
-          >
-            Collapse All
-          </button>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 'var(--space-lg)' }}>
+          <button onClick={expandAll} className="btn btn-outline" style={{ height: 32, padding: '0 12px', fontSize: '0.85rem' }}>Expand All</button>
+          <button onClick={() => setExpandedIds(new Set())} className="btn btn-outline" style={{ height: 32, padding: '0 12px', fontSize: '0.85rem' }}>Collapse All</button>
         </div>
       )}
 
-      {/* Category Tree */}
       {categories.length === 0 ? (
-        <div style={{
-          textAlign: 'center',
-          padding: '48px 24px',
-          backgroundColor: 'white',
-          border: '2px dashed #e5e7eb',
-          borderRadius: '12px'
-        }}>
-          <Folder size={48} style={{ color: '#d1d5db', margin: '0 auto 16px' }} />
-          <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#111827', marginBottom: '8px' }}>
-            No categories yet
-          </h3>
-          <p style={{ color: '#6b7280', marginBottom: '24px' }}>
-            Create your first category to start organizing products
-          </p>
-          <button
-            onClick={handleCreate}
-            style={{
-              padding: '10px 20px',
-              backgroundColor: '#3b82f6',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '14px',
-              fontWeight: 500
-            }}
-          >
-            <Plus size={18} />
-            Add Category
+        <div className="glass-panel" style={{ padding: 'var(--space-2xl)', textAlign: 'center', border: '2px dashed var(--border-subtle)' }}>
+          <Folder size={48} style={{ margin: '0 auto var(--space-md)', color: 'var(--text-tertiary)' }} />
+          <h3 style={{ fontSize: '1.1rem', marginBottom: 'var(--space-sm)' }}>No categories yet</h3>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>Create your first category to start organizing products</p>
+          <button onClick={() => { setEditingCategory(null); setIsModalOpen(true); }} className="btn btn-primary">
+            <Plus size={16} /> Add Category
           </button>
         </div>
       ) : (
-        <div>
-          {renderCategoryTree(categories)}
-        </div>
+        <div>{renderTree(categories)}</div>
       )}
 
-      {/* Category Form Modal */}
       <CategoryFormModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
@@ -437,6 +166,7 @@ export default function CategoriesPage() {
         initialData={editingCategory}
         categories={categories}
       />
+      <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { 100% { transform: rotate(360deg); } }` }} />
     </div>
   );
 }

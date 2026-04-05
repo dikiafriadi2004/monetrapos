@@ -77,6 +77,14 @@ export class StoresService {
     companyId: string,
     companyName: string,
   ): Promise<Store> {
+    // Check if default store already exists
+    const existing = await this.storeRepo.findOne({
+      where: { companyId, code: 'MAIN' },
+    });
+    if (existing) {
+      return existing;
+    }
+
     const defaultStore = this.storeRepo.create({
       companyId,
       name: `${companyName} - Main Store`,
@@ -228,14 +236,36 @@ export class StoresService {
     });
     if (!store) throw new NotFoundException('Store not found');
 
-    // TODO: Implement actual stats calculation
+    // Query real stats from database
+    const [totalEmployees, totalProducts, todaySalesResult, monthSalesResult] = await Promise.all([
+      this.storeRepo.manager.query(
+        `SELECT COUNT(*) as count FROM employees WHERE store_id = ? AND is_active = 1`,
+        [storeId]
+      ).then((r: any[]) => parseInt(r[0]?.count || '0')).catch(() => 0),
+
+      this.storeRepo.manager.query(
+        `SELECT COUNT(*) as count FROM inventory WHERE store_id = ?`,
+        [storeId]
+      ).then((r: any[]) => parseInt(r[0]?.count || '0')).catch(() => 0),
+
+      this.storeRepo.manager.query(
+        `SELECT COALESCE(SUM(total), 0) as total FROM transactions WHERE store_id = ? AND DATE(created_at) = CURDATE() AND status = 'completed'`,
+        [storeId]
+      ).then((r: any[]) => parseFloat(r[0]?.total || '0')).catch(() => 0),
+
+      this.storeRepo.manager.query(
+        `SELECT COALESCE(SUM(total), 0) as total FROM transactions WHERE store_id = ? AND YEAR(created_at) = YEAR(NOW()) AND MONTH(created_at) = MONTH(NOW()) AND status = 'completed'`,
+        [storeId]
+      ).then((r: any[]) => parseFloat(r[0]?.total || '0')).catch(() => 0),
+    ]);
+
     return {
       store,
       stats: {
-        totalEmployees: 0,
-        totalProducts: 0,
-        todaySales: 0,
-        monthSales: 0,
+        totalEmployees,
+        totalProducts,
+        todaySales: todaySalesResult,
+        monthSales: monthSalesResult,
       },
     };
   }

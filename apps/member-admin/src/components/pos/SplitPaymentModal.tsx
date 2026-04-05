@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { X, CreditCard, Smartphone, Building2, Wallet, Plus, Trash2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 type PaymentMethodType = 'cash' | 'card' | 'transfer' | 'qris';
 
@@ -59,7 +60,7 @@ export default function SplitPaymentModal({ isOpen, onClose, total, onConfirm }:
 
   const handleConfirm = async () => {
     if (totalPaid < total) {
-      alert('Total paid amount must equal or exceed the total');
+      toast.error('Total paid amount must equal or exceed the total');
       return;
     }
 
@@ -69,7 +70,7 @@ export default function SplitPaymentModal({ isOpen, onClose, total, onConfirm }:
       onClose();
     } catch (error) {
       console.error('Payment failed:', error);
-      alert('Payment failed. Please try again.');
+      toast.error('Payment failed. Please try again.');
     } finally {
       setLoading(false);
     }

@@ -1,0 +1,64 @@
+name: Company Admin CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'apps/company-admin/**'
+      - '.github/workflows/company-admin.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'apps/company-admin/**'
+
+jobs:
+  test:
+    name: Lint & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/company-admin/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/company-admin
+        run: npm ci
+
+      - name: Lint
+        working-directory: apps/company-admin
+        run: npm run lint -- --max-warnings 50
+        continue-on-error: true
+
+      - name: Build
+        working-directory: apps/company-admin
+        run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4404/api/v1
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy company-admin to staging
+        run: echo "Deploy company-admin to staging - configure with Vercel/Netlify/custom"
+
+  deploy-production:
+    name: Deploy to Production
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy company-admin to production
+        run: echo "Deploy company-admin to production - configure with Vercel/Netlify/custom"

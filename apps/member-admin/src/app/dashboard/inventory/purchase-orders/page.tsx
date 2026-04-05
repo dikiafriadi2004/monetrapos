@@ -2,30 +2,19 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  purchaseOrdersService,
-  PurchaseOrder,
-  PurchaseOrderStatus,
-} from '@/services/purchase-orders.service';
-import {
-  ShoppingCart,
-  Plus,
-  Search,
-  Filter,
-  Eye,
-  Edit2,
-  Trash2,
-  CheckCircle,
-  XCircle,
-  Clock,
-  Package,
-  Loader2,
-  Calendar,
-  Building2,
-  Store,
-  FileText,
-} from 'lucide-react';
+import { purchaseOrdersService, PurchaseOrder, PurchaseOrderStatus } from '@/services/purchase-orders.service';
+import { ShoppingCart, Plus, Search, Eye, Edit2, Trash2, CheckCircle, XCircle, Clock, Package, Loader2, Building2, Store, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+const STATUS_CONFIG: Record<string, { color: string; icon: any }> = {
+  [PurchaseOrderStatus.DRAFT]: { color: '#6b7280', icon: FileText },
+  [PurchaseOrderStatus.SENT]: { color: '#3b82f6', icon: Clock },
+  [PurchaseOrderStatus.RECEIVED]: { color: 'var(--success)', icon: CheckCircle },
+  [PurchaseOrderStatus.CANCELLED]: { color: 'var(--danger)', icon: XCircle },
+};
+
+const fmt = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n || 0);
+const fmtDate = (d: string) => new Date(d).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' });
 
 export default function PurchaseOrdersPage() {
   const router = useRouter();
@@ -34,327 +23,155 @@ export default function PurchaseOrdersPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<PurchaseOrderStatus | 'all'>('all');
 
-  useEffect(() => {
-    loadOrders();
-  }, [statusFilter]);
+  useEffect(() => { load(); }, [statusFilter]);
 
-  const loadOrders = async () => {
+  const load = async () => {
     try {
       setLoading(true);
-      const response = await purchaseOrdersService.getAll({
-        status: statusFilter !== 'all' ? statusFilter : undefined,
-      });
-      setOrders(response.data);
-    } catch (error: any) {
-      console.error('Failed to load purchase orders:', error);
-      toast.error('Failed to load purchase orders');
-    } finally {
-      setLoading(false);
-    }
+      const res = await purchaseOrdersService.getAll({ status: statusFilter !== 'all' ? statusFilter : undefined });
+      setOrders(res.data);
+    } catch { toast.error('Failed to load purchase orders'); }
+    finally { setLoading(false); }
   };
 
-  const handleDelete = async (order: PurchaseOrder) => {
-    if (!confirm(`Are you sure you want to delete PO ${order.poNumber}?`)) return;
-
-    try {
-      await purchaseOrdersService.delete(order.id);
-      toast.success('Purchase order deleted');
-      await loadOrders();
-    } catch (error: any) {
-      console.error('Failed to delete purchase order:', error);
-      toast.error('Failed to delete purchase order');
-    }
+  const handleDelete = async (o: PurchaseOrder) => {
+    if (!confirm(`Delete PO ${o.poNumber}?`)) return;
+    try { await purchaseOrdersService.delete(o.id); toast.success('Deleted'); load(); }
+    catch { toast.error('Failed to delete'); }
   };
 
-  const handleCancel = async (order: PurchaseOrder) => {
-    if (!confirm(`Are you sure you want to cancel PO ${order.poNumber}?`)) return;
-
-    try {
-      await purchaseOrdersService.cancel(order.id);
-      toast.success('Purchase order cancelled');
-      await loadOrders();
-    } catch (error: any) {
-      console.error('Failed to cancel purchase order:', error);
-      toast.error('Failed to cancel purchase order');
-    }
+  const handleCancel = async (o: PurchaseOrder) => {
+    if (!confirm(`Cancel PO ${o.poNumber}?`)) return;
+    try { await purchaseOrdersService.cancel(o.id); toast.success('Cancelled'); load(); }
+    catch { toast.error('Failed to cancel'); }
   };
 
-  const getStatusBadge = (status: PurchaseOrderStatus) => {
-    const badges = {
-      [PurchaseOrderStatus.DRAFT]: {
-        bg: 'bg-gray-100',
-        text: 'text-gray-800',
-        icon: <FileText className="w-3 h-3" />,
-      },
-      [PurchaseOrderStatus.SENT]: {
-        bg: 'bg-blue-100',
-        text: 'text-blue-800',
-        icon: <Clock className="w-3 h-3" />,
-      },
-      [PurchaseOrderStatus.RECEIVED]: {
-        bg: 'bg-green-100',
-        text: 'text-green-800',
-        icon: <CheckCircle className="w-3 h-3" />,
-      },
-      [PurchaseOrderStatus.CANCELLED]: {
-        bg: 'bg-red-100',
-        text: 'text-red-800',
-        icon: <XCircle className="w-3 h-3" />,
-      },
-    };
-
-    const badge = badges[status];
-    return (
-      <span
-        className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${badge.bg} ${badge.text}`}
-      >
-        {badge.icon}
-        {status.toUpperCase()}
-      </span>
-    );
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('id-ID', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  };
-
-  const filteredOrders = orders.filter((order) =>
-    order.poNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.supplierName.toLowerCase().includes(searchTerm.toLowerCase())
+  const filtered = orders.filter(o =>
+    o.poNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    o.supplierName.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-xl)' }}>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Purchase Orders</h1>
-          <p className="text-gray-600 mt-1">Manage purchase orders from suppliers</p>
+          <h1 style={{ fontSize: '1.75rem', marginBottom: 'var(--space-xs)' }}>Purchase Orders</h1>
+          <p style={{ color: 'var(--text-secondary)' }}>Manage purchase orders from suppliers</p>
         </div>
-        <button
-          onClick={() => router.push('/dashboard/inventory/purchase-orders/new')}
-          className="btn btn-primary"
-        >
-          <Plus className="w-4 h-4" />
-          Create PO
+        <button onClick={() => router.push('/dashboard/inventory/purchase-orders/new')} className="btn btn-primary">
+          <Plus size={16} /> Create PO
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-lg shadow-md p-4">
-        <div className="flex flex-col md:flex-row gap-4">
-          {/* Search */}
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Search by PO number or supplier..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              />
+      {/* Summary Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>
+        {Object.values(PurchaseOrderStatus).map(status => {
+          const cfg = STATUS_CONFIG[status];
+          const Icon = cfg.icon;
+          const count = orders.filter(o => o.status === status).length;
+          const total = orders.filter(o => o.status === status).reduce((s, o) => s + o.total, 0);
+          return (
+            <div key={status} className="glass-panel" style={{ padding: 'var(--space-md)', borderLeft: `3px solid ${cfg.color}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <Icon size={14} style={{ color: cfg.color }} />
+                <span style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'capitalize', color: cfg.color }}>{status}</span>
+              </div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>{count}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>{fmt(total)}</div>
             </div>
-          </div>
+          );
+        })}
+      </div>
 
-          {/* Status Filter */}
-          <div className="flex gap-2">
-            {['all', ...Object.values(PurchaseOrderStatus)].map((status) => (
-              <button
-                key={status}
-                onClick={() => setStatusFilter(status as any)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  statusFilter === status
-                    ? 'bg-indigo-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
-              </button>
-            ))}
-          </div>
+      {/* Filters */}
+      <div className="glass-panel" style={{ padding: 'var(--space-md)', marginBottom: 'var(--space-lg)', display: 'flex', gap: 'var(--space-md)', flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 200, position: 'relative' }}>
+          <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+          <input className="form-input" style={{ paddingLeft: 36 }} placeholder="Search by PO number or supplier..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {['all', ...Object.values(PurchaseOrderStatus)].map(s => (
+            <button key={s} onClick={() => setStatusFilter(s as any)} className={`btn ${statusFilter === s ? 'btn-primary' : 'btn-outline'}`} style={{ height: 36, padding: '0 12px', fontSize: '0.8rem' }}>
+              {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Purchase Orders List */}
       {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}>
+          <Loader2 size={40} style={{ animation: 'spin 1s linear infinite', color: 'var(--primary)' }} />
         </div>
-      ) : filteredOrders.length === 0 ? (
-        <div className="bg-white rounded-lg shadow-md p-12 text-center">
-          <ShoppingCart className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
-            No purchase orders found
-          </h3>
-          <p className="text-gray-600 mb-6">
-            {searchTerm
-              ? 'Try adjusting your search terms'
-              : 'Get started by creating your first purchase order'}
-          </p>
-          {!searchTerm && (
-            <button
-              onClick={() => router.push('/dashboard/inventory/purchase-orders/new')}
-              className="btn btn-primary"
-            >
-              <Plus className="w-4 h-4" />
-              Create Purchase Order
-            </button>
-          )}
+      ) : filtered.length === 0 ? (
+        <div className="glass-panel" style={{ padding: 'var(--space-2xl)', textAlign: 'center' }}>
+          <ShoppingCart size={48} style={{ margin: '0 auto var(--space-md)', color: 'var(--text-tertiary)' }} />
+          <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-lg)' }}>{searchTerm ? 'No orders match your search' : 'No purchase orders yet'}</p>
+          {!searchTerm && <button onClick={() => router.push('/dashboard/inventory/purchase-orders/new')} className="btn btn-primary"><Plus size={16} /> Create PO</button>}
         </div>
       ) : (
-        <div className="bg-white rounded-lg shadow-md overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    PO Number
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Supplier
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Store
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Order Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Expected Date
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Total
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
+        <div className="glass-panel" style={{ padding: 0 }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                  {['PO Number', 'Supplier', 'Store', 'Order Date', 'Expected', 'Total', 'Status', 'Actions'].map(h => (
+                    <th key={h} style={{ padding: 'var(--space-sm) var(--space-lg)', textAlign: 'left', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredOrders.map((order) => (
-                  <tr key={order.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <Package className="w-4 h-4 text-gray-400" />
-                        <span className="font-semibold text-gray-900">
-                          {order.poNumber}
+              <tbody>
+                {filtered.map(o => {
+                  const cfg = STATUS_CONFIG[o.status];
+                  const Icon = cfg.icon;
+                  return (
+                    <tr key={o.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                      <td style={{ padding: 'var(--space-md) var(--space-lg)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <Package size={14} style={{ color: 'var(--text-tertiary)' }} />
+                          <span style={{ fontWeight: 600 }}>{o.poNumber}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: 'var(--space-md) var(--space-lg)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.9rem' }}>
+                          <Building2 size={14} style={{ color: 'var(--text-tertiary)' }} />{o.supplierName}
+                        </div>
+                      </td>
+                      <td style={{ padding: 'var(--space-md) var(--space-lg)', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <Store size={14} style={{ color: 'var(--text-tertiary)' }} />{o.storeName}
+                        </div>
+                      </td>
+                      <td style={{ padding: 'var(--space-md) var(--space-lg)', fontSize: '0.85rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{fmtDate(o.orderDate)}</td>
+                      <td style={{ padding: 'var(--space-md) var(--space-lg)', fontSize: '0.85rem', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{o.expectedDate ? fmtDate(o.expectedDate) : '-'}</td>
+                      <td style={{ padding: 'var(--space-md) var(--space-lg)', fontWeight: 600 }}>{fmt(o.total)}</td>
+                      <td style={{ padding: 'var(--space-md) var(--space-lg)' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 10, fontSize: '0.75rem', fontWeight: 600, background: `${cfg.color}20`, color: cfg.color }}>
+                          <Icon size={11} /> {o.status.toUpperCase()}
                         </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <Building2 className="w-4 h-4 text-gray-400" />
-                        <span className="text-gray-900">{order.supplierName}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <Store className="w-4 h-4 text-gray-400" />
-                        <span className="text-gray-600">{order.storeName}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {formatDate(order.orderDate)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {order.expectedDate ? formatDate(order.expectedDate) : '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="font-semibold text-gray-900">
-                        {formatCurrency(order.total)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {getStatusBadge(order.status)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() =>
-                            router.push(`/dashboard/inventory/purchase-orders/${order.id}`)
-                          }
-                          className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
-                          title="View Details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                        {order.status === PurchaseOrderStatus.DRAFT && (
-                          <>
-                            <button
-                              onClick={() =>
-                                router.push(`/dashboard/inventory/purchase-orders/${order.id}/edit`)
-                              }
-                              className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg"
-                              title="Edit"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(order)}
-                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
-                        {order.status === PurchaseOrderStatus.SENT && (
-                          <button
-                            onClick={() => handleCancel(order)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg"
-                            title="Cancel"
-                          >
-                            <XCircle className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td style={{ padding: 'var(--space-md) var(--space-lg)' }}>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button onClick={() => router.push(`/dashboard/inventory/purchase-orders/${o.id}`)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', padding: 4 }} title="View"><Eye size={15} /></button>
+                          {o.status === PurchaseOrderStatus.DRAFT && (
+                            <>
+                              <button onClick={() => router.push(`/dashboard/inventory/purchase-orders/${o.id}/edit`)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--primary)', padding: 4 }} title="Edit"><Edit2 size={15} /></button>
+                              <button onClick={() => handleDelete(o)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', padding: 4 }} title="Delete"><Trash2 size={15} /></button>
+                            </>
+                          )}
+                          {o.status === PurchaseOrderStatus.SENT && (
+                            <button onClick={() => handleCancel(o)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', padding: 4 }} title="Cancel"><XCircle size={15} /></button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         </div>
       )}
-
-      {/* Summary Cards */}
-      <div className="grid md:grid-cols-4 gap-6">
-        {Object.values(PurchaseOrderStatus).map((status) => {
-          const count = orders.filter((o) => o.status === status).length;
-          const total = orders
-            .filter((o) => o.status === status)
-            .reduce((sum, o) => sum + o.total, 0);
-
-          return (
-            <div key={status} className="bg-white rounded-lg shadow-md p-6">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-gray-600">
-                  {status.charAt(0).toUpperCase() + status.slice(1)}
-                </span>
-                {getStatusBadge(status)}
-              </div>
-              <div className="text-2xl font-bold text-gray-900 mb-1">{count}</div>
-              <div className="text-sm text-gray-600">{formatCurrency(total)}</div>
-            </div>
-          );
-        })}
-      </div>
+      <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { 100% { transform: rotate(360deg); } }` }} />
     </div>
   );
 }

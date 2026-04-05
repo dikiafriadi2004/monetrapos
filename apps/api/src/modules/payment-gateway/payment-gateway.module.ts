@@ -1,5 +1,6 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConfigModule } from '@nestjs/config';
 import { PaymentGatewayService } from './payment-gateway.service';
 import { PaymentGatewayController } from './payment-gateway.controller';
 import { PaymentGatewayConfigController } from './payment-gateway-config.controller';
@@ -12,6 +13,7 @@ import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import { StoresModule } from '../stores/stores.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PaymentMethodsModule } from '../payment-methods/payment-methods.module';
+import { EmailModule } from '../email/email.module';
 import { Company } from '../companies/company.entity';
 import { User } from '../users/user.entity';
 import { PaymentWebhook } from '../billing/payment-webhook.entity';
@@ -19,11 +21,13 @@ import { PaymentWebhook } from '../billing/payment-webhook.entity';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Company, User, PaymentWebhook, PaymentGatewayConfig]),
-    BillingModule,
+    ConfigModule,
+    forwardRef(() => BillingModule),
     forwardRef(() => SubscriptionsModule),
     StoresModule,
     NotificationsModule,
     PaymentMethodsModule,
+    EmailModule,
   ],
   controllers: [PaymentGatewayController, PaymentGatewayConfigController],
   providers: [

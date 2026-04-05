@@ -39,16 +39,18 @@ export class PermissionGuard implements CanActivate {
       throw new ForbiddenException('User not authenticated');
     }
 
-    // Company admins, member owners, and users with 'owner' role have all permissions
-    if (
-      user.type === 'company_admin' ||
-      user.type === 'member' ||
-      user.role === 'owner'
-    ) {
+    // company_admin (platform admin) has all permissions
+    if (user.type === 'company_admin') {
       return true;
     }
 
-    // Employees need to have specific permissions via their role
+    // Owner role always has full access to all features
+    if (user.role === 'owner') {
+      return true;
+    }
+
+    // Members with non-owner roles (admin, manager, accountant) need permission check
+    // Employees also need permission check
     if (!user.permissions || user.permissions.length === 0) {
       throw new ForbiddenException('Insufficient permissions');
     }

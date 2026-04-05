@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4404/api/v1';
+import apiClient from '@/lib/api-client';
 
 export interface Supplier {
   id: string;
@@ -56,92 +54,54 @@ export interface UpdateSupplierDto {
 }
 
 class SuppliersService {
-  private getAuthHeader() {
-    const token = localStorage.getItem('access_token');
-    return {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    };
-  }
-
-  /**
-   * Get all suppliers
-   */
   async getAll(params?: {
     search?: string;
     active?: boolean;
     page?: number;
     limit?: number;
   }): Promise<{ data: Supplier[]; total: number; page: number; limit: number }> {
-    const queryParams = new URLSearchParams();
-    if (params?.search) queryParams.append('search', params.search);
-    if (params?.active !== undefined) queryParams.append('active', String(params.active));
-    if (params?.page) queryParams.append('page', String(params.page));
-    if (params?.limit) queryParams.append('limit', String(params.limit));
-
-    const response = await axios.get(
-      `${API_URL}/suppliers?${queryParams.toString()}`,
-      this.getAuthHeader()
-    );
-    return response.data;
+    const q = new URLSearchParams();
+    if (params?.search) q.append('search', params.search);
+    if (params?.active !== undefined) q.append('is_active', String(params.active));
+    if (params?.page) q.append('page', String(params.page));
+    if (params?.limit) q.append('limit', String(params.limit));
+    const res = await apiClient.get(`/suppliers?${q.toString()}`);
+    const data = res.data;
+    // Backend may return array or paginated object
+    if (Array.isArray(data)) return { data, total: data.length, page: 1, limit: data.length };
+    return data;
   }
 
-  /**
-   * Get supplier by ID
-   */
   async getById(id: string): Promise<Supplier> {
-    const response = await axios.get(
-      `${API_URL}/suppliers/${id}`,
-      this.getAuthHeader()
-    );
-    return response.data;
+    const res = await apiClient.get(`/suppliers/${id}`);
+    return res.data;
   }
 
-  /**
-   * Create supplier
-   */
   async create(data: CreateSupplierDto): Promise<Supplier> {
-    const response = await axios.post(
-      `${API_URL}/suppliers`,
-      data,
-      this.getAuthHeader()
-    );
-    return response.data;
+    const res = await apiClient.post('/suppliers', data);
+    return res.data;
   }
 
-  /**
-   * Update supplier
-   */
   async update(id: string, data: UpdateSupplierDto): Promise<Supplier> {
-    const response = await axios.put(
-      `${API_URL}/suppliers/${id}`,
-      data,
-      this.getAuthHeader()
-    );
-    return response.data;
+    // Backend uses PATCH, not PUT
+    const res = await apiClient.patch(`/suppliers/${id}`, data);
+    return res.data;
   }
 
-  /**
-   * Delete supplier
-   */
   async delete(id: string): Promise<void> {
-    await axios.delete(
-      `${API_URL}/suppliers/${id}`,
-      this.getAuthHeader()
-    );
+    await apiClient.delete(`/suppliers/${id}`);
   }
 
-  /**
-   * Toggle supplier active status
-   */
-  async toggleActive(id: string): Promise<Supplier> {
-    const response = await axios.put(
-      `${API_URL}/suppliers/${id}/toggle`,
-      {},
-      this.getAuthHeader()
-    );
-    return response.data;
+  // Backend has POST /suppliers/:id/activate (no toggle endpoint)
+  async activate(id: string): Promise<Supplier> {
+    const res = await apiClient.post(`/suppliers/${id}/activate`);
+    return res.data;
+  }
+
+  // Deactivate by patching isActive = false
+  async deactivate(id: string): Promise<Supplier> {
+    const res = await apiClient.patch(`/suppliers/${id}`, { is_active: false });
+    return res.data;
   }
 }
 

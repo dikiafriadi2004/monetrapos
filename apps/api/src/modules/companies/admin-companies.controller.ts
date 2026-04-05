@@ -1,4 +1,4 @@
-import {
+﻿import {
   Controller,
   Get,
   Post,
@@ -29,7 +29,7 @@ class CreateMemberDto {
 
 /**
  * Company Admin Controller
- * For MonetRAPOS administrators to manage member companies (subscribers)
+ * For MonetraPOS administrators to manage member companies (subscribers)
  */
 @ApiTags('Admin - Member Management')
 @ApiBearerAuth()
@@ -151,8 +151,9 @@ export class AdminCompaniesController {
   private ensureCompanyAdmin(req: any): void {
     if (req.user.type !== 'company_admin') {
       throw new UnauthorizedException(
-        'Only MonetRAPOS administrators can access member management',
+        'Only MonetraPOS administrators can access member management',
       );
     }
   }
 }
+

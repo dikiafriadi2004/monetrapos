@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { laundryService } from '@/services/laundry.service';
-import { Calendar, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Loader2, ChevronLeft, ChevronRight, Truck, Package } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function LaundrySchedulePage() {
@@ -10,17 +10,14 @@ export default function LaundrySchedulePage() {
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
-  useEffect(() => {
-    loadSchedule();
-  }, [selectedDate]);
+  useEffect(() => { loadSchedule(); }, [selectedDate]);
 
   const loadSchedule = async () => {
     try {
       setLoading(true);
-      const response = await laundryService.getSchedule(undefined, selectedDate);
-      setSchedule(response);
-    } catch (error: any) {
-      console.error('Failed to load schedule:', error);
+      const res = await laundryService.getSchedule(undefined, selectedDate);
+      setSchedule(res);
+    } catch {
       toast.error('Failed to load schedule');
     } finally {
       setLoading(false);
@@ -28,119 +25,103 @@ export default function LaundrySchedulePage() {
   };
 
   const changeDate = (days: number) => {
-    const date = new Date(selectedDate);
-    date.setDate(date.getDate() + days);
-    setSelectedDate(date.toISOString().split('T')[0]);
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() + days);
+    setSelectedDate(d.toISOString().split('T')[0]);
   };
 
+  const fmt = (n: number) => `Rp ${n?.toLocaleString('id-ID') || 0}`;
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Laundry Schedule</h1>
-        <p className="text-gray-600 mt-1">View pickup and delivery schedule</p>
+    <div>
+      <div style={{ marginBottom: 'var(--space-xl)' }}>
+        <h1 style={{ fontSize: '1.75rem', marginBottom: 'var(--space-xs)' }}>Laundry Schedule</h1>
+        <p style={{ color: 'var(--text-secondary)' }}>View pickup and delivery schedule by date</p>
       </div>
 
       {/* Date Selector */}
-      <div className="bg-white rounded-lg shadow-md p-4">
-        <div className="flex items-center justify-between">
-          <button
-            onClick={() => changeDate(-1)}
-            className="p-2 hover:bg-gray-100 rounded-lg"
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </button>
-          
-          <div className="flex items-center gap-3">
-            <Calendar className="w-5 h-5 text-indigo-600" />
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-            />
-          </div>
-
-          <button
-            onClick={() => changeDate(1)}
-            className="p-2 hover:bg-gray-100 rounded-lg"
-          >
-            <ChevronRight className="w-5 h-5" />
-          </button>
+      <div className="glass-panel" style={{ padding: 'var(--space-md)', marginBottom: 'var(--space-lg)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--space-md)' }}>
+        <button onClick={() => changeDate(-1)} className="btn btn-outline" style={{ height: 36, width: 36, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <ChevronLeft size={18} />
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Calendar size={18} style={{ color: 'var(--primary)' }} />
+          <input
+            type="date"
+            className="form-input"
+            style={{ width: 180 }}
+            value={selectedDate}
+            onChange={e => setSelectedDate(e.target.value)}
+          />
         </div>
+        <button onClick={() => changeDate(1)} className="btn btn-outline" style={{ height: 36, width: 36, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <ChevronRight size={18} />
+        </button>
       </div>
 
-      {/* Schedule Content */}
       {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}>
+          <Loader2 size={40} style={{ animation: 'spin 1s linear infinite', color: 'var(--primary)' }} />
         </div>
       ) : (
-        <div className="grid md:grid-cols-2 gap-6">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-lg)' }}>
           {/* Pickups */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">
-              Pickups ({schedule?.pickups?.length || 0})
-            </h2>
-            {schedule?.pickups && schedule.pickups.length > 0 ? (
-              <div className="space-y-3">
+          <div className="glass-panel" style={{ padding: 'var(--space-lg)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 'var(--space-lg)' }}>
+              <Package size={20} style={{ color: 'var(--primary)' }} />
+              <h2 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Pickups ({schedule?.pickups?.length || 0})</h2>
+            </div>
+            {schedule?.pickups?.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
                 {schedule.pickups.map((order: any) => (
-                  <div key={order.id} className="p-4 border border-gray-200 rounded-lg">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <p className="font-semibold">{order.orderNumber}</p>
-                        <p className="text-sm text-gray-600">{order.customerName || 'Walk-in'}</p>
-                      </div>
-                      <span className="px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-800 rounded-full">
-                        Pickup
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-600">
-                      Service: {order.serviceTypeName || '-'}
-                    </p>
-                    <p className="text-sm font-medium text-gray-900 mt-2">
-                      Rp {order.totalPrice?.toLocaleString() || 0}
-                    </p>
-                  </div>
+                  <OrderCard key={order.id} order={order} type="pickup" fmt={fmt} />
                 ))}
               </div>
             ) : (
-              <p className="text-gray-500 text-center py-8">No pickups scheduled</p>
+              <div style={{ padding: 'var(--space-xl)', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                No pickups scheduled
+              </div>
             )}
           </div>
 
           {/* Deliveries */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">
-              Deliveries ({schedule?.deliveries?.length || 0})
-            </h2>
-            {schedule?.deliveries && schedule.deliveries.length > 0 ? (
-              <div className="space-y-3">
+          <div className="glass-panel" style={{ padding: 'var(--space-lg)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 'var(--space-lg)' }}>
+              <Truck size={20} style={{ color: 'var(--success)' }} />
+              <h2 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Deliveries ({schedule?.deliveries?.length || 0})</h2>
+            </div>
+            {schedule?.deliveries?.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
                 {schedule.deliveries.map((order: any) => (
-                  <div key={order.id} className="p-4 border border-gray-200 rounded-lg">
-                    <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <p className="font-semibold">{order.orderNumber}</p>
-                        <p className="text-sm text-gray-600">{order.customerName || 'Walk-in'}</p>
-                      </div>
-                      <span className="px-2 py-1 text-xs font-semibold bg-green-100 text-green-800 rounded-full">
-                        Delivery
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-600">
-                      Service: {order.serviceTypeName || '-'}
-                    </p>
-                    <p className="text-sm font-medium text-gray-900 mt-2">
-                      Rp {order.totalPrice?.toLocaleString() || 0}
-                    </p>
-                  </div>
+                  <OrderCard key={order.id} order={order} type="delivery" fmt={fmt} />
                 ))}
               </div>
             ) : (
-              <p className="text-gray-500 text-center py-8">No deliveries scheduled</p>
+              <div style={{ padding: 'var(--space-xl)', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+                No deliveries scheduled
+              </div>
             )}
           </div>
         </div>
       )}
+      <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { 100% { transform: rotate(360deg); } }` }} />
+    </div>
+  );
+}
+
+function OrderCard({ order, type, fmt }: { order: any; type: 'pickup' | 'delivery'; fmt: (n: number) => string }) {
+  const color = type === 'pickup' ? 'var(--primary)' : 'var(--success)';
+  return (
+    <div style={{ padding: 'var(--space-md)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-md)', borderLeft: `3px solid ${color}` }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+        <span style={{ fontWeight: 600 }}>{order.orderNumber}</span>
+        <span style={{ fontSize: '0.8rem', padding: '2px 8px', borderRadius: 10, background: `${color}20`, color, fontWeight: 600, textTransform: 'capitalize' }}>
+          {type}
+        </span>
+      </div>
+      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{order.customerName || 'Walk-in'}</div>
+      {order.serviceTypeName && <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)' }}>🧺 {order.serviceTypeName}</div>}
+      <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--success)', marginTop: 4 }}>{fmt(order.totalPrice)}</div>
     </div>
   );
 }

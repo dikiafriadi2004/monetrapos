@@ -45,7 +45,7 @@ export class PaymentGatewayService {
     });
 
     return {
-      redirectUrl: invoice.invoice_url,
+      redirectUrl: (invoice as any).invoiceUrl || (invoice as any).invoice_url,
       orderId: request.orderId,
     };
   }

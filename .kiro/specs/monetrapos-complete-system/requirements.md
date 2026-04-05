@@ -1,6 +1,6 @@
-# Requirements - MonetRAPOS Complete System
+﻿# Requirements - MonetraPOS Complete System
 
-**Feature Name**: MonetRAPOS Complete System  
+**Feature Name**: MonetraPOS Complete System  
 **Type**: SaaS Multi-Tenant POS System  
 **Target Market**: FnB, Laundry, Retail, dan UMKM lainnya  
 **Status**: In Planning  
@@ -11,7 +11,7 @@
 ## 1. Business Context
 
 ### 1.1 Vision
-MonetRAPOS adalah platform SaaS yang menyediakan solusi Point of Sale (POS) lengkap untuk pelaku usaha UMKM di Indonesia, khususnya FnB, Laundry, dan Retail. Platform ini memungkinkan pemilik usaha untuk mengelola bisnis mereka dengan mudah melalui sistem berbasis cloud dengan subscription model.
+MonetraPOS adalah platform SaaS yang menyediakan solusi Point of Sale (POS) lengkap untuk pelaku usaha UMKM di Indonesia, khususnya FnB, Laundry, dan Retail. Platform ini memungkinkan pemilik usaha untuk mengelola bisnis mereka dengan mudah melalui sistem berbasis cloud dengan subscription model.
 
 ### 1.2 Business Model
 - **SaaS (Software as a Service)** dengan subscription bulanan/tahunan
@@ -20,7 +20,7 @@ MonetRAPOS adalah platform SaaS yang menyediakan solusi Point of Sale (POS) leng
 - **Target customer**: UMKM dengan 1-50 cabang
 
 ### 1.3 Stakeholders
-1. **MonetRAPOS (Anda)** - Pemilik platform, kelola member & fitur
+1. **MonetraPOS (Anda)** - Pemilik platform, kelola member & fitur
 2. **Member (Pemilik Usaha)** - Subscribe & kelola bisnis mereka
 3. **Karyawan Member** - Gunakan sistem untuk operasional (kasir, manager, dll)
 4. **End Customer** - Pelanggan dari bisnis member
@@ -32,7 +32,7 @@ MonetRAPOS adalah platform SaaS yang menyediakan solusi Point of Sale (POS) leng
 ### 2.1 Components
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     MonetRAPOS Platform                      │
+│                     MonetraPOS Platform                      │
 ├─────────────────────────────────────────────────────────────┤
 │                                                               │
 │  1. Backend API (NestJS)                                     │
@@ -42,7 +42,7 @@ MonetRAPOS adalah platform SaaS yang menyediakan solusi Point of Sale (POS) leng
 │     - JWT Authentication                                     │
 │                                                               │
 │  2. Company Admin (Next.js) - Port 4402                      │
-│     - Untuk MonetRAPOS (Anda)                                │
+│     - Untuk MonetraPOS (Anda)                                │
 │     - Kelola member, subscription, fitur                     │
 │                                                               │
 │  3. Member Admin (Next.js) - Port 4403                       │
@@ -60,7 +60,7 @@ MonetRAPOS adalah platform SaaS yang menyediakan solusi Point of Sale (POS) leng
 
 ## 3. User Roles & Permissions
 
-### 3.1 Company Admin (MonetRAPOS)
+### 3.1 Company Admin (MonetraPOS)
 **Role**: Super Admin, Admin, Support
 
 **Akses**:
@@ -344,7 +344,7 @@ Halo [Member Name],
 Subscription Anda untuk paket [Plan Name] akan berakhir pada:
 📅 [Expiry Date]
 
-Untuk melanjutkan menggunakan MonetRAPOS tanpa gangguan, 
+Untuk melanjutkan menggunakan MonetraPOS tanpa gangguan, 
 silakan perpanjang subscription Anda sekarang.
 
 [Perpanjang Sekarang]
@@ -356,7 +356,7 @@ Pilihan durasi:
 - 1 Tahun: Rp 2,400,000 (Hemat 20%)
 
 Terima kasih,
-Tim MonetRAPOS
+Tim MonetraPOS
 ```
 
 **Acceptance Criteria**:
@@ -720,7 +720,7 @@ Step 8: Feature available di Member Admin
 ### 5.1 Company Admin Features
 
 #### 4.1.1 Member Management
-**User Story**: Sebagai MonetRAPOS admin, saya ingin mengelola member agar bisa kontrol siapa yang menggunakan platform.
+**User Story**: Sebagai MonetraPOS admin, saya ingin mengelola member agar bisa kontrol siapa yang menggunakan platform.
 
 **Acceptance Criteria**:
 - [ ] Lihat list semua member dengan filter & search
@@ -732,7 +732,7 @@ Step 8: Feature available di Member Admin
 - [ ] Lihat activity log member
 
 #### 4.1.2 Subscription Management
-**User Story**: Sebagai MonetRAPOS admin, saya ingin mengelola subscription plans agar bisa kontrol pricing & fitur.
+**User Story**: Sebagai MonetraPOS admin, saya ingin mengelola subscription plans agar bisa kontrol pricing & fitur.
 
 **Acceptance Criteria**:
 - [ ] CRUD subscription plans (Basic, Pro, Enterprise)
@@ -744,7 +744,7 @@ Step 8: Feature available di Member Admin
 - [ ] Upgrade/downgrade flow
 
 #### 4.1.3 Feature Management
-**User Story**: Sebagai MonetRAPOS admin, saya ingin mengelola fitur yang tersedia agar bisa customize per plan.
+**User Story**: Sebagai MonetraPOS admin, saya ingin mengelola fitur yang tersedia agar bisa customize per plan.
 
 **Acceptance Criteria**:
 - [ ] CRUD features list
@@ -754,7 +754,7 @@ Step 8: Feature available di Member Admin
 - [ ] Feature limits per plan
 
 #### 4.1.4 Billing & Invoicing
-**User Story**: Sebagai MonetRAPOS admin, saya ingin mengelola billing agar bisa track pembayaran member.
+**User Story**: Sebagai MonetraPOS admin, saya ingin mengelola billing agar bisa track pembayaran member.
 
 **Acceptance Criteria**:
 - [ ] Generate invoice otomatis
@@ -765,7 +765,7 @@ Step 8: Feature available di Member Admin
 - [ ] Integration dengan payment gateway (Midtrans, Xendit)
 
 #### 4.1.5 Analytics & Reporting
-**User Story**: Sebagai MonetRAPOS admin, saya ingin lihat analytics agar bisa monitor performa platform.
+**User Story**: Sebagai MonetraPOS admin, saya ingin lihat analytics agar bisa monitor performa platform.
 
 **Acceptance Criteria**:
 - [ ] Dashboard overview (total member, revenue, active users)
@@ -777,7 +777,7 @@ Step 8: Feature available di Member Admin
 - [ ] Export reports
 
 #### 4.1.6 Support & Troubleshooting
-**User Story**: Sebagai MonetRAPOS admin, saya ingin support member agar bisa bantu mereka.
+**User Story**: Sebagai MonetraPOS admin, saya ingin support member agar bisa bantu mereka.
 
 **Acceptance Criteria**:
 - [ ] Ticket system
@@ -1190,3 +1190,4 @@ Step 8: Feature available di Member Admin
 **Document Status**: Draft  
 **Last Updated**: 28 Maret 2026  
 **Next Review**: Pending approval
+

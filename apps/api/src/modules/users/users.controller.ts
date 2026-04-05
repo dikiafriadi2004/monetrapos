@@ -9,21 +9,16 @@ import {
   UseGuards,
   Request,
 } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { UsersService } from './users.service';
 import { UserRole } from './user.entity';
 
-// TODO: Import actual guards when auth module is updated
-// import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-// import { RolesGuard } from '../auth/guards/roles.guard';
-// import { Roles } from '../auth/decorators/roles.decorator';
-
 @Controller('users')
-// @UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(AuthGuard('jwt'))
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  // @Roles(UserRole.OWNER, UserRole.ADMIN)
   async create(
     @Body()
     body: {
@@ -35,33 +30,21 @@ export class UsersController {
     },
     @Request() req: any,
   ) {
-    // TODO: Get companyId from authenticated user
-    const companyId = req.user?.companyId || 'temp-company-id';
-
-    return this.usersService.create({
-      companyId,
-      ...body,
-    });
+    const companyId = req.user.companyId || req.user.company_id;
+    return this.usersService.create({ companyId, ...body });
   }
 
   @Get()
   async findAll(@Request() req: any) {
-    // TODO: Get companyId from authenticated user
-    const companyId = req.user?.companyId || 'temp-company-id';
-
-    return this.usersService.findAll(companyId);
+    return this.usersService.findAll(req.user.companyId || req.user.company_id);
   }
 
   @Get(':id')
   async findOne(@Param('id') id: string, @Request() req: any) {
-    // TODO: Get companyId from authenticated user
-    const companyId = req.user?.companyId || 'temp-company-id';
-
-    return this.usersService.findOne(id, companyId);
+    return this.usersService.findOne(id, req.user.companyId || req.user.company_id);
   }
 
   @Put(':id')
-  // @Roles(UserRole.OWNER, UserRole.ADMIN)
   async update(
     @Param('id') id: string,
     @Body()
@@ -75,10 +58,7 @@ export class UsersController {
     }>,
     @Request() req: any,
   ) {
-    // TODO: Get companyId from authenticated user
-    const companyId = req.user?.companyId || 'temp-company-id';
-
-    return this.usersService.update(id, companyId, body);
+    return this.usersService.update(id, req.user.companyId || req.user.company_id, body);
   }
 
   @Put(':id/password')
@@ -87,20 +67,13 @@ export class UsersController {
     @Body() body: { newPassword: string },
     @Request() req: any,
   ) {
-    // TODO: Get companyId from authenticated user
-    const companyId = req.user?.companyId || 'temp-company-id';
-
-    await this.usersService.updatePassword(id, companyId, body.newPassword);
+    await this.usersService.updatePassword(id, req.user.companyId || req.user.company_id, body.newPassword);
     return { message: 'Password updated successfully' };
   }
 
   @Delete(':id')
-  // @Roles(UserRole.OWNER, UserRole.ADMIN)
   async remove(@Param('id') id: string, @Request() req: any) {
-    // TODO: Get companyId from authenticated user
-    const companyId = req.user?.companyId || 'temp-company-id';
-
-    await this.usersService.remove(id, companyId);
+    await this.usersService.remove(id, req.user.companyId || req.user.company_id);
     return { message: 'User deleted successfully' };
   }
 }

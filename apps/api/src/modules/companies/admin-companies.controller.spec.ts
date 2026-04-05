@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+﻿import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
 import { AdminCompaniesController } from './admin-companies.controller';
 import { CompaniesService } from './companies.service';
@@ -20,7 +20,7 @@ describe('AdminCompaniesController', () => {
     user: {
       id: 'admin-123',
       type: 'company_admin',
-      email: 'admin@monetrapos.com',
+      email: 'admin@MonetraPOS.com',
     },
   };
 
@@ -316,3 +316,4 @@ describe('AdminCompaniesController', () => {
     });
   });
 });
+

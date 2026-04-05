@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4404/api/v1';
+import apiClient from '@/lib/api-client';
 
 export interface EmployeePerformanceReport {
   employeeId: string;
@@ -8,60 +6,53 @@ export interface EmployeePerformanceReport {
   totalSales: number;
   totalTransactions: number;
   averageTransactionValue: number;
-  period: string;
+  totalWorkHours?: number;
+  salesPerHour?: number;
 }
 
 export interface CustomerAnalyticsReport {
   totalCustomers: number;
   newCustomers: number;
   returningCustomers: number;
+  averageLifetimeValue?: number;
+  retentionRate?: number;
   topCustomers: {
     customerId: string;
     customerName: string;
     totalSpent: number;
-    visitCount: number;
+    totalOrders?: number;
+    visitCount?: number;
   }[];
-  customersByTier: {
-    tier: string;
-    count: number;
-  }[];
+  customersByTier: Record<string, number> | { tier: string; count: number }[];
 }
 
 export interface ProfitLossReport {
-  period: string;
-  revenue: number;
-  cogs: number;
-  grossProfit: number;
-  expenses: number;
-  netProfit: number;
-  profitMargin: number;
+  period?: { startDate: string; endDate: string };
+  revenue?: number;
+  cogs?: number;
+  grossProfit?: number;
+  expenses?: number;
+  netProfit?: number;
+  profitMargin?: number;
+  // Backend shape
+  costs?: { totalCost: number; costOfGoodsSold: number; operatingExpenses: number };
+  profit?: { grossProfit: number; grossProfitMargin: number; netProfit: number; netProfitMargin: number };
 }
 
 class AdvancedReportsService {
-  private getAuthHeader() {
-    const token = localStorage.getItem('access_token');
-    return {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    };
-  }
-
   async getEmployeePerformance(params: {
     storeId?: string;
     startDate: string;
     endDate: string;
   }): Promise<EmployeePerformanceReport[]> {
-    const queryParams = new URLSearchParams();
-    if (params.storeId) queryParams.append('store_id', params.storeId);
-    queryParams.append('start_date', params.startDate);
-    queryParams.append('end_date', params.endDate);
-
-    const response = await axios.get(
-      `${API_URL}/reports/employee-performance?${queryParams.toString()}`,
-      this.getAuthHeader()
-    );
-    return response.data;
+    const q = new URLSearchParams();
+    if (params.storeId) q.append('store_id', params.storeId);
+    q.append('start_date', params.startDate);
+    q.append('end_date', params.endDate);
+    const res = await apiClient.get(`/reports/advanced/employee-performance?${q.toString()}`);
+    const data = res.data;
+    // Backend returns { period, employees: [], summary }
+    return Array.isArray(data) ? data : (data?.employees || []);
   }
 
   async getCustomerAnalytics(params: {
@@ -69,16 +60,12 @@ class AdvancedReportsService {
     startDate: string;
     endDate: string;
   }): Promise<CustomerAnalyticsReport> {
-    const queryParams = new URLSearchParams();
-    if (params.storeId) queryParams.append('store_id', params.storeId);
-    queryParams.append('start_date', params.startDate);
-    queryParams.append('end_date', params.endDate);
-
-    const response = await axios.get(
-      `${API_URL}/reports/customer-analytics?${queryParams.toString()}`,
-      this.getAuthHeader()
-    );
-    return response.data;
+    const q = new URLSearchParams();
+    if (params.storeId) q.append('store_id', params.storeId);
+    q.append('start_date', params.startDate);
+    q.append('end_date', params.endDate);
+    const res = await apiClient.get(`/reports/advanced/customers?${q.toString()}`);
+    return res.data;
   }
 
   async getProfitLoss(params: {
@@ -86,28 +73,22 @@ class AdvancedReportsService {
     startDate: string;
     endDate: string;
   }): Promise<ProfitLossReport> {
-    const queryParams = new URLSearchParams();
-    if (params.storeId) queryParams.append('store_id', params.storeId);
-    queryParams.append('start_date', params.startDate);
-    queryParams.append('end_date', params.endDate);
-
-    const response = await axios.get(
-      `${API_URL}/reports/profit-loss?${queryParams.toString()}`,
-      this.getAuthHeader()
-    );
-    return response.data;
-  }
-
-  async exportReport(reportType: string, params: any): Promise<Blob> {
-    const queryParams = new URLSearchParams(params);
-    const response = await axios.get(
-      `${API_URL}/reports/export/${reportType}?${queryParams.toString()}`,
-      {
-        ...this.getAuthHeader(),
-        responseType: 'blob',
-      }
-    );
-    return response.data;
+    const q = new URLSearchParams();
+    if (params.storeId) q.append('store_id', params.storeId);
+    q.append('start_date', params.startDate);
+    q.append('end_date', params.endDate);
+    const res = await apiClient.get(`/reports/advanced/profit-loss?${q.toString()}`);
+    const data = res.data;
+    // Normalize backend shape to frontend shape
+    return {
+      ...data,
+      revenue: data?.revenue?.totalSales ?? data?.revenue ?? 0,
+      cogs: data?.costs?.costOfGoodsSold ?? data?.cogs ?? 0,
+      grossProfit: data?.profit?.grossProfit ?? data?.grossProfit ?? 0,
+      expenses: data?.costs?.operatingExpenses ?? data?.expenses ?? 0,
+      netProfit: data?.profit?.netProfit ?? data?.netProfit ?? 0,
+      profitMargin: data?.profit?.netProfitMargin ?? data?.profitMargin ?? 0,
+    };
   }
 }
 

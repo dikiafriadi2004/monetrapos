@@ -44,16 +44,24 @@ export default function RenewSubscriptionPage() {
 
   const handleRenew = async () => {
     setProcessing(true);
-    const toastId = toast.loading('Processing renewal...');
+    const toastId = toast.loading('Memproses perpanjangan...');
     try {
       const response = await subscriptionService.renewSubscription(selectedDuration);
-      toast.success('Redirecting to payment...', { id: toastId });
+      toast.success('Mengarahkan ke halaman pembayaran...', { id: toastId });
       setTimeout(() => {
-        window.location.href = response.paymentUrl;
+        // Redirect ke checkout page kita dulu, bukan langsung ke Xendit
+        if (response.paymentUrl) {
+          const invoiceNum = (response as any).invoiceNumber || (response as any).invoice?.invoiceNumber || '';
+          const checkoutUrl = `/checkout?invoice=${invoiceNum}&amount=${price.final}&paymentUrl=${encodeURIComponent(response.paymentUrl)}`;
+          router.push(checkoutUrl);
+        } else {
+          toast.error('Gagal mendapatkan URL pembayaran', { id: toastId });
+          setProcessing(false);
+        }
       }, 500);
     } catch (error: any) {
       console.error('Renewal failed:', error);
-      const errorMessage = error.response?.data?.message || 'Renewal failed. Please try again.';
+      const errorMessage = error.response?.data?.message || 'Perpanjangan gagal. Silakan coba lagi.';
       toast.error(errorMessage, { id: toastId });
       setProcessing(false);
     }
@@ -172,7 +180,9 @@ export default function RenewSubscriptionPage() {
           <div>
             <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: 'var(--space-xs)' }}>End Date</div>
             <div style={{ fontWeight: '700', fontSize: '1rem' }}>
-              {new Date(subscription.endDate).toLocaleDateString('id-ID')}
+              {subscription.endDate
+                ? new Date(subscription.endDate).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' })
+                : '—'}
             </div>
           </div>
         </div>
@@ -270,7 +280,7 @@ export default function RenewSubscriptionPage() {
           </svg>
           <p style={{ fontSize: '0.875rem' }}>
             {subscription.status === 'active'
-              ? `Your subscription will be extended from the current end date (${new Date(subscription.endDate).toLocaleDateString('id-ID')}).`
+              ? `Your subscription will be extended from the current end date (${subscription.endDate ? new Date(subscription.endDate).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' }) : '—'}).`
               : 'Your subscription will be reactivated starting from today.'}
           </p>
         </div>
@@ -284,10 +294,10 @@ export default function RenewSubscriptionPage() {
           {processing ? (
             <>
               <Loader2 size={20} style={{ animation: 'spin 1s linear infinite' }} />
-              Processing...
+              Memproses...
             </>
           ) : (
-            'Proceed to Payment'
+            'Lanjut ke Pembayaran'
           )}
         </button>
       </div>

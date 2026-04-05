@@ -43,6 +43,7 @@ export default function SubscriptionHistoryPage() {
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+      timeZone: 'Asia/Jakarta',
     });
   };
 
@@ -162,11 +163,11 @@ export default function SubscriptionHistoryPage() {
                       {record.oldEndDate && record.newEndDate ? (
                         <span>
                           <span style={{ color: 'var(--text-tertiary)' }}>
-                            {new Date(record.oldEndDate).toLocaleDateString('id-ID')}
+                            {new Date(record.oldEndDate).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' })}
                           </span>
                           {' → '}
                           <span style={{ fontWeight: '700' }}>
-                            {new Date(record.newEndDate).toLocaleDateString('id-ID')}
+                            {new Date(record.newEndDate).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' })}
                           </span>
                         </span>
                       ) : (

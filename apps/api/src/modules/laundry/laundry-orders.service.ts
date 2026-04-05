@@ -225,6 +225,7 @@ export class LaundryOrdersService {
       color?: string;
       brand?: string;
       quantity: number;
+      barcode?: string;
       notes?: string;
     }>,
     companyId: string,
@@ -238,6 +239,7 @@ export class LaundryOrdersService {
         color: itemDto.color,
         brand: itemDto.brand,
         quantity: itemDto.quantity,
+        barcode: itemDto.barcode,
         notes: itemDto.notes,
         order_id: order.id,
       }),

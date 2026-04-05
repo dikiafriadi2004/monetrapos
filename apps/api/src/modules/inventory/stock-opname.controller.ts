@@ -5,26 +5,25 @@ import {
   Body,
   Patch,
   Param,
-  // UseGuards,
+  UseGuards,
   Request,
   Query,
 } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { StockOpnameService } from './stock-opname.service';
 import { CreateStockOpnameDto } from './dto/create-stock-opname.dto';
 import { UpdateStockOpnameDto } from './dto/update-stock-opname.dto';
 import { StockOpnameStatus } from './stock-opname.entity';
-// TODO: Import actual guards when auth module is updated
-// import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('stock-opnames')
-// @UseGuards(JwtAuthGuard)
+@UseGuards(AuthGuard('jwt'))
 export class StockOpnameController {
   constructor(private readonly stockOpnameService: StockOpnameService) {}
 
   @Post()
   create(@Request() req, @Body() createDto: CreateStockOpnameDto) {
     return this.stockOpnameService.create(
-      req.user.company_id,
+      req.user.companyId,
       req.user.id,
       createDto,
     );
@@ -39,39 +38,26 @@ export class StockOpnameController {
     @Query('to_date') toDate?: string,
   ) {
     const filters: any = {};
-
     if (status) filters.status = status;
     if (storeId) filters.store_id = storeId;
     if (fromDate) filters.from_date = new Date(fromDate);
     if (toDate) filters.to_date = new Date(toDate);
-
-    return this.stockOpnameService.findAll(req.user.company_id, filters);
+    return this.stockOpnameService.findAll(req.user.companyId, filters);
   }
 
   @Get(':id')
   findOne(@Request() req, @Param('id') id: string) {
-    return this.stockOpnameService.findOne(req.user.company_id, id);
+    return this.stockOpnameService.findOne(req.user.companyId, id);
   }
 
   @Get(':id/discrepancy-report')
   getDiscrepancyReport(@Request() req, @Param('id') id: string) {
-    return this.stockOpnameService.getDiscrepancyReport(
-      req.user.company_id,
-      id,
-    );
+    return this.stockOpnameService.getDiscrepancyReport(req.user.companyId, id);
   }
 
   @Patch(':id')
-  update(
-    @Request() req,
-    @Param('id') id: string,
-    @Body() updateDto: UpdateStockOpnameDto,
-  ) {
-    return this.stockOpnameService.update(
-      req.user.company_id,
-      id,
-      updateDto,
-    );
+  update(@Request() req, @Param('id') id: string, @Body() updateDto: UpdateStockOpnameDto) {
+    return this.stockOpnameService.update(req.user.companyId, id, updateDto);
   }
 
   @Post(':id/complete')
@@ -81,7 +67,7 @@ export class StockOpnameController {
     @Body('apply_adjustments') applyAdjustments?: boolean,
   ) {
     return this.stockOpnameService.complete(
-      req.user.company_id,
+      req.user.companyId,
       id,
       req.user.id,
       applyAdjustments ?? true,
@@ -90,6 +76,6 @@ export class StockOpnameController {
 
   @Post(':id/cancel')
   cancel(@Request() req, @Param('id') id: string) {
-    return this.stockOpnameService.cancel(req.user.company_id, id);
+    return this.stockOpnameService.cancel(req.user.companyId, id);
   }
 }

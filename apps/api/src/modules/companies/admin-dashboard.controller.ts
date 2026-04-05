@@ -29,26 +29,20 @@ export class AdminDashboardController {
   async getStats(@Request() req: any) {
     this.ensureAdmin(req);
 
-    const [totalMembers, activeMembers, suspendedMembers, pendingMembers] = await Promise.all([
-      this.companyRepo.count({ where: { slug: undefined } as any }),
-      this.companyRepo.count({ where: { status: 'active' } as any }),
-      this.companyRepo.count({ where: { status: 'suspended' } as any }),
-      this.companyRepo.count({ where: { status: 'pending' } as any }),
+    const [realTotal, realActive, realSuspended, realPending] = await Promise.all([
+      this.companyRepo.createQueryBuilder('c')
+        .where('c.slug != :slug', { slug: 'super-admin' })
+        .getCount(),
+      this.companyRepo.createQueryBuilder('c')
+        .where('c.slug != :slug AND c.status = :status', { slug: 'super-admin', status: 'active' })
+        .getCount(),
+      this.companyRepo.createQueryBuilder('c')
+        .where('c.slug != :slug AND c.status = :status', { slug: 'super-admin', status: 'suspended' })
+        .getCount(),
+      this.companyRepo.createQueryBuilder('c')
+        .where('c.slug != :slug AND c.status = :status', { slug: 'super-admin', status: 'pending' })
+        .getCount(),
     ]);
-
-    // Exclude super-admin company from counts
-    const realTotal = await this.companyRepo.createQueryBuilder('c')
-      .where('c.slug != :slug', { slug: 'super-admin' })
-      .getCount();
-    const realActive = await this.companyRepo.createQueryBuilder('c')
-      .where('c.slug != :slug AND c.status = :status', { slug: 'super-admin', status: 'active' })
-      .getCount();
-    const realSuspended = await this.companyRepo.createQueryBuilder('c')
-      .where('c.slug != :slug AND c.status = :status', { slug: 'super-admin', status: 'suspended' })
-      .getCount();
-    const realPending = await this.companyRepo.createQueryBuilder('c')
-      .where('c.slug != :slug AND c.status = :status', { slug: 'super-admin', status: 'pending' })
-      .getCount();
 
     // Revenue from paid invoices
     const paidInvoices = await this.invoiceRepo.find({ where: { status: InvoiceStatus.PAID } });

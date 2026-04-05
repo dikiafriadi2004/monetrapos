@@ -60,11 +60,13 @@ class SettingsService {
   }
 
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
-    await api.post('/admin/change-password', { currentPassword, newPassword });
+    // Use auth me endpoint via users profile update
+    await api.patch('/users/profile', { currentPassword, newPassword });
   }
 
   async testEmailSettings(): Promise<{ success: boolean; message: string }> {
-    return await api.post('/admin/settings/test-email');
+    // Not implemented in backend yet - return mock success
+    return { success: false, message: 'Email testing not configured' };
   }
 }
 

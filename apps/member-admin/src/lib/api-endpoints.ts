@@ -4,6 +4,7 @@ export const API_ENDPOINTS = {
   // Auth
   AUTH: {
     LOGIN: '/auth/login',
+    LOGIN_EMPLOYEE: '/auth/login/employee',
     REGISTER: '/auth/register',
     LOGOUT: '/auth/logout',
     REFRESH: '/auth/refresh',
@@ -34,11 +35,13 @@ export const API_ENDPOINTS = {
     BASE: '/subscriptions',
     BY_ID: (id: string) => `/subscriptions/${id}`,
     CURRENT: '/subscriptions/current',
-    PLANS: '/subscriptions/plans',
+    PLANS: '/subscription-plans',              // ✅ correct backend endpoint
+    PLANS_WITH_DURATIONS: '/subscription-plans/with-durations',
     HISTORY: '/subscriptions/history',
-    RENEW: (id: string) => `/subscriptions/${id}/renew`,
-    CANCEL: (id: string) => `/subscriptions/${id}/cancel`,
-    REACTIVATE: (id: string) => `/subscriptions/${id}/reactivate`,
+    RENEW: '/subscriptions/renew',             // ✅ POST /subscriptions/renew
+    CANCEL: '/subscriptions/cancel',           // ✅ POST /subscriptions/cancel
+    REACTIVATE: '/subscriptions/reactivate',   // ✅ POST /subscriptions/reactivate
+    CHANGE_PLAN: '/subscriptions/change-plan', // ✅ PUT /subscriptions/change-plan
   },
 
   // Products
@@ -145,6 +148,77 @@ export const API_ENDPOINTS = {
     BASE: '/payment-methods',
     BY_ID: (id: string) => `/payment-methods/${id}`,
     TOGGLE: (id: string) => `/payment-methods/${id}/toggle`,
+  },
+
+  // QRIS
+  QRIS: {
+    BASE: '/qris',
+    ACTIVE: '/qris/active',
+    BY_ID: (id: string) => `/qris/${id}`,
+  },
+
+  // Taxes
+  TAXES: {
+    BASE: '/taxes',
+    BY_ID: (id: string) => `/taxes/${id}`,
+  },
+
+  // Discounts
+  DISCOUNTS: {
+    BASE: '/discounts',
+    BY_ID: (id: string) => `/discounts/${id}`,
+    STATS: (id: string) => `/discounts/${id}/stats`,
+    VALIDATE: '/discounts/validate',
+    GENERATE_CODE: '/discounts/generate-code',
+  },
+
+  // Inventory
+  INVENTORY: {
+    BASE: '/inventory',
+    MOVEMENTS: '/inventory/movements',
+    LOW_STOCK: '/inventory/low-stock',
+    TRANSFER: '/inventory/transfer',
+    RESERVE: '/inventory/reserve',
+    RELEASE: '/inventory/release',
+  },
+
+  // Stock Opname
+  STOCK_OPNAMES: {
+    BASE: '/stock-opnames',
+    BY_ID: (id: string) => `/stock-opnames/${id}`,
+    COMPLETE: (id: string) => `/stock-opnames/${id}/complete`,
+    CANCEL: (id: string) => `/stock-opnames/${id}/cancel`,
+    DISCREPANCY: (id: string) => `/stock-opnames/${id}/discrepancy-report`,
+  },
+
+  // Suppliers
+  SUPPLIERS: {
+    BASE: '/suppliers',
+    BY_ID: (id: string) => `/suppliers/${id}`,
+    ACTIVATE: (id: string) => `/suppliers/${id}/activate`,
+  },
+
+  // Purchase Orders
+  PURCHASE_ORDERS: {
+    BASE: '/purchase-orders',
+    BY_ID: (id: string) => `/purchase-orders/${id}`,
+    STATUS: (id: string) => `/purchase-orders/${id}/status`,
+    RECEIVE: (id: string) => `/purchase-orders/${id}/receive`,
+    CANCEL: (id: string) => `/purchase-orders/${id}/cancel`,
+  },
+
+  // Payment Gateway
+  PAYMENT_GATEWAY: {
+    AVAILABLE: '/payment-gateway/available',
+    PREFERENCE: '/payment-gateway/preference',
+  },
+
+  // Audit
+  AUDIT: {
+    LOGS: '/audit/logs',
+    BY_ENTITY: (type: string, id: string) => `/audit/logs/entity/${type}/${id}`,
+    BY_USER: (userId: string) => `/audit/logs/user/${userId}`,
+    RECENT: '/audit/logs/recent',
   },
 };
 

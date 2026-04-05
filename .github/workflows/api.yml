@@ -1,0 +1,111 @@
+name: API CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'apps/api/**'
+      - '.github/workflows/api.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'apps/api/**'
+
+jobs:
+  test:
+    name: Test & Lint
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: monetrapos_test
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: --health-cmd="redis-cli ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: apps/api/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/api
+        run: npm ci
+
+      - name: Lint
+        working-directory: apps/api
+        run: npm run lint
+
+      - name: Build
+        working-directory: apps/api
+        run: npm run build
+        env:
+          NODE_ENV: test
+
+      - name: Run tests
+        working-directory: apps/api
+        run: npm test -- --passWithNoTests
+        env:
+          NODE_ENV: test
+          DB_HOST: localhost
+          DB_PORT: 3306
+          DB_USERNAME: root
+          DB_PASSWORD: root
+          DB_DATABASE: monetrapos_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          JWT_SECRET: test-secret-key
+          JWT_EXPIRES_IN: 1d
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        working-directory: apps/api
+        run: |
+          docker build -t monetrapos-api:staging .
+
+      - name: Deploy to staging
+        run: echo "Deploy to staging server - configure with your deployment method"
+        # Add your deployment steps here:
+        # - SSH to server and pull latest
+        # - Push to container registry
+        # - Update Kubernetes deployment
+        # - etc.
+
+  deploy-production:
+    name: Deploy to Production
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker image
+        working-directory: apps/api
+        run: |
+          docker build -t monetrapos-api:latest .
+
+      - name: Deploy to production
+        run: echo "Deploy to production server - configure with your deployment method"

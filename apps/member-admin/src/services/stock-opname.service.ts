@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4404/api/v1';
+import apiClient from '@/lib/api-client';
 
 export enum StockOpnameStatus {
   DRAFT = 'draft',
@@ -60,84 +58,49 @@ export interface UpdateStockOpnameDto {
 }
 
 class StockOpnameService {
-  private getAuthHeader() {
-    const token = localStorage.getItem('access_token');
-    return {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    };
-  }
-
   async getAll(params?: {
     status?: StockOpnameStatus;
     storeId?: string;
     fromDate?: string;
     toDate?: string;
   }): Promise<StockOpname[]> {
-    const queryParams = new URLSearchParams();
-    if (params?.status) queryParams.append('status', params.status);
-    if (params?.storeId) queryParams.append('store_id', params.storeId);
-    if (params?.fromDate) queryParams.append('from_date', params.fromDate);
-    if (params?.toDate) queryParams.append('to_date', params.toDate);
-
-    const response = await axios.get(
-      `${API_URL}/stock-opnames?${queryParams.toString()}`,
-      this.getAuthHeader()
-    );
-    return response.data;
+    const q = new URLSearchParams();
+    if (params?.status) q.append('status', params.status);
+    if (params?.storeId) q.append('store_id', params.storeId);
+    if (params?.fromDate) q.append('from_date', params.fromDate);
+    if (params?.toDate) q.append('to_date', params.toDate);
+    const res = await apiClient.get(`/stock-opnames?${q.toString()}`);
+    return Array.isArray(res.data) ? res.data : (res.data?.data || []);
   }
 
   async getById(id: string): Promise<StockOpname> {
-    const response = await axios.get(
-      `${API_URL}/stock-opnames/${id}`,
-      this.getAuthHeader()
-    );
-    return response.data;
+    const res = await apiClient.get(`/stock-opnames/${id}`);
+    return res.data;
   }
 
   async create(data: CreateStockOpnameDto): Promise<StockOpname> {
-    const response = await axios.post(
-      `${API_URL}/stock-opnames`,
-      data,
-      this.getAuthHeader()
-    );
-    return response.data;
+    const res = await apiClient.post('/stock-opnames', data);
+    return res.data;
   }
 
   async update(id: string, data: UpdateStockOpnameDto): Promise<StockOpname> {
-    const response = await axios.patch(
-      `${API_URL}/stock-opnames/${id}`,
-      data,
-      this.getAuthHeader()
-    );
-    return response.data;
+    const res = await apiClient.patch(`/stock-opnames/${id}`, data);
+    return res.data;
   }
 
   async complete(id: string, applyAdjustments: boolean = true): Promise<StockOpname> {
-    const response = await axios.post(
-      `${API_URL}/stock-opnames/${id}/complete`,
-      { apply_adjustments: applyAdjustments },
-      this.getAuthHeader()
-    );
-    return response.data;
+    const res = await apiClient.post(`/stock-opnames/${id}/complete`, { apply_adjustments: applyAdjustments });
+    return res.data;
   }
 
   async cancel(id: string): Promise<StockOpname> {
-    const response = await axios.post(
-      `${API_URL}/stock-opnames/${id}/cancel`,
-      {},
-      this.getAuthHeader()
-    );
-    return response.data;
+    const res = await apiClient.post(`/stock-opnames/${id}/cancel`);
+    return res.data;
   }
 
   async getDiscrepancyReport(id: string): Promise<any> {
-    const response = await axios.get(
-      `${API_URL}/stock-opnames/${id}/discrepancy-report`,
-      this.getAuthHeader()
-    );
-    return response.data;
+    const res = await apiClient.get(`/stock-opnames/${id}/discrepancy-report`);
+    return res.data;
   }
 }
 

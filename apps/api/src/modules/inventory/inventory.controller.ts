@@ -109,13 +109,14 @@ export class InventoryController {
   @Post('low-stock/alerts')
   @RequireRoles(UserType.MEMBER)
   @ApiOperation({ summary: 'Send low stock alerts via email' })
-  @ApiQuery({ name: 'storeId', required: true })
-  @ApiQuery({ name: 'email', required: true })
   async sendLowStockAlerts(
     @Request() req: any,
-    @Query('storeId') storeId: string,
-    @Query('email') email: string,
+    @Query('storeId') storeIdQuery?: string,
+    @Query('email') emailQuery?: string,
+    @Body() body?: { storeId?: string; email?: string },
   ) {
+    const storeId = storeIdQuery || body?.storeId || '';
+    const email = emailQuery || body?.email || req.user?.email || '';
     return this.inventoryService.sendLowStockAlerts(
       req.user.companyId,
       storeId,

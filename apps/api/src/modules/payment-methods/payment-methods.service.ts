@@ -19,6 +19,13 @@ export class PaymentMethodsService {
   ) {}
 
   /**
+   * Find payment method by ID
+   */
+  async findById(id: string, companyId: string): Promise<PaymentMethod | null> {
+    return this.paymentMethodRepo.findOne({ where: { id, companyId } });
+  }
+
+  /**
    * Find all payment methods for a company
    */
   async findByCompany(companyId: string): Promise<PaymentMethod[]> {

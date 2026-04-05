@@ -1,4 +1,4 @@
-import {
+﻿import {
   Injectable,
   NotFoundException,
   ConflictException,
@@ -226,7 +226,7 @@ export class CompaniesService {
 
   /**
    * COMPANY ADMIN METHODS
-   * For MonetRAPOS administrators to manage member companies
+   * For MonetraPOS administrators to manage member companies
    * Requirement: 4.1.1 - Member Management
    */
 
@@ -331,16 +331,42 @@ export class CompaniesService {
       throw new NotFoundException('Member company not found');
     }
 
-    // Get additional statistics (you can expand this with actual queries)
-    // For now, returning basic structure
+    // Get additional statistics with real DB queries
+    const [totalStores, totalUsers, totalTransactions, totalRevenue] = await Promise.all([
+      this.companyRepo.manager.query(
+        `SELECT COUNT(*) as count FROM stores WHERE company_id = ? AND deleted_at IS NULL`,
+        [companyId]
+      ).then((r: any[]) => parseInt(r[0]?.count || '0')).catch(() => 0),
+
+      this.companyRepo.manager.query(
+        `SELECT COUNT(*) as count FROM users WHERE company_id = ? AND is_active = 1`,
+        [companyId]
+      ).then((r: any[]) => parseInt(r[0]?.count || '0')).catch(() => 0),
+
+      this.companyRepo.manager.query(
+        `SELECT COUNT(*) as count FROM transactions WHERE company_id = ? AND status = 'completed'`,
+        [companyId]
+      ).then((r: any[]) => parseInt(r[0]?.count || '0')).catch(() => 0),
+
+      this.companyRepo.manager.query(
+        `SELECT COALESCE(SUM(total), 0) as total FROM transactions WHERE company_id = ? AND status = 'completed'`,
+        [companyId]
+      ).then((r: any[]) => parseFloat(r[0]?.total || '0')).catch(() => 0),
+    ]);
+
+    const totalProducts = await this.companyRepo.manager.query(
+      `SELECT COUNT(*) as count FROM products p INNER JOIN stores s ON p.store_id = s.id WHERE s.company_id = ?`,
+      [companyId]
+    ).then((r: any[]) => parseInt(r[0]?.count || '0')).catch(() => 0);
+
     return {
       ...company,
       statistics: {
-        totalStores: 0, // TODO: Query from stores table
-        totalProducts: 0, // TODO: Query from products table
-        totalUsers: 0, // TODO: Query from users table
-        totalTransactions: 0, // TODO: Query from transactions table
-        totalRevenue: 0, // TODO: Query from transactions table
+        totalStores,
+        totalProducts,
+        totalUsers,
+        totalTransactions,
+        totalRevenue,
       },
     };
   }

@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+﻿import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import * as fc from 'fast-check';
@@ -15,7 +15,7 @@ import { Company } from '../../src/modules/companies/company.entity';
  * 
  * **Validates: Requirements 2.1**
  * 
- * Feature: monetrapos-complete-system, Property 27: Multi-Tenant Data Isolation
+ * Feature: MonetraPOS-complete-system, Property 27: Multi-Tenant Data Isolation
  * 
  * For any query by a user with company_id X, the results should only include 
  * records where company_id = X, and no records from other companies should be accessible.
@@ -601,3 +601,4 @@ describe('Property 27: Multi-Tenant Data Isolation', () => {
     );
   }, 60000);
 });
+

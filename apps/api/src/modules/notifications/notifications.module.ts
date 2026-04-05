@@ -6,6 +6,7 @@ import { NotificationsService } from './notifications.service';
 import { EmailProcessor } from './processors/email.processor';
 import { Notification } from './notification.entity';
 import { QUEUE_NAMES } from '../../common/queue/queues.constants';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { QUEUE_NAMES } from '../../common/queue/queues.constants';
     BullModule.registerQueue({
       name: QUEUE_NAMES.EMAIL,
     }),
+    EmailModule,
   ],
   controllers: [NotificationsController],
   providers: [NotificationsService, EmailProcessor],

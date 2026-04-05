@@ -2,6 +2,13 @@ import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'ax
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4404/api/v1';
 
+/** Unwrap axios response — returns res.data if present, otherwise res itself */
+export function unwrap<T>(res: unknown): T {
+  if (res && typeof res === 'object' && 'data' in res) {
+    return (res as { data: T }).data;
+  }
+  return res as T;
+}
 // Create axios instance
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_URL,
@@ -31,14 +38,24 @@ apiClient.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
 
-    // Handle 401 Unauthorized
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Handle 401 Unauthorized — skip refresh for auth endpoints
+    const isAuthEndpoint = originalRequest.url?.includes('/auth/login') ||
+      originalRequest.url?.includes('/auth/refresh') ||
+      originalRequest.url?.includes('/auth/register');
+
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {
       originalRequest._retry = true;
 
       try {
         const refreshToken = localStorage.getItem('refresh_token');
         if (!refreshToken) {
-          throw new Error('No refresh token available');
+          // No refresh token — clear and redirect
+          localStorage.removeItem('access_token');
+          localStorage.removeItem('user');
+          if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+            window.location.href = '/login';
+          }
+          return Promise.reject(error);
         }
 
         // Attempt to refresh token
@@ -65,7 +82,7 @@ apiClient.interceptors.response.use(
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('user');
         
-        if (typeof window !== 'undefined') {
+        if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
           window.location.href = '/login';
         }
         return Promise.reject(refreshError);

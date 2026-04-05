@@ -11,9 +11,17 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery, ApiParam } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname, join } from 'path';
+import { existsSync, mkdirSync } from 'fs';
+import { deleteOldFile } from '../../common/utils/file.utils';
 import { StoresService } from './stores.service';
 import { CreateStoreDto, UpdateStoreDto, AssignManagerDto } from './dto';
 
@@ -120,5 +128,50 @@ export class StoresController {
   getStats(@Param('id') id: string, @Request() req: any) {
     const companyId = req.user.companyId;
     return this.storesService.getStoreStats(id, companyId);
+  }
+
+  @Post(':id/upload-logo')
+  @ApiOperation({ summary: 'Upload store receipt logo' })
+  @ApiParam({ name: 'id', description: 'Store ID' })
+  @UseInterceptors(FileInterceptor('file', {
+    storage: diskStorage({
+      destination: (req, file, cb) => {
+        const dir = join(process.cwd(), 'uploads', 'store-logos');
+        if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+        cb(null, dir);
+      },
+      filename: (req, file, cb) => {
+        const ext = extname(file.originalname).toLowerCase();
+        cb(null, `store-logo-${Date.now()}${ext}`);
+      },
+    }),
+    fileFilter: (req, file, cb) => {
+      const allowed = ['.jpg', '.jpeg', '.png', '.webp', '.svg'];
+      if (!allowed.includes(extname(file.originalname).toLowerCase())) {
+        return cb(new BadRequestException('Only image files allowed'), false);
+      }
+      cb(null, true);
+    },
+    limits: { fileSize: 5 * 1024 * 1024 },
+  }))
+  async uploadLogo(
+    @Param('id') id: string,
+    @Request() req: any,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) throw new BadRequestException('No file uploaded');
+    const companyId = req.user.companyId;
+    const logoUrl = `/uploads/store-logos/${file.filename}`;
+
+    // Delete old logo — get store first
+    try {
+      const storeResult = await this.storesService.findAll(companyId);
+      const storeList = (storeResult as any).data || storeResult;
+      const store = Array.isArray(storeList) ? storeList.find((s: any) => s.id === id) : null;
+      if (store?.receiptLogoUrl) deleteOldFile(store.receiptLogoUrl);
+    } catch {}
+
+    await this.storesService.update(id, { receiptLogoUrl: logoUrl } as any, companyId);
+    return { logoUrl };
   }
 }

@@ -1,305 +1,404 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { fnbService, FnbOrder, OrderStatus, OrderType } from '@/services/fnb.service';
-import { UtensilsCrossed, Plus, Search, Eye, Loader2, X } from 'lucide-react';
+import { fnbService, FnbOrder, FnbTable, OrderStatus, OrderType } from '@/services/fnb.service';
+import { UtensilsCrossed, Eye, Plus, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { Modal, PageHeader, SearchInput, StatusBadge, EmptyState, LoadingSpinner } from '@/components/ui';
+import { useStore } from '@/hooks/useStore';
+import apiClient from '@/lib/api-client';
+
+const STATUS_BADGE: Record<string, string> = {
+  pending: 'badge-warning', preparing: 'bg-purple-100 text-purple-700', ready: 'badge-success',
+  served: 'badge-primary', completed: 'badge-gray', cancelled: 'badge-danger',
+};
+
+const TYPE_CONFIG: Record<string, { label: string; emoji: string; color: string }> = {
+  'dine-in':  { label: 'Dine-in',  emoji: '🪑', color: '#6366f1' },
+  takeaway:   { label: 'Takeaway', emoji: '🥡', color: '#f59e0b' },
+  delivery:   { label: 'Delivery', emoji: '🛵', color: '#10b981' },
+};
 
 export default function FnbOrdersPage() {
+  const { storeId } = useStore();
   const [orders, setOrders] = useState<FnbOrder[]>([]);
+  const [tables, setTables] = useState<FnbTable[]>([]);
+  const [customers, setCustomers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<OrderStatus | ''>('');
+  const [typeFilter, setTypeFilter] = useState<OrderType | ''>('');
   const [selectedOrder, setSelectedOrder] = useState<FnbOrder | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+
+  useEffect(() => { loadOrders(); }, [statusFilter, typeFilter, storeId]);
 
   useEffect(() => {
-    loadOrders();
-  }, [statusFilter]);
+    if (storeId) {
+      fnbService.getTables(storeId).then(setTables).catch(() => {});
+      apiClient.get('/customers').then((r: any) => {
+        setCustomers(Array.isArray(r.data) ? r.data : (r.data?.data || []));
+      }).catch(() => {});
+    }
+  }, [storeId]);
 
   const loadOrders = async () => {
     try {
       setLoading(true);
-      const response = await fnbService.getOrders({
+      const res = await fnbService.getOrders({
+        storeId: storeId || undefined,
         status: statusFilter || undefined,
+        orderType: typeFilter || undefined,
       });
-      setOrders(response);
-    } catch (error: any) {
-      console.error('Failed to load orders:', error);
-      toast.error('Failed to load orders');
-    } finally {
-      setLoading(false);
-    }
+      setOrders(Array.isArray(res) ? res : []);
+    } catch { toast.error('Failed to load orders'); }
+    finally { setLoading(false); }
   };
 
   const handleUpdateStatus = async (orderId: string, newStatus: OrderStatus) => {
     try {
       await fnbService.updateOrderStatus(orderId, newStatus);
-      toast.success('Order status updated');
-      await loadOrders();
-    } catch (error: any) {
-      console.error('Failed to update status:', error);
-      toast.error('Failed to update status');
-    }
+      toast.success('Status updated');
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+    } catch { toast.error('Failed to update status'); }
   };
 
-  const filteredOrders = orders.filter(order =>
-    order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    order.customerName?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filtered = orders.filter(o =>
+    o.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (o.customerName || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const getStatusBadge = (status: OrderStatus) => {
-    const styles = {
-      [OrderStatus.PENDING]: 'bg-yellow-100 text-yellow-800',
-      [OrderStatus.CONFIRMED]: 'bg-blue-100 text-blue-800',
-      [OrderStatus.PREPARING]: 'bg-purple-100 text-purple-800',
-      [OrderStatus.READY]: 'bg-green-100 text-green-800',
-      [OrderStatus.SERVED]: 'bg-indigo-100 text-indigo-800',
-      [OrderStatus.COMPLETED]: 'bg-gray-100 text-gray-800',
-      [OrderStatus.CANCELLED]: 'bg-red-100 text-red-800',
-    };
-    return styles[status] || 'bg-gray-100 text-gray-800';
-  };
+  const fmt = (n: number) => `Rp ${(n || 0).toLocaleString('id-ID')}`;
 
-  const getOrderTypeBadge = (type: OrderType) => {
-    const styles = {
-      [OrderType.DINE_IN]: 'bg-blue-50 text-blue-700',
-      [OrderType.TAKEAWAY]: 'bg-green-50 text-green-700',
-      [OrderType.DELIVERY]: 'bg-purple-50 text-purple-700',
-    };
-    return styles[type] || 'bg-gray-50 text-gray-700';
-  };
+  // Stats per type
+  const stats = Object.values(OrderType).map(type => ({
+    type,
+    ...TYPE_CONFIG[type],
+    count: orders.filter(o => o.orderType === type).length,
+    active: orders.filter(o => o.orderType === type && !['completed','cancelled'].includes(o.status)).length,
+  }));
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">F&B Orders</h1>
-          <p className="text-gray-600 mt-1">Manage food and beverage orders</p>
-        </div>
+    <div>
+      <PageHeader title="F&B Orders" description="Kelola pesanan berdasarkan tipe layanan"
+        action={
+          <button onClick={() => setShowCreate(true)} className="btn btn-primary" disabled={!storeId}>
+            <Plus size={16} /> New Order
+          </button>
+        }
+      />
+
+      {/* Type Stats */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        {stats.map(s => (
+          <button
+            key={s.type}
+            onClick={() => setTypeFilter(typeFilter === s.type ? '' : s.type)}
+            className={`card text-left transition-all ${typeFilter === s.type ? 'ring-2 ring-indigo-500' : ''}`}
+            style={{ padding: '1rem' }}
+          >
+            <div className="flex items-center gap-3">
+              <span style={{ fontSize: '1.75rem' }}>{s.emoji}</span>
+              <div>
+                <div className="font-semibold text-gray-900">{s.label}</div>
+                <div className="text-sm text-gray-500">{s.count} total · {s.active} aktif</div>
+              </div>
+            </div>
+          </button>
+        ))}
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow-md p-4">
-        <div className="flex flex-col md:flex-row gap-4">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                placeholder="Search orders..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              />
-            </div>
-          </div>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as OrderStatus | '')}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-          >
-            <option value="">All Status</option>
-            <option value={OrderStatus.PENDING}>Pending</option>
-            <option value={OrderStatus.CONFIRMED}>Confirmed</option>
-            <option value={OrderStatus.PREPARING}>Preparing</option>
-            <option value={OrderStatus.READY}>Ready</option>
-            <option value={OrderStatus.SERVED}>Served</option>
-            <option value={OrderStatus.COMPLETED}>Completed</option>
-          </select>
-        </div>
+      <div className="flex flex-wrap gap-3 mb-6">
+        <SearchInput value={searchTerm} onChange={setSearchTerm} placeholder="Cari nomor order atau nama pelanggan..." className="flex-1 min-w-[200px]" />
+        <select className="form-input w-40" value={statusFilter} onChange={e => setStatusFilter(e.target.value as any)}>
+          <option value="">Semua Status</option>
+          {Object.values(OrderStatus).map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
       </div>
 
-      {/* Orders List */}
-      {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
-        </div>
-      ) : filteredOrders.length === 0 ? (
-        <div className="bg-white rounded-lg shadow-md p-12 text-center">
-          <UtensilsCrossed className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">No orders found</h3>
-          <p className="text-gray-600">Orders will appear here</p>
-        </div>
+      {loading ? <LoadingSpinner /> : filtered.length === 0 ? (
+        <EmptyState icon={UtensilsCrossed} title="Belum ada order"
+          action={<button onClick={() => setShowCreate(true)} className="btn btn-primary btn-sm" disabled={!storeId}><Plus size={14}/> Buat Order</button>}
+        />
       ) : (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredOrders.map((order) => (
-            <div
-              key={order.id}
-              className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow"
-            >
-              <div className="flex justify-between items-start mb-4">
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">{order.orderNumber}</h3>
-                  <p className="text-sm text-gray-500">
-                    {new Date(order.createdAt).toLocaleString()}
-                  </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map(order => {
+            const typeCfg = TYPE_CONFIG[order.orderType] || { label: order.orderType, emoji: '📋', color: '#6b7280' };
+            return (
+              <div key={order.id} className="card hover:shadow-md transition-shadow animate-fade-in">
+                <div className="card-body">
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <p className="font-bold text-gray-900">{order.orderNumber}</p>
+                      <p className="text-xs text-gray-400">{new Date(order.createdAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}</p>
+                    </div>
+                    <span style={{
+                      padding: '3px 10px', borderRadius: 12, fontSize: '0.75rem', fontWeight: 600,
+                      background: `${typeCfg.color}15`, color: typeCfg.color,
+                    }}>
+                      {typeCfg.emoji} {typeCfg.label}
+                    </span>
+                  </div>
+                  {order.tableName && <p className="text-sm text-gray-600 mb-1">🪑 Meja {order.tableName}</p>}
+                  {order.customerName && <p className="text-sm text-gray-600 mb-1">👤 {order.customerName}</p>}
+                  {order.orderType === OrderType.DELIVERY && (
+                    <p className="text-xs text-gray-400 mb-1">🛵 Delivery</p>
+                  )}
+                  <p className="text-sm text-gray-500 mb-3">{order.items?.length || 0} item</p>
+                  <p className="text-lg font-bold text-emerald-600 mb-3">{fmt(order.total)}</p>
+                  <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+                    <span className={`badge ${STATUS_BADGE[order.status] || 'badge-gray'} capitalize`}>{order.status}</span>
+                    <div className="flex gap-2">
+                      <button onClick={() => setSelectedOrder(order)} className="btn btn-outline btn-sm"><Eye size={13}/> Detail</button>
+                      {order.status !== OrderStatus.COMPLETED && order.status !== OrderStatus.CANCELLED && (
+                        <select className="form-input h-8 text-xs py-0 w-32" value={order.status}
+                          onChange={e => handleUpdateStatus(order.id, e.target.value as OrderStatus)}>
+                          {[OrderStatus.PENDING, OrderStatus.PREPARING, OrderStatus.READY, OrderStatus.SERVED, OrderStatus.COMPLETED].map(s => (
+                            <option key={s} value={s}>{s}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <span className={`px-2 py-1 text-xs font-semibold rounded-full ${getOrderTypeBadge(order.orderType)}`}>
-                  {order.orderType.replace('_', ' ')}
-                </span>
               </div>
-
-              {order.tableName && (
-                <div className="mb-2">
-                  <span className="text-sm text-gray-600">Table: </span>
-                  <span className="text-sm font-medium">{order.tableName}</span>
-                </div>
-              )}
-
-              {order.customerName && (
-                <div className="mb-2">
-                  <span className="text-sm text-gray-600">Customer: </span>
-                  <span className="text-sm font-medium">{order.customerName}</span>
-                </div>
-              )}
-
-              <div className="mb-4">
-                <span className="text-sm text-gray-600">Items: </span>
-                <span className="text-sm font-medium">{order.items?.length || 0}</span>
-              </div>
-
-              <div className="mb-4">
-                <span className="text-lg font-bold text-gray-900">
-                  Rp {order.total.toLocaleString()}
-                </span>
-              </div>
-
-              <div className="mb-4">
-                <span className={`px-3 py-1 text-sm font-semibold rounded-full ${getStatusBadge(order.status)}`}>
-                  {order.status}
-                </span>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setSelectedOrder(order)}
-                  className="flex-1 px-3 py-2 text-sm bg-indigo-50 text-indigo-700 rounded-lg hover:bg-indigo-100"
-                >
-                  <Eye className="w-4 h-4 inline mr-1" />
-                  View
-                </button>
-                {order.status !== OrderStatus.COMPLETED && order.status !== OrderStatus.CANCELLED && (
-                  <select
-                    value={order.status}
-                    onChange={(e) => handleUpdateStatus(order.id, e.target.value as OrderStatus)}
-                    className="px-3 py-2 text-sm border border-gray-300 rounded-lg"
-                  >
-                    <option value={OrderStatus.PENDING}>Pending</option>
-                    <option value={OrderStatus.CONFIRMED}>Confirmed</option>
-                    <option value={OrderStatus.PREPARING}>Preparing</option>
-                    <option value={OrderStatus.READY}>Ready</option>
-                    <option value={OrderStatus.SERVED}>Served</option>
-                    <option value={OrderStatus.COMPLETED}>Completed</option>
-                  </select>
-                )}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      {/* Order Details Modal */}
-      {selectedOrder && (
-        <OrderDetailsModal
-          order={selectedOrder}
-          onClose={() => setSelectedOrder(null)}
+      {/* Detail Modal */}
+      <Modal open={!!selectedOrder} onClose={() => setSelectedOrder(null)} title={`Order — ${selectedOrder?.orderNumber}`} size="lg">
+        {selectedOrder && (
+          <div className="space-y-4">
+            {/* Type badge */}
+            {(() => {
+              const cfg = TYPE_CONFIG[selectedOrder.orderType] || { label: selectedOrder.orderType, emoji: '📋', color: '#6b7280' };
+              return (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 20, background: `${cfg.color}15`, color: cfg.color, fontWeight: 600, fontSize: '0.9rem' }}>
+                  {cfg.emoji} {cfg.label}
+                </div>
+              );
+            })()}
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                ['Status', selectedOrder.status],
+                ...(selectedOrder.tableName ? [['Meja', selectedOrder.tableName]] : []),
+                ...(selectedOrder.customerName ? [['Pelanggan', selectedOrder.customerName]] : []),
+                ['Tanggal', new Date(selectedOrder.createdAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })],
+              ].map(([l, v]) => (
+                <div key={l}><p className="text-xs text-gray-400 uppercase">{l}</p><p className="font-semibold mt-0.5 capitalize">{v}</p></div>
+              ))}
+            </div>
+            {selectedOrder.items && selectedOrder.items.length > 0 && (
+              <div>
+                <p className="text-sm font-semibold text-gray-700 mb-2">Items</p>
+                {selectedOrder.items.map(item => (
+                  <div key={item.id} className="flex justify-between py-1.5 border-b border-gray-100 text-sm">
+                    <div>
+                      <span>{item.productName || item.productId}</span>
+                      <span className="text-gray-400 ml-2">×{item.quantity}</span>
+                      {item.notes && <p className="text-xs text-amber-600">📝 {item.notes}</p>}
+                    </div>
+                    <span className="font-medium">{fmt(item.subtotal)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="bg-gray-50 rounded-lg p-3 space-y-1">
+              <div className="flex justify-between text-sm text-gray-600"><span>Subtotal</span><span>{fmt(selectedOrder.subtotal)}</span></div>
+              <div className="flex justify-between text-sm text-gray-600"><span>Pajak</span><span>{fmt(selectedOrder.tax)}</span></div>
+              <div className="flex justify-between font-bold text-base pt-1 border-t border-gray-200">
+                <span>Total</span><span className="text-emerald-600">{fmt(selectedOrder.total)}</span>
+              </div>
+            </div>
+            {selectedOrder.notes && <p className="text-sm text-gray-500">📝 {selectedOrder.notes}</p>}
+          </div>
+        )}
+      </Modal>
+
+      {/* Create Order Modal */}
+      {showCreate && (
+        <CreateOrderModal
+          storeId={storeId || ''}
+          tables={tables}
+          customers={customers}
+          onClose={() => setShowCreate(false)}
+          onSuccess={() => { setShowCreate(false); loadOrders(); }}
         />
       )}
     </div>
   );
 }
 
-function OrderDetailsModal({
-  order,
-  onClose,
+// ── Create Order Modal ────────────────────────────────────────────────────────
+function CreateOrderModal({
+  storeId, tables, customers, onClose, onSuccess,
 }: {
-  order: FnbOrder;
+  storeId: string;
+  tables: FnbTable[];
+  customers: any[];
   onClose: () => void;
+  onSuccess: () => void;
 }) {
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    orderType: OrderType.DINE_IN as OrderType,
+    tableId: '',
+    customerId: '',
+    deliveryAddress: '',
+    notes: '',
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!storeId) { toast.error('Pilih toko terlebih dahulu'); return; }
+    if (form.orderType === OrderType.DINE_IN && !form.tableId) {
+      toast.error('Pilih meja untuk Dine-in'); return;
+    }
+    if (form.orderType === OrderType.DELIVERY && !form.deliveryAddress) {
+      toast.error('Masukkan alamat pengiriman'); return;
+    }
+    setSaving(true);
+    try {
+      await fnbService.createOrder({
+        storeId,
+        orderType: form.orderType,
+        tableId: form.tableId || undefined,
+        customerId: form.customerId || undefined,
+        notes: form.notes || undefined,
+      });
+      toast.success('Order berhasil dibuat');
+      onSuccess();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Gagal membuat order');
+    } finally { setSaving(false); }
+  };
+
+  const availableTables = tables.filter(t => t.status === 'available' || t.status === 'occupied');
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
-          <h2 className="text-xl font-bold text-gray-900">Order Details</h2>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
+      <div className="glass-panel animate-fade-in" style={{ position: 'relative', width: 520, maxWidth: '90vw', padding: 'var(--space-xl)', zIndex: 101 }}>
+        <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: 'var(--space-lg)' }}>Buat Order Baru</h3>
 
-        <div className="p-6 space-y-6">
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm text-gray-500">Order Number</p>
-              <p className="text-lg font-semibold">{order.orderNumber}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Order Type</p>
-              <p className="text-lg font-semibold capitalize">{order.orderType.replace('_', ' ')}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Status</p>
-              <p className="text-lg font-semibold capitalize">{order.status}</p>
-            </div>
-            <div>
-              <p className="text-sm text-gray-500">Date</p>
-              <p className="text-lg font-semibold">
-                {new Date(order.createdAt).toLocaleString()}
-              </p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Tipe Order */}
+          <div className="form-group">
+            <label className="form-label">Tipe Order *</label>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+              {Object.values(OrderType).map(type => {
+                const cfg = TYPE_CONFIG[type];
+                const selected = form.orderType === type;
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => setForm(p => ({ ...p, orderType: type, tableId: '', deliveryAddress: '' }))}
+                    style={{
+                      padding: '12px 8px',
+                      border: `2px solid ${selected ? cfg.color : 'var(--border-subtle)'}`,
+                      borderRadius: 'var(--radius-md)',
+                      background: selected ? `${cfg.color}10` : 'transparent',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    <div style={{ fontSize: '1.5rem', marginBottom: 4 }}>{cfg.emoji}</div>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 600, color: selected ? cfg.color : 'var(--text-secondary)' }}>
+                      {cfg.label}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {order.tableName && (
-            <div>
-              <p className="text-sm text-gray-500">Table</p>
-              <p className="text-lg font-semibold">{order.tableName}</p>
-            </div>
-          )}
-
-          {order.customerName && (
-            <div>
-              <p className="text-sm text-gray-500">Customer</p>
-              <p className="text-lg font-semibold">{order.customerName}</p>
-            </div>
-          )}
-
-          <div>
-            <h3 className="text-lg font-semibold mb-4">Items</h3>
-            <div className="space-y-2">
-              {order.items?.map((item) => (
-                <div key={item.id} className="flex justify-between items-center py-2 border-b">
-                  <div>
-                    <p className="font-medium">{item.productName || item.productId}</p>
-                    <p className="text-sm text-gray-500">Qty: {item.quantity}</p>
-                    {item.notes && <p className="text-sm text-gray-500">Note: {item.notes}</p>}
-                  </div>
-                  <p className="font-semibold">Rp {item.subtotal.toLocaleString()}</p>
+          {/* Meja - hanya untuk Dine-in */}
+          {form.orderType === OrderType.DINE_IN && (
+            <div className="form-group">
+              <label className="form-label">Pilih Meja *</label>
+              {availableTables.length === 0 ? (
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)' }}>
+                  Belum ada meja. Tambahkan meja di menu Tables.
+                </p>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: 8 }}>
+                  {availableTables.map(t => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setForm(p => ({ ...p, tableId: t.id }))}
+                      style={{
+                        padding: '10px 6px',
+                        border: `2px solid ${form.tableId === t.id ? '#6366f1' : 'var(--border-subtle)'}`,
+                        borderRadius: 'var(--radius-md)',
+                        background: form.tableId === t.id ? 'rgba(99,102,241,0.1)' : 'transparent',
+                        cursor: 'pointer',
+                        textAlign: 'center',
+                        fontSize: '0.8rem',
+                      }}
+                    >
+                      <div style={{ fontWeight: 700 }}>{t.tableNumber}</div>
+                      <div style={{ fontSize: '0.7rem', color: t.status === 'available' ? 'var(--success)' : 'var(--warning)' }}>
+                        {t.status === 'available' ? 'Kosong' : 'Terisi'}
+                      </div>
+                    </button>
+                  ))}
                 </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="border-t pt-4">
-            <div className="flex justify-between mb-2">
-              <span className="text-gray-600">Subtotal</span>
-              <span className="font-medium">Rp {order.subtotal.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between mb-2">
-              <span className="text-gray-600">Tax</span>
-              <span className="font-medium">Rp {order.tax.toLocaleString()}</span>
-            </div>
-            <div className="flex justify-between text-lg font-bold">
-              <span>Total</span>
-              <span>Rp {order.total.toLocaleString()}</span>
-            </div>
-          </div>
-
-          {order.notes && (
-            <div>
-              <p className="text-sm text-gray-500 mb-1">Notes</p>
-              <p className="text-gray-900">{order.notes}</p>
+              )}
             </div>
           )}
-        </div>
+
+          {/* Alamat - hanya untuk Delivery */}
+          {form.orderType === OrderType.DELIVERY && (
+            <div className="form-group">
+              <label className="form-label">Alamat Pengiriman *</label>
+              <textarea
+                className="form-input"
+                rows={2}
+                value={form.deliveryAddress}
+                onChange={e => setForm(p => ({ ...p, deliveryAddress: e.target.value }))}
+                placeholder="Masukkan alamat lengkap pengiriman..."
+                required
+              />
+            </div>
+          )}
+
+          {/* Pelanggan - opsional */}
+          <div className="form-group">
+            <label className="form-label">Pelanggan (Opsional)</label>
+            <select className="form-input" value={form.customerId} onChange={e => setForm(p => ({ ...p, customerId: e.target.value }))}>
+              <option value="">Walk-in / Tanpa pelanggan</option>
+              {customers.map(c => (
+                <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ''}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Catatan */}
+          <div className="form-group">
+            <label className="form-label">Catatan</label>
+            <input
+              className="form-input"
+              value={form.notes}
+              onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
+              placeholder="Catatan khusus untuk order ini..."
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: 'var(--space-md)', justifyContent: 'flex-end', marginTop: 'var(--space-lg)' }}>
+            <button type="button" onClick={onClose} className="btn btn-outline">Batal</button>
+            <button type="submit" className="btn btn-primary" disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {saving && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
+              {saving ? 'Membuat...' : 'Buat Order'}
+            </button>
+          </div>
+        </form>
+        <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { 100% { transform: rotate(360deg); } }` }} />
       </div>
     </div>
   );

@@ -44,7 +44,7 @@ class MembersService {
     businessName?: string;
     password: string;
   }): Promise<Member> {
-    return await api.post('/auth/register', data) as any;
+    return await api.post('/admin/companies', data) as any;
   }
 
   async update(id: string, data: Partial<Member>): Promise<Member> {

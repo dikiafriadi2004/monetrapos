@@ -1,0 +1,127 @@
+﻿version: '3.8'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: monetrapos-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
+      MYSQL_DATABASE: ${DB_DATABASE:-monetrapos}
+      MYSQL_USER: ${DB_USERNAME:-monetrapos}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-root}
+    ports:
+      - '3306:3306'
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache & Queue
+  redis:
+    image: redis:7-alpine
+    container_name: monetrapos-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API (NestJS)
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: monetrapos-api
+    restart: unless-stopped
+    ports:
+      - '4404:4404'
+    environment:
+      NODE_ENV: production
+      PORT: 4404
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USERNAME: ${DB_USERNAME:-monetrapos}
+      DB_PASSWORD: ${DB_PASSWORD:-root}
+      DB_DATABASE: ${DB_DATABASE:-monetrapos}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      JWT_SECRET: ${JWT_SECRET:-change-this-in-production}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:4402,http://localhost:4403}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - api_uploads:/app/uploads
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:4404/api/v1/health']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Member Admin (Next.js)
+  member-admin:
+    build:
+      context: ./apps/member-admin
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4404/api/v1}
+    container_name: monetrapos-member-admin
+    restart: unless-stopped
+    ports:
+      - '4403:4403'
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4404/api/v1}
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:4403/']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Company Admin (Next.js)
+  company-admin:
+    build:
+      context: ./apps/company-admin
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4404/api/v1}
+    container_name: monetrapos-company-admin
+    restart: unless-stopped
+    ports:
+      - '4402:4402'
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4404/api/v1}
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:4402/']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  mysql_data:
+  redis_data:
+  api_uploads:
+
+networks:
+  default:
+    name: monetrapos-network
+

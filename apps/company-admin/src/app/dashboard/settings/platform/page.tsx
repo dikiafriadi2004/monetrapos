@@ -1,8 +1,9 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from 'react';
 import { Settings, Save, Mail, Globe, Shield, User, Plus, Edit, Trash2, X } from 'lucide-react';
 import { api } from '../../../../lib/api';
+import toast from 'react-hot-toast';
 
 interface PlatformSettings {
   siteName: string;
@@ -31,8 +32,8 @@ interface AdminUser {
 export default function PlatformSettingsPage() {
   const [activeTab, setActiveTab] = useState<'general' | 'email' | 'security' | 'admins'>('general');
   const [settings, setSettings] = useState<PlatformSettings>({
-    siteName: 'MonetRAPOS',
-    siteUrl: 'https://monetrapos.com',
+    siteName: 'MonetraPOS',
+    siteUrl: 'https://MonetraPOS.com',
     supportEmail: 'support@monetrapos.com',
     supportPhone: '+62 812-3456-7890',
     maintenanceMode: false,
@@ -82,21 +83,16 @@ export default function PlatformSettingsPage() {
     setSaving(true);
     try {
       await api.patch('/admin/settings', settings);
-      alert('Settings saved successfully!');
-    } catch (err) {
-      alert('Failed to save settings');
+      toast.success('Settings saved successfully');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to save settings');
     } finally {
       setSaving(false);
     }
   };
 
   const handleTestEmail = async () => {
-    try {
-      await api.post('/admin/settings/test-email');
-      alert('Test email sent! Check your inbox.');
-    } catch {
-      alert('Failed to send test email. Check your SMTP settings.');
-    }
+    toast('Email testing requires SMTP configuration in server environment variables.', { icon: 'ℹ️' });
   };
 
   const openAdminModal = (admin?: AdminUser) => {
@@ -120,8 +116,8 @@ export default function PlatformSettingsPage() {
       }
       await fetchAdmins();
       setAdminModalOpen(false);
-    } catch {
-      alert('Failed to save admin user');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to save admin user');
     }
   };
 
@@ -130,8 +126,9 @@ export default function PlatformSettingsPage() {
     try {
       await api.delete(`/admin/users/${id}`);
       setAdmins(prev => prev.filter(a => a.id !== id));
-    } catch {
-      alert('Failed to delete admin');
+      toast.success('Admin deleted');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to delete admin');
     }
   };
 
@@ -193,7 +190,7 @@ export default function PlatformSettingsPage() {
             <label className="form-label">Site Name</label>
             <input
               className="form-input"
-              placeholder="MonetRAPOS"
+              placeholder="MonetraPOS"
               value={settings.siteName}
               onChange={(e) => setSettings({ ...settings, siteName: e.target.value })}
             />
@@ -204,7 +201,7 @@ export default function PlatformSettingsPage() {
             <input
               className="form-input"
               type="url"
-              placeholder="https://monetrapos.com"
+              placeholder="https://MonetraPOS.com"
               value={settings.siteUrl}
               onChange={(e) => setSettings({ ...settings, siteUrl: e.target.value })}
             />
@@ -446,3 +443,4 @@ export default function PlatformSettingsPage() {
     </div>
   );
 }
+

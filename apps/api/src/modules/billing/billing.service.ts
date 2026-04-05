@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Invoice, InvoiceStatus } from './invoice.entity';
@@ -10,14 +10,22 @@ import {
 import { InvoicePdfService } from './invoice-pdf.service';
 import { InjectQueue } from '@nestjs/bull';
 import type { Queue } from 'bull';
+import { Subscription } from '../subscriptions/subscription.entity';
+import { Company } from '../companies/company.entity';
 
 @Injectable()
 export class BillingService {
+  private readonly logger = new Logger(BillingService.name);
+
   constructor(
     @InjectRepository(Invoice)
     private readonly invoiceRepository: Repository<Invoice>,
     @InjectRepository(PaymentTransaction)
     private readonly paymentTransactionRepository: Repository<PaymentTransaction>,
+    @InjectRepository(Subscription)
+    private readonly subscriptionRepository: Repository<Subscription>,
+    @InjectRepository(Company)
+    private readonly companyRepository: Repository<Company>,
     private readonly invoicePdfService: InvoicePdfService,
     @InjectQueue('notifications')
     private readonly notificationsQueue: Queue,
@@ -101,8 +109,9 @@ export class BillingService {
 
   async findAllInvoices(): Promise<Invoice[]> {
     return this.invoiceRepository.find({
+      relations: ['company'],
       order: { createdAt: 'DESC' },
-      take: 100,
+      take: 200,
     });
   }
 
@@ -119,6 +128,10 @@ export class BillingService {
     }
 
     return invoice;
+  }
+
+  async updateInvoicePaymentUrl(id: string, paymentUrl: string): Promise<void> {
+    await this.invoiceRepository.update(id, { paymentUrl } as any);
   }
 
   async updateInvoiceStatus(
@@ -297,9 +310,15 @@ export class BillingService {
 
       if (invoice) {
         await this.generateAndSaveInvoicePdf(invoice);
-      }
 
-      // TODO: Activate/extend subscription
+        // Activate or extend subscription linked to this invoice
+        if (invoice.subscriptionId) {
+          await this.activateSubscriptionAfterPayment(
+            invoice.subscriptionId,
+            invoice.companyId,
+          );
+        }
+      }
     }
   }
 
@@ -340,5 +359,61 @@ export class BillingService {
     });
 
     return pdfPath;
+  }
+
+  // ============================================
+  // SUBSCRIPTION ACTIVATION AFTER PAYMENT
+  // ============================================
+
+  /**
+   * Activate or extend subscription after successful payment.
+   * Called from handlePaymentWebhook when payment status = SUCCESS.
+   */
+  private async activateSubscriptionAfterPayment(
+    subscriptionId: string,
+    companyId: string,
+  ): Promise<void> {
+    try {
+      const subscription = await this.subscriptionRepository.findOne({
+        where: { id: subscriptionId },
+      });
+
+      if (!subscription) {
+        this.logger.warn(`Subscription ${subscriptionId} not found for activation`);
+        return;
+      }
+
+      const duration = subscription.durationMonths || 1;
+      const now = new Date();
+
+      const baseDate =
+        subscription.status === 'active' && subscription.endDate && subscription.endDate > now
+          ? new Date(subscription.endDate)
+          : now;
+
+      const newEndDate = new Date(baseDate);
+      newEndDate.setMonth(newEndDate.getMonth() + duration);
+
+      await this.subscriptionRepository.update(subscriptionId, {
+        status: 'active' as any,
+        startDate: subscription.status !== 'active' ? now : subscription.startDate,
+        endDate: newEndDate,
+        durationMonths: duration,
+        gracePeriodEndDate: null as any,
+        cancelAtPeriodEnd: false,
+      });
+
+      await this.companyRepository.update(companyId, {
+        status: 'active',
+        subscriptionStatus: 'active',
+        subscriptionEndsAt: newEndDate,
+      });
+
+      this.logger.log(
+        `Subscription ${subscriptionId} activated/extended until ${newEndDate.toISOString()}`,
+      );
+    } catch (err) {
+      this.logger.error(`Failed to activate subscription ${subscriptionId}: ${err.message}`);
+    }
   }
 }

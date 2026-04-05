@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 interface RoleFormModalProps {
   isOpen: boolean;
@@ -57,9 +58,9 @@ export function RoleFormModal({ isOpen, onClose, onSubmit, initialData }: RoleFo
     try {
       await onSubmit(formData);
       onClose();
-    } catch (err) {
-      console.error(err);
-      alert('Failed to save role');
+    } catch (err: any) {
+      console.error('Failed to save role:', err);
+      toast.error(err?.response?.data?.message || 'Failed to save role');
     } finally {
       setLoading(false);
     }

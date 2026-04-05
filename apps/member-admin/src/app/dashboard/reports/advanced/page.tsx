@@ -2,246 +2,128 @@
 
 import { useState } from 'react';
 import { advancedReportsService } from '@/services/advanced-reports.service';
-import { BarChart3, Users, TrendingUp, Download, Loader2, Calendar } from 'lucide-react';
+import { BarChart3, Users, TrendingUp, Loader2, RefreshCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
+
+const TABS = [
+  { key: 'employee', label: 'Employee Performance', icon: Users },
+  { key: 'customer', label: 'Customer Analytics', icon: BarChart3 },
+  { key: 'profit', label: 'Profit & Loss', icon: TrendingUp },
+] as const;
+
+const fmt = (n: number) => `Rp ${(n || 0).toLocaleString('id-ID')}`;
+const fmtPct = (n: number) => `${(n || 0).toFixed(1)}%`;
 
 export default function AdvancedReportsPage() {
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'employee' | 'customer' | 'profit'>('employee');
   const [dateRange, setDateRange] = useState({
-    startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    startDate: new Date(Date.now() - 30 * 86400000).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
   });
   const [employeeData, setEmployeeData] = useState<any[]>([]);
   const [customerData, setCustomerData] = useState<any>(null);
   const [profitData, setProfitData] = useState<any>(null);
 
-  const loadEmployeeReport = async () => {
+  const generate = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const data = await advancedReportsService.getEmployeePerformance(dateRange);
-      setEmployeeData(data);
-    } catch (error: any) {
-      console.error('Failed to load report:', error);
-      toast.error('Failed to load employee report');
+      if (activeTab === 'employee') {
+        const data = await advancedReportsService.getEmployeePerformance(dateRange);
+        setEmployeeData(Array.isArray(data) ? data : []);
+      } else if (activeTab === 'customer') {
+        const data = await advancedReportsService.getCustomerAnalytics(dateRange);
+        setCustomerData(data);
+      } else {
+        const data = await advancedReportsService.getProfitLoss(dateRange);
+        setProfitData(data);
+      }
+    } catch {
+      toast.error('Failed to generate report');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadCustomerReport = async () => {
-    try {
-      setLoading(true);
-      const data = await advancedReportsService.getCustomerAnalytics(dateRange);
-      setCustomerData(data);
-    } catch (error: any) {
-      console.error('Failed to load report:', error);
-      toast.error('Failed to load customer report');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadProfitReport = async () => {
-    try {
-      setLoading(true);
-      const data = await advancedReportsService.getProfitLoss(dateRange);
-      setProfitData(data);
-    } catch (error: any) {
-      console.error('Failed to load report:', error);
-      toast.error('Failed to load profit & loss report');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGenerateReport = () => {
-    switch (activeTab) {
-      case 'employee':
-        loadEmployeeReport();
-        break;
-      case 'customer':
-        loadCustomerReport();
-        break;
-      case 'profit':
-        loadProfitReport();
-        break;
-    }
-  };
-
-  const handleExport = async () => {
-    try {
-      const blob = await advancedReportsService.exportReport(activeTab, dateRange);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${activeTab}-report-${dateRange.startDate}-${dateRange.endDate}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      toast.success('Report exported');
-    } catch (error: any) {
-      console.error('Failed to export:', error);
-      toast.error('Failed to export report');
     }
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Advanced Reports</h1>
-        <p className="text-gray-600 mt-1">Detailed analytics and insights</p>
+    <div>
+      <div style={{ marginBottom: 'var(--space-xl)' }}>
+        <h1 style={{ fontSize: '1.75rem', marginBottom: 'var(--space-xs)' }}>Advanced Reports</h1>
+        <p style={{ color: 'var(--text-secondary)' }}>Detailed analytics and business insights</p>
       </div>
 
       {/* Tabs */}
-      <div className="bg-white rounded-lg shadow-md">
-        <div className="border-b border-gray-200">
-          <nav className="flex -mb-px">
-            <button
-              onClick={() => setActiveTab('employee')}
-              className={`px-6 py-4 text-sm font-medium border-b-2 ${
-                activeTab === 'employee'
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <Users className="w-4 h-4 inline mr-2" />
-              Employee Performance
+      <div className="glass-panel" style={{ padding: 0, marginBottom: 'var(--space-lg)' }}>
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--border-subtle)' }}>
+          {TABS.map(({ key, label, icon: Icon }) => (
+            <button key={key} onClick={() => setActiveTab(key)} style={{
+              flex: 1, padding: 'var(--space-md)', background: activeTab === key ? 'rgba(99,102,241,0.1)' : 'transparent',
+              border: 'none', borderBottom: activeTab === key ? '2px solid var(--primary)' : '2px solid transparent',
+              color: activeTab === key ? 'var(--primary)' : 'var(--text-secondary)', cursor: 'pointer', fontWeight: 500,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            }}>
+              <Icon size={16} /> {label}
             </button>
-            <button
-              onClick={() => setActiveTab('customer')}
-              className={`px-6 py-4 text-sm font-medium border-b-2 ${
-                activeTab === 'customer'
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <BarChart3 className="w-4 h-4 inline mr-2" />
-              Customer Analytics
-            </button>
-            <button
-              onClick={() => setActiveTab('profit')}
-              className={`px-6 py-4 text-sm font-medium border-b-2 ${
-                activeTab === 'profit'
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <TrendingUp className="w-4 h-4 inline mr-2" />
-              Profit & Loss
-            </button>
-          </nav>
+          ))}
         </div>
 
-        {/* Date Range & Actions */}
-        <div className="p-6 border-b border-gray-200">
-          <div className="flex flex-col md:flex-row gap-4 items-end">
-            <div className="flex-1 grid md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Start Date
-                </label>
-                <input
-                  type="date"
-                  value={dateRange.startDate}
-                  onChange={(e) => setDateRange({ ...dateRange, startDate: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  End Date
-                </label>
-                <input
-                  type="date"
-                  value={dateRange.endDate}
-                  onChange={(e) => setDateRange({ ...dateRange, endDate: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={handleGenerateReport}
-                disabled={loading}
-                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
-              >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calendar className="w-4 h-4" />}
-                Generate
-              </button>
-              <button
-                onClick={handleExport}
-                className="px-6 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
-              >
-                <Download className="w-4 h-4" />
-                Export
-              </button>
-            </div>
+        {/* Date Range */}
+        <div style={{ padding: 'var(--space-lg)', borderBottom: '1px solid var(--border-subtle)', display: 'flex', gap: 'var(--space-md)', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <div className="form-group" style={{ margin: 0 }}>
+            <label className="form-label">Start Date</label>
+            <input type="date" className="form-input" value={dateRange.startDate} onChange={e => setDateRange(p => ({ ...p, startDate: e.target.value }))} />
           </div>
+          <div className="form-group" style={{ margin: 0 }}>
+            <label className="form-label">End Date</label>
+            <input type="date" className="form-input" value={dateRange.endDate} onChange={e => setDateRange(p => ({ ...p, endDate: e.target.value }))} />
+          </div>
+          <button onClick={generate} disabled={loading} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {loading ? <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCcw size={16} />}
+            Generate
+          </button>
         </div>
 
-        {/* Report Content */}
-        <div className="p-6">
+        {/* Content */}
+        <div style={{ padding: 'var(--space-lg)' }}>
           {loading ? (
-            <div className="flex items-center justify-center h-64">
-              <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+              <Loader2 size={40} style={{ animation: 'spin 1s linear infinite', color: 'var(--primary)' }} />
             </div>
           ) : (
             <>
-              {activeTab === 'employee' && (
-                <EmployeePerformanceReport data={employeeData} />
-              )}
-              {activeTab === 'customer' && (
-                <CustomerAnalyticsReport data={customerData} />
-              )}
-              {activeTab === 'profit' && (
-                <ProfitLossReport data={profitData} />
-              )}
+              {activeTab === 'employee' && <EmployeeTab data={employeeData} />}
+              {activeTab === 'customer' && <CustomerTab data={customerData} />}
+              {activeTab === 'profit' && <ProfitTab data={profitData} />}
             </>
           )}
         </div>
       </div>
+      <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { 100% { transform: rotate(360deg); } }` }} />
     </div>
   );
 }
 
-function EmployeePerformanceReport({ data }: { data: any[] }) {
-  if (!data || data.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-        <p className="text-gray-600">No employee data available. Generate a report to see results.</p>
-      </div>
-    );
-  }
-
+function EmployeeTab({ data }: { data: any[] }) {
+  if (!data.length) return <EmptyState icon={Users} message="Click Generate to load employee performance data." />;
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
-          <tr>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Employee</th>
-            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Sales</th>
-            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Transactions</th>
-            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Avg Transaction</th>
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+            {['Employee', 'Total Sales', 'Transactions', 'Avg Transaction', 'Work Hours', 'Sales/Hour'].map(h => (
+              <th key={h} style={{ padding: 'var(--space-sm) var(--space-md)', textAlign: h === 'Employee' ? 'left' : 'right', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>{h}</th>
+            ))}
           </tr>
         </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
-          {data.map((employee, index) => (
-            <tr key={index}>
-              <td className="px-6 py-4 whitespace-nowrap">
-                <div className="text-sm font-medium text-gray-900">{employee.employeeName}</div>
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap text-right">
-                <div className="text-sm text-gray-900">Rp {employee.totalSales?.toLocaleString() || 0}</div>
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap text-right">
-                <div className="text-sm text-gray-900">{employee.totalTransactions || 0}</div>
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap text-right">
-                <div className="text-sm text-gray-900">Rp {employee.averageTransactionValue?.toLocaleString() || 0}</div>
-              </td>
+        <tbody>
+          {data.map((e, i) => (
+            <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+              <td style={{ padding: 'var(--space-md)', fontWeight: 600 }}>{e.employeeName}</td>
+              <td style={{ padding: 'var(--space-md)', textAlign: 'right', color: 'var(--success)', fontWeight: 600 }}>{fmt(e.totalSales)}</td>
+              <td style={{ padding: 'var(--space-md)', textAlign: 'right' }}>{e.totalTransactions}</td>
+              <td style={{ padding: 'var(--space-md)', textAlign: 'right' }}>{fmt(e.averageTransactionValue)}</td>
+              <td style={{ padding: 'var(--space-md)', textAlign: 'right', color: 'var(--text-secondary)' }}>{(e.totalWorkHours || 0).toFixed(1)}h</td>
+              <td style={{ padding: 'var(--space-md)', textAlign: 'right', color: 'var(--text-secondary)' }}>{fmt(e.salesPerHour || 0)}</td>
             </tr>
           ))}
         </tbody>
@@ -250,57 +132,61 @@ function EmployeePerformanceReport({ data }: { data: any[] }) {
   );
 }
 
-function CustomerAnalyticsReport({ data }: { data: any }) {
-  if (!data) {
-    return (
-      <div className="text-center py-12">
-        <BarChart3 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-        <p className="text-gray-600">No customer data available. Generate a report to see results.</p>
-      </div>
-    );
-  }
+function CustomerTab({ data }: { data: any }) {
+  if (!data) return <EmptyState icon={BarChart3} message="Click Generate to load customer analytics." />;
+  const tierEntries = data.customersByTier
+    ? (Array.isArray(data.customersByTier)
+        ? data.customersByTier
+        : Object.entries(data.customersByTier).map(([tier, count]) => ({ tier, count })))
+    : [];
 
   return (
-    <div className="space-y-6">
-      <div className="grid md:grid-cols-3 gap-6">
-        <div className="bg-indigo-50 rounded-lg p-6">
-          <p className="text-sm text-indigo-600 font-medium">Total Customers</p>
-          <p className="text-3xl font-bold text-indigo-900 mt-2">{data.totalCustomers || 0}</p>
-        </div>
-        <div className="bg-green-50 rounded-lg p-6">
-          <p className="text-sm text-green-600 font-medium">New Customers</p>
-          <p className="text-3xl font-bold text-green-900 mt-2">{data.newCustomers || 0}</p>
-        </div>
-        <div className="bg-blue-50 rounded-lg p-6">
-          <p className="text-sm text-blue-600 font-medium">Returning Customers</p>
-          <p className="text-3xl font-bold text-blue-900 mt-2">{data.returningCustomers || 0}</p>
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-lg)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 'var(--space-md)' }}>
+        {[
+          ['Total Customers', data.totalCustomers, 'var(--primary)'],
+          ['New Customers', data.newCustomers, 'var(--success)'],
+          ['Returning', data.returningCustomers, '#3b82f6'],
+          ['Retention Rate', fmtPct(data.retentionRate), '#f59e0b'],
+        ].map(([label, value, color]: any) => (
+          <div key={label} className="glass-panel" style={{ padding: 'var(--space-lg)', borderLeft: `3px solid ${color}` }}>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginBottom: 4 }}>{label}</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 700, color }}>{value}</div>
+          </div>
+        ))}
       </div>
 
-      {data.topCustomers && data.topCustomers.length > 0 && (
+      {tierEntries.length > 0 && (
         <div>
-          <h3 className="text-lg font-semibold mb-4">Top Customers</h3>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Customer</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Total Spent</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Visits</th>
+          <div style={{ fontWeight: 600, marginBottom: 'var(--space-sm)' }}>By Tier</div>
+          <div style={{ display: 'flex', gap: 'var(--space-sm)', flexWrap: 'wrap' }}>
+            {tierEntries.map((t: any) => (
+              <span key={t.tier} style={{ padding: '4px 12px', borderRadius: 10, background: 'var(--bg-tertiary)', fontSize: '0.85rem' }}>
+                {t.tier}: <strong>{t.count}</strong>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {data.topCustomers?.length > 0 && (
+        <div>
+          <div style={{ fontWeight: 600, marginBottom: 'var(--space-sm)' }}>Top Customers</div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                  {['Customer', 'Total Spent', 'Orders'].map(h => (
+                    <th key={h} style={{ padding: 'var(--space-sm) var(--space-md)', textAlign: h === 'Customer' ? 'left' : 'right', fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-tertiary)' }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {data.topCustomers.map((customer: any, index: number) => (
-                  <tr key={index}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{customer.customerName}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <div className="text-sm text-gray-900">Rp {customer.totalSpent?.toLocaleString() || 0}</div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <div className="text-sm text-gray-900">{customer.visitCount || 0}</div>
-                    </td>
+              <tbody>
+                {data.topCustomers.map((c: any, i: number) => (
+                  <tr key={i} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                    <td style={{ padding: 'var(--space-sm) var(--space-md)', fontWeight: 600 }}>{c.customerName}</td>
+                    <td style={{ padding: 'var(--space-sm) var(--space-md)', textAlign: 'right', color: 'var(--success)' }}>{fmt(c.totalSpent)}</td>
+                    <td style={{ padding: 'var(--space-sm) var(--space-md)', textAlign: 'right' }}>{c.totalOrders || c.visitCount || '-'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -312,61 +198,38 @@ function CustomerAnalyticsReport({ data }: { data: any }) {
   );
 }
 
-function ProfitLossReport({ data }: { data: any }) {
-  if (!data) {
-    return (
-      <div className="text-center py-12">
-        <TrendingUp className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-        <p className="text-gray-600">No profit & loss data available. Generate a report to see results.</p>
-      </div>
-    );
-  }
-
+function ProfitTab({ data }: { data: any }) {
+  if (!data) return <EmptyState icon={TrendingUp} message="Click Generate to load profit & loss data." />;
+  const rows = [
+    ['Revenue', data.revenue, 'var(--success)', true],
+    ['Cost of Goods Sold', -(data.cogs || 0), 'var(--danger)', false],
+    ['Gross Profit', data.grossProfit, data.grossProfit >= 0 ? 'var(--success)' : 'var(--danger)', true],
+    ['Operating Expenses', -(data.expenses || 0), 'var(--danger)', false],
+    ['Net Profit', data.netProfit, data.netProfit >= 0 ? 'var(--success)' : 'var(--danger)', true],
+  ];
   return (
-    <div className="space-y-6">
-      <div className="bg-white border border-gray-200 rounded-lg p-6">
-        <div className="space-y-4">
-          <div className="flex justify-between items-center pb-4 border-b">
-            <span className="text-lg font-semibold text-gray-900">Revenue</span>
-            <span className="text-lg font-bold text-green-600">
-              Rp {data.revenue?.toLocaleString() || 0}
-            </span>
+    <div style={{ maxWidth: 500 }}>
+      <div className="glass-panel" style={{ padding: 'var(--space-lg)' }}>
+        {rows.map(([label, value, color, bold]: any, i) => (
+          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: 'var(--space-sm) 0', borderBottom: bold ? '1px solid var(--border-subtle)' : 'none', marginBottom: bold ? 'var(--space-sm)' : 0 }}>
+            <span style={{ fontWeight: bold ? 700 : 400, color: bold ? 'var(--text-primary)' : 'var(--text-secondary)' }}>{label}</span>
+            <span style={{ fontWeight: bold ? 700 : 500, color }}>{fmt(Math.abs(value))}</span>
           </div>
-          
-          <div className="flex justify-between items-center">
-            <span className="text-gray-600">Cost of Goods Sold (COGS)</span>
-            <span className="text-gray-900">Rp {data.cogs?.toLocaleString() || 0}</span>
-          </div>
-          
-          <div className="flex justify-between items-center pb-4 border-b">
-            <span className="font-semibold text-gray-900">Gross Profit</span>
-            <span className="font-bold text-gray-900">
-              Rp {data.grossProfit?.toLocaleString() || 0}
-            </span>
-          </div>
-          
-          <div className="flex justify-between items-center">
-            <span className="text-gray-600">Operating Expenses</span>
-            <span className="text-gray-900">Rp {data.expenses?.toLocaleString() || 0}</span>
-          </div>
-          
-          <div className="flex justify-between items-center pt-4 border-t-2 border-gray-300">
-            <span className="text-xl font-bold text-gray-900">Net Profit</span>
-            <span className={`text-xl font-bold ${
-              (data.netProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'
-            }`}>
-              Rp {data.netProfit?.toLocaleString() || 0}
-            </span>
-          </div>
-          
-          <div className="flex justify-between items-center pt-2">
-            <span className="text-sm text-gray-600">Profit Margin</span>
-            <span className="text-sm font-semibold text-gray-900">
-              {data.profitMargin?.toFixed(2) || 0}%
-            </span>
-          </div>
+        ))}
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'var(--space-sm)', fontSize: '0.9rem', color: 'var(--text-tertiary)' }}>
+          <span>Profit Margin</span>
+          <span style={{ fontWeight: 600 }}>{fmtPct(data.profitMargin)}</span>
         </div>
       </div>
+    </div>
+  );
+}
+
+function EmptyState({ icon: Icon, message }: { icon: any; message: string }) {
+  return (
+    <div style={{ textAlign: 'center', padding: 'var(--space-2xl)', color: 'var(--text-tertiary)' }}>
+      <Icon size={48} style={{ margin: '0 auto var(--space-md)' }} />
+      <p style={{ color: 'var(--text-secondary)' }}>{message}</p>
     </div>
   );
 }

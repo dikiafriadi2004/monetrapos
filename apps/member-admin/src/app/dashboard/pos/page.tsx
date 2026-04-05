@@ -1,7 +1,7 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
-import { ShoppingCart, Receipt, AlertCircle, Scan, Tag, CreditCard } from 'lucide-react';
+import { ShoppingCart, Receipt, AlertCircle, Scan, Tag, CreditCard, UtensilsCrossed } from 'lucide-react';
 import ProductSearch from '@/components/pos/ProductSearch';
 import Cart from '@/components/pos/Cart';
 import CustomerSelect from '@/components/pos/CustomerSelect';
@@ -18,10 +18,26 @@ import { customerService } from '@/services/customer.service';
 import { paymentMethodService } from '@/services/payment-method.service';
 import { useAuth } from '@/contexts/AuthContext';
 import { PaymentMethod } from '@/types/payment-method.types';
+import toast from 'react-hot-toast';
+import apiClient from '@/lib/api-client';
+
+const ORDER_TYPES = [
+  { value: 'dine-in',  label: 'Dine-in',  emoji: '🪑' },
+  { value: 'takeaway', label: 'Takeaway', emoji: '🥡' },
+  { value: 'delivery', label: 'Delivery', emoji: '🛵' },
+];
 
 export default function POSPage() {
   const { company, user } = useAuth();
-  const storeId = company?.id; // Use company ID as store ID
+  const businessType = (company as any)?.businessType || 'retail';
+  const isFnB = businessType === 'fnb';
+
+  const [selectedStoreId, setSelectedStoreId] = useState<string>('');
+  const [stores, setStores] = useState<any[]>([]);
+  const storeId = selectedStoreId;
+  const [orderType, setOrderType] = useState<string>('dine-in'); // untuk FnB
+  const [selectedTableId, setSelectedTableId] = useState<string>(''); // untuk FnB dine-in
+  const [tables, setTables] = useState<any[]>([]);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -44,8 +60,8 @@ export default function POSPage() {
     timestamp: Date;
   }>>([]);
 
-  // Tax and discount
-  const taxRate = 0.11; // 11% PPN
+  // Tax and discount — fetched from company settings, fallback 11%
+  const [taxRate, setTaxRate] = useState(0.11);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [discountInfo, setDiscountInfo] = useState<{
     type: 'percentage' | 'fixed';
@@ -53,12 +69,29 @@ export default function POSPage() {
   } | null>(null);
 
   useEffect(() => {
+    // Load stores first
+    import('@/services/stores.service').then(({ storesService }) => {
+      storesService.getAll({ isActive: 'true' }).then((res: any) => {
+        const list = Array.isArray(res) ? res : (res?.data || []);
+        setStores(list);
+        if (list.length > 0 && !selectedStoreId) {
+          setSelectedStoreId(list[0].id);
+        }
+      }).catch(console.error);
+    });
+  }, []);
+
+  useEffect(() => {
     if (storeId) {
+      setActiveShift(null); // reset shift saat store berubah
       checkActiveShift(storeId);
       fetchPaymentMethods();
+      fetchTaxRate();
+      if (isFnB) fetchTables(storeId);
     }
+  }, [storeId]); // eslint-disable-line
 
-    // Keyboard shortcuts
+  useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       // F2 - Barcode Scanner
       if (e.key === 'F2') {
@@ -75,7 +108,6 @@ export default function POSPage() {
       // F4 - Customer
       if (e.key === 'F4') {
         e.preventDefault();
-        // Open customer select (implement in CustomerSelect component)
       }
       // F12 - Checkout
       if (e.key === 'F12') {
@@ -95,14 +127,14 @@ export default function POSPage() {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [cartItems, storeId]);
+  }, [cartItems]);
 
   const checkActiveShift = async (storeId: string) => {
     try {
       const shift = await shiftService.getActiveShift(storeId);
       setActiveShift(shift);
       if (!shift) {
-        alert('No active shift. Please open a shift first.');
+        toast.error('No active shift. Please open a shift first.');
       }
     } catch (error) {
       console.error('Failed to check active shift:', error);
@@ -118,31 +150,50 @@ export default function POSPage() {
     }
   };
 
-  const handleAddProduct = (product: Product) => {
+  const fetchTaxRate = async () => {
+    try {
+      const res = await apiClient.get('/companies/settings');
+      const rate = res.data?.taxSettings?.defaultTaxRate;
+      if (typeof rate === 'number' && rate >= 0) {
+        setTaxRate(rate / 100); // API returns percentage (e.g. 11), convert to decimal
+      }
+    } catch {
+      // silently fallback to default 11%
+    }
+  };
+
+  const fetchTables = async (sid: string) => {
+    try {
+      const res = await apiClient.get('/fnb/tables', { params: { store_id: sid, status: 'available' } });
+      const list = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+      setTables(list);
+    } catch {
+      setTables([]);
+    }
+  };
+
+  const handleAddProduct = (product: Product, variant?: { id: string; name: string; priceAdjustment: number }) => {
+    // Unique key: product + variant combo
+    const itemKey = variant ? `${product.id}__${variant.id}` : product.id;
     const existingIndex = cartItems.findIndex(
-      (item) => item.product.id === product.id
+      (item) => (item as any).itemKey === itemKey
     );
 
     if (existingIndex >= 0) {
-      // Update quantity
       const newItems = [...cartItems];
       const newQuantity = newItems[existingIndex].quantity + 1;
-      
       if (newQuantity > product.stock) {
-        alert(`Insufficient stock. Available: ${product.stock}`);
+        toast.error(`Stok tidak cukup. Tersedia: ${product.stock}`);
         return;
       }
-
       newItems[existingIndex].quantity = newQuantity;
       newItems[existingIndex].subtotal = newQuantity * product.price;
       setCartItems(newItems);
     } else {
-      // Add new item
       if (product.stock < 1) {
-        alert('Product out of stock');
+        toast.error('Stok habis');
         return;
       }
-
       setCartItems([
         ...cartItems,
         {
@@ -150,7 +201,10 @@ export default function POSPage() {
           quantity: 1,
           price: product.price,
           subtotal: product.price,
-        },
+          variantName: variant?.name,
+          variantId: variant?.id,
+          itemKey,
+        } as any,
       ]);
     }
   };
@@ -162,7 +216,7 @@ export default function POSPage() {
     const item = newItems[index];
 
     if (quantity > item.product.stock) {
-      alert(`Insufficient stock. Available: ${item.product.stock}`);
+      toast.error(`Insufficient stock. Available: ${item.product.stock}`);
       return;
     }
 
@@ -203,7 +257,7 @@ export default function POSPage() {
 
   const handleHoldTransaction = () => {
     if (cartItems.length === 0) {
-      alert('Cart is empty');
+      toast.error('Cart is empty');
       return;
     }
 
@@ -221,7 +275,7 @@ export default function POSPage() {
     setSelectedCustomer(null);
     setDiscountAmount(0);
     setDiscountInfo(null);
-    alert('Transaction held successfully');
+    toast.success('Transaction held successfully');
   };
 
   const handleResumeTransaction = (heldTransaction: any) => {
@@ -242,12 +296,12 @@ export default function POSPage() {
 
   const handlePayment = async (paymentMethod: PaymentMethodType, paidAmount: number) => {
     if (!activeShift) {
-      alert('No active shift. Please open a shift first.');
+      toast.error('No active shift. Please open a shift first.');
       return;
     }
 
     if (cartItems.length === 0) {
-      alert('Cart is empty');
+      toast.error('Cart is empty');
       return;
     }
 
@@ -271,12 +325,17 @@ export default function POSPage() {
         customerId: selectedCustomer?.id,
         employeeId: user?.id,
         employeeName: `${user?.firstName} ${user?.lastName}`,
-        items: cartItems.map((item) => ({
+        shiftId: activeShift?.id,
+        ...(isFnB && { orderType }),
+        ...(isFnB && orderType === 'dine-in' && selectedTableId && { tableId: selectedTableId }),
+        items: cartItems.map((item: any) => ({
           productId: item.product.id,
           productName: item.product.name,
+          variantName: item.variantName,
           quantity: item.quantity,
-          price: item.price,
+          unitPrice: item.price,
           subtotal: item.subtotal,
+          discountAmount: 0,
         })),
       });
 
@@ -319,7 +378,7 @@ export default function POSPage() {
       setIsReceiptPreviewOpen(true);
     } catch (error: any) {
       console.error('Transaction failed:', error);
-      alert(error.response?.data?.message || 'Transaction failed. Please try again.');
+      toast.error(error.response?.data?.message || 'Transaction failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -329,10 +388,10 @@ export default function POSPage() {
 
   if (!storeId) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <AlertCircle size={48} className="mx-auto text-gray-400 mb-4" />
-          <p className="text-gray-600">Loading...</p>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+        <div style={{ textAlign: 'center' }}>
+          <AlertCircle size={48} style={{ margin: '0 auto 16px', color: 'var(--text-tertiary)' }} />
+          <p style={{ color: 'var(--text-secondary)' }}>Loading...</p>
         </div>
       </div>
     );
@@ -340,15 +399,12 @@ export default function POSPage() {
 
   if (!activeShift) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <AlertCircle size={48} className="mx-auto text-red-400 mb-4" />
-          <p className="text-gray-900 font-semibold mb-2">No Active Shift</p>
-          <p className="text-gray-600 mb-4">Please open a shift to start selling</p>
-          <button
-            onClick={() => (window.location.href = '/dashboard/shifts')}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+        <div style={{ textAlign: 'center' }}>
+          <AlertCircle size={48} style={{ margin: '0 auto 16px', color: 'var(--danger)' }} />
+          <p style={{ fontWeight: 600, marginBottom: 8 }}>No Active Shift</p>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>Please open a shift to start selling</p>
+          <button onClick={() => (window.location.href = '/dashboard/shifts')} className="btn btn-primary">
             Go to Shifts
           </button>
         </div>
@@ -357,101 +413,126 @@ export default function POSPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-primary)' }}>
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <ShoppingCart size={24} className="text-blue-600" />
-            <h1 className="text-2xl font-bold text-gray-900">POS Terminal</h1>
+      <div style={{ background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)', padding: '12px 24px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <ShoppingCart size={24} style={{ color: 'var(--accent-base)' }} />
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>POS Terminal</h1>
+            {stores.length > 1 && (
+              <select
+                value={selectedStoreId}
+                onChange={e => { setSelectedStoreId(e.target.value); setActiveShift(null); }}
+                style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', fontSize: '0.875rem' }}
+              >
+                {stores.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            )}
+            {/* Order Type Selector - hanya untuk FnB */}
+            {isFnB && (
+              <div style={{ display: 'flex', gap: 4, background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)', padding: 4 }}>
+                {ORDER_TYPES.map(t => (
+                  <button
+                    key={t.value}
+                    onClick={() => { setOrderType(t.value); setSelectedTableId(''); }}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontSize: '0.8rem',
+                      fontWeight: orderType === t.value ? 700 : 400,
+                      background: orderType === t.value ? 'var(--accent-base)' : 'transparent',
+                      color: orderType === t.value ? 'white' : 'var(--text-secondary)',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    {t.emoji} {t.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {/* Table Selector - hanya untuk FnB dine-in */}
+            {isFnB && orderType === 'dine-in' && (
+              <select
+                value={selectedTableId}
+                onChange={e => setSelectedTableId(e.target.value)}
+                style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', fontSize: '0.875rem', minWidth: 140 }}
+              >
+                <option value="">🪑 Pilih Meja</option>
+                {tables.map((t: any) => (
+                  <option key={t.id} value={t.id}>
+                    Meja {t.table_number}{t.section ? ` (${t.section})` : ''}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
-          <div className="flex items-center space-x-4">
-            <div className="text-sm text-gray-600">
-              Shift: <span className="font-medium text-gray-900">#{activeShift.id.slice(0, 8)}</span>
-            </div>
+          <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+            Shift: <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>#{activeShift.id.slice(0, 8)}</span>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left Side - Product Search & Selection */}
-        <div className="flex-1 p-6 overflow-y-auto">
-          <div className="max-w-4xl mx-auto space-y-6">
+      <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+        {/* Left Side */}
+        <div style={{ flex: 1, padding: 24, overflowY: 'auto' }}>
+          <div style={{ maxWidth: 800, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 24 }}>
             {/* Product Search */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Search Product
-              </label>
+              <label className="form-label">Search Product</label>
               <ProductSearch storeId={storeId} onSelectProduct={handleAddProduct} />
             </div>
 
             {/* Customer Selection */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Customer (Optional)
-              </label>
-              <CustomerSelect
-                storeId={storeId}
-                selectedCustomer={selectedCustomer}
-                onSelectCustomer={setSelectedCustomer}
-              />
+              <label className="form-label">Customer (Optional)</label>
+              <CustomerSelect storeId={storeId} selectedCustomer={selectedCustomer} onSelectCustomer={setSelectedCustomer} />
             </div>
 
             {/* Quick Actions */}
-            <div className="grid grid-cols-3 gap-4">
-              <button
-                onClick={() => setIsBarcodeScannerOpen(true)}
-                className="p-4 border-2 border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-colors"
-              >
-                <Scan size={24} className="mx-auto mb-2 text-gray-600" />
-                <div className="text-sm font-medium text-gray-700">Scan Barcode</div>
-                <div className="text-xs text-gray-500 mt-1">Press F2</div>
-              </button>
-              <button
-                onClick={() => cartItems.length > 0 && setIsDiscountModalOpen(true)}
-                disabled={cartItems.length === 0}
-                className="p-4 border-2 border-gray-200 rounded-lg hover:border-green-300 hover:bg-green-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Tag size={24} className="mx-auto mb-2 text-gray-600" />
-                <div className="text-sm font-medium text-gray-700">Apply Discount</div>
-                <div className="text-xs text-gray-500 mt-1">Press F3</div>
-              </button>
-              <button
-                onClick={handleHoldTransaction}
-                disabled={cartItems.length === 0}
-                className="p-4 border-2 border-gray-200 rounded-lg hover:border-yellow-300 hover:bg-yellow-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Receipt size={24} className="mx-auto mb-2 text-gray-600" />
-                <div className="text-sm font-medium text-gray-700">Hold Transaction</div>
-                <div className="text-xs text-gray-500 mt-1">Press F5</div>
-              </button>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+              {[
+                { icon: Scan, label: 'Scan Barcode', shortcut: 'F2', onClick: () => setIsBarcodeScannerOpen(true), disabled: false, color: 'var(--accent-base)' },
+                { icon: Tag, label: 'Apply Discount', shortcut: 'F3', onClick: () => cartItems.length > 0 && setIsDiscountModalOpen(true), disabled: cartItems.length === 0, color: 'var(--success)' },
+                { icon: Receipt, label: 'Hold Transaction', shortcut: 'F5', onClick: handleHoldTransaction, disabled: cartItems.length === 0, color: 'var(--warning)' },
+              ].map(({ icon: Icon, label, shortcut, onClick, disabled, color }) => (
+                <button key={label} onClick={onClick} disabled={disabled} style={{
+                  padding: 16, border: '2px solid var(--border-color)', borderRadius: 'var(--radius-md)',
+                  background: 'var(--bg-secondary)', cursor: disabled ? 'not-allowed' : 'pointer',
+                  opacity: disabled ? 0.5 : 1, transition: 'all var(--transition-fast)', textAlign: 'center',
+                }}>
+                  <Icon size={24} style={{ margin: '0 auto 8px', color }} />
+                  <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>{label}</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: 4 }}>Press {shortcut}</div>
+                </button>
+              ))}
             </div>
 
             {/* Held Transactions */}
             {heldTransactions.length > 0 && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <div className="text-sm font-medium text-yellow-900 mb-2">
+              <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 'var(--radius-md)', padding: 16 }}>
+                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--warning)', marginBottom: 8 }}>
                   Held Transactions ({heldTransactions.length})
                 </div>
-                <div className="space-y-2">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {heldTransactions.map((held) => (
-                    <button
-                      key={held.id}
-                      onClick={() => handleResumeTransaction(held)}
-                      className="w-full p-3 bg-white border border-yellow-200 rounded-lg hover:bg-yellow-50 transition-colors text-left"
-                    >
-                      <div className="flex justify-between items-center">
+                    <button key={held.id} onClick={() => handleResumeTransaction(held)} style={{
+                      width: '100%', padding: 12, background: 'var(--bg-secondary)', border: '1px solid rgba(245,158,11,0.3)',
+                      borderRadius: 'var(--radius-sm)', cursor: 'pointer', textAlign: 'left',
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {held.items.length} items
-                            {held.customer && ` - ${held.customer.name}`}
+                          <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>
+                            {held.items.length} items{held.customer && ` — ${held.customer.name}`}
                           </div>
-                          <div className="text-xs text-gray-500">
-                            {new Date(held.timestamp).toLocaleTimeString('id-ID')}
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+                            {new Date(held.timestamp).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' })}
                           </div>
                         </div>
-                        <div className="text-sm font-semibold text-gray-900">
+                        <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>
                           Rp {held.items.reduce((sum, item) => sum + item.subtotal, 0).toLocaleString('id-ID')}
                         </div>
                       </div>
@@ -463,20 +544,17 @@ export default function POSPage() {
 
             {/* Discount Info */}
             {discountInfo && (
-              <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                <div className="flex items-center justify-between">
+              <div style={{ padding: 16, background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 'var(--radius-md)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>
-                    <div className="text-sm font-medium text-green-900">
-                      Discount Applied: {discountInfo.type === 'percentage' ? `${discountInfo.value}%` : `Rp ${discountInfo.value.toLocaleString('id-ID')}`}
+                    <div style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--success)' }}>
+                      Discount: {discountInfo.type === 'percentage' ? `${discountInfo.value}%` : `Rp ${discountInfo.value.toLocaleString('id-ID')}`}
                     </div>
-                    <div className="text-xs text-green-700 mt-1">
-                      Discount Amount: Rp {discountAmount.toLocaleString('id-ID')}
+                    <div style={{ fontSize: '0.75rem', color: 'var(--success)', marginTop: 4 }}>
+                      Saving: Rp {discountAmount.toLocaleString('id-ID')}
                     </div>
                   </div>
-                  <button
-                    onClick={handleRemoveDiscount}
-                    className="text-green-600 hover:text-green-800"
-                  >
+                  <button onClick={handleRemoveDiscount} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '0.875rem' }}>
                     Remove
                   </button>
                 </div>
@@ -485,9 +563,9 @@ export default function POSPage() {
           </div>
         </div>
 
-        {/* Right Side - Cart & Checkout */}
-        <div className="w-96 bg-white border-l border-gray-200 flex flex-col">
-          <div className="flex-1 p-6 overflow-hidden flex flex-col">
+        {/* Right Side - Cart */}
+        <div style={{ width: 384, background: 'var(--bg-secondary)', borderLeft: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ flex: 1, padding: 24, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             <Cart
               items={cartItems}
               onUpdateQuantity={handleUpdateQuantity}
@@ -499,24 +577,14 @@ export default function POSPage() {
               total={total}
             />
           </div>
-
-          {/* Checkout Button */}
-          <div className="p-6 border-t border-gray-200 space-y-2">
-            <button
-              onClick={() => setIsPaymentModalOpen(true)}
-              disabled={cartItems.length === 0 || loading}
-              className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold text-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-            >
-              <Receipt size={24} />
-              <span>Checkout</span>
+          <div style={{ padding: 24, borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <button onClick={() => setIsPaymentModalOpen(true)} disabled={cartItems.length === 0 || loading}
+              className="btn btn-primary" style={{ width: '100%', padding: '14px', fontSize: '1.1rem', justifyContent: 'center', gap: 8 }}>
+              <Receipt size={22} /> Checkout (F12)
             </button>
-            <button
-              onClick={() => setIsSplitPaymentModalOpen(true)}
-              disabled={cartItems.length === 0 || loading}
-              className="w-full py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center space-x-2"
-            >
-              <CreditCard size={20} />
-              <span>Split Payment</span>
+            <button onClick={() => setIsSplitPaymentModalOpen(true)} disabled={cartItems.length === 0 || loading}
+              className="btn btn-outline" style={{ width: '100%', padding: '10px', justifyContent: 'center', gap: 8 }}>
+              <CreditCard size={18} /> Split Payment
             </button>
           </div>
         </div>
@@ -536,9 +604,66 @@ export default function POSPage() {
         onClose={() => setIsSplitPaymentModalOpen(false)}
         total={total}
         onConfirm={async (payments) => {
-          // Handle split payment - use first payment method for now
-          // In production, you'd send all payment methods to the API
-          await handlePayment(payments[0].method, total);
+          if (!activeShift) { toast.error('No active shift'); return; }
+          if (cartItems.length === 0) { toast.error('Cart is empty'); return; }
+          setLoading(true);
+          try {
+            const { subtotal, tax, total: txTotal } = calculateTotals();
+            const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
+            const changeAmount = totalPaid - txTotal;
+            // Primary method is the first one; all methods sent for record
+            const primaryMethod = payments[0].method;
+            const transaction = await transactionService.createTransaction({
+              storeId: storeId!,
+              paymentMethod: primaryMethod,
+              paymentMethods: payments.map(p => ({ method: p.method, amount: p.amount })),
+              subtotal,
+              taxAmount: tax,
+              discountAmount,
+              total: txTotal,
+              paidAmount: totalPaid,
+              changeAmount,
+              customerName: selectedCustomer?.name,
+              customerId: selectedCustomer?.id,
+              employeeId: user?.id,
+              employeeName: `${user?.firstName} ${user?.lastName}`,
+              shiftId: activeShift?.id,
+              items: cartItems.map((item: any) => ({
+                productId: item.product.id,
+                productName: item.product.name,
+                variantName: item.variantName,
+                quantity: item.quantity,
+                unitPrice: item.price,
+                subtotal: item.subtotal,
+                discountAmount: 0,
+              })),
+            });
+            setLastTransaction({
+              transactionNumber: transaction.transactionNumber,
+              items: cartItems,
+              subtotal,
+              tax,
+              discount: discountAmount,
+              total: txTotal,
+              paidAmount: totalPaid,
+              changeAmount,
+              paymentMethod: `Split (${payments.map(p => p.method).join(', ')})`,
+              customerName: selectedCustomer?.name,
+              employeeName: `${user?.firstName} ${user?.lastName}`,
+            });
+            setCartItems([]);
+            setSelectedCustomer(null);
+            setDiscountAmount(0);
+            setDiscountInfo(null);
+            setIsSplitPaymentModalOpen(false);
+            setIsReceiptPreviewOpen(true);
+            toast.success('Split payment processed');
+          } catch (error: any) {
+            console.error('Split payment failed:', error);
+            toast.error(error?.response?.data?.message || 'Split payment failed');
+          } finally {
+            setLoading(false);
+          }
         }}
       />
 
@@ -573,14 +698,56 @@ export default function POSPage() {
         onClose={() => setIsReceiptPreviewOpen(false)}
         transaction={lastTransaction}
         onPrint={() => {
-          // TODO: Implement print functionality
-          alert('Print functionality coming soon');
+          if (!lastTransaction) return;
+          const printWindow = window.open('', '_blank');
+          if (printWindow) {
+            printWindow.document.write(`
+              <html><head><title>Receipt</title>
+              <style>body{font-family:monospace;max-width:300px;margin:0 auto;padding:20px}
+              .center{text-align:center}.divider{border-top:1px dashed #000;margin:8px 0}
+              .row{display:flex;justify-content:space-between}</style></head>
+              <body>
+              <div class="center"><h3>MonetraPOS</h3></div>
+              <div class="divider"></div>
+              <p>Invoice: ${lastTransaction.transactionNumber}</p>
+              <p>Date: ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}</p>
+              ${lastTransaction.customerName ? `<p>Customer: ${lastTransaction.customerName}</p>` : ''}
+              <div class="divider"></div>
+              ${(lastTransaction.items || []).map((item: any) => `
+                <div class="row"><span>${item.quantity}x ${item.product?.name || item.productName}</span><span>Rp ${item.subtotal?.toLocaleString('id-ID')}</span></div>
+              `).join('')}
+              <div class="divider"></div>
+              <div class="row"><span>Subtotal</span><span>Rp ${lastTransaction.subtotal?.toLocaleString('id-ID')}</span></div>
+              <div class="row"><span>Tax</span><span>Rp ${lastTransaction.tax?.toLocaleString('id-ID')}</span></div>
+              ${lastTransaction.discount ? `<div class="row"><span>Discount</span><span>-Rp ${lastTransaction.discount?.toLocaleString('id-ID')}</span></div>` : ''}
+              <div class="row"><strong>Total</strong><strong>Rp ${lastTransaction.total?.toLocaleString('id-ID')}</strong></div>
+              <div class="row"><span>Paid</span><span>Rp ${lastTransaction.paidAmount?.toLocaleString('id-ID')}</span></div>
+              <div class="row"><span>Change</span><span>Rp ${lastTransaction.changeAmount?.toLocaleString('id-ID')}</span></div>
+              <div class="divider"></div>
+              <div class="center"><p>Thank you!</p></div>
+              </body></html>
+            `);
+            printWindow.document.close();
+            printWindow.print();
+          }
         }}
-        onEmail={() => {
-          // TODO: Implement email functionality
-          alert('Email functionality coming soon');
+        onEmail={async () => {
+          if (!lastTransaction?.customerEmail) {
+            toast.error('No customer email available');
+            return;
+          }
+          try {
+            await import('@/lib/api-client').then(m => m.default.post('/receipts/email', {
+              transactionId: lastTransaction.id,
+              email: lastTransaction.customerEmail,
+            }));
+            toast.success('Receipt sent to ' + lastTransaction.customerEmail);
+          } catch {
+            toast.error('Failed to send receipt email');
+          }
         }}
       />
     </div>
   );
 }
+

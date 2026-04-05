@@ -1,4 +1,4 @@
-import { NestFactory } from '@nestjs/core';
+﻿import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
@@ -6,15 +6,34 @@ import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
+import helmet from 'helmet';
+import { LandingService } from './modules/landing/landing.service';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
+
+  // Set timezone to WIB (UTC+7) for all date operations
+  process.env.TZ = 'Asia/Jakarta';
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // Serve static files (for invoice PDFs)
   app.useStaticAssets(join(process.cwd(), 'uploads'), {
     prefix: '/uploads/',
   });
+
+  // Security headers
+  app.use(helmet({
+    crossOriginEmbedderPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'https:'],
+        scriptSrc: ["'self'"],
+      },
+    },
+  }));
 
   // Global prefix
   app.setGlobalPrefix('api/v1');
@@ -26,6 +45,9 @@ async function bootstrap() {
         'http://localhost:4402',
         'http://localhost:4403',
         'http://localhost:4404',
+        'http://10.1.2.254:4402',
+        'http://10.1.2.254:4403',
+        'http://10.1.2.254:4404',
       ];
 
   app.enableCors({
@@ -45,7 +67,7 @@ async function bootstrap() {
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
-      forbidNonWhitelisted: true,
+      forbidNonWhitelisted: false, // Allow extra fields, just strip them
       transform: true,
       transformOptions: {
         enableImplicitConversion: true,
@@ -55,7 +77,7 @@ async function bootstrap() {
 
   // Swagger
   const config = new DocumentBuilder()
-    .setTitle('MonetRAPOS API')
+    .setTitle('MonetraPOS API')
     .setDescription('Multi-Business POS Application API')
     .setVersion('1.0')
     .addBearerAuth()
@@ -78,10 +100,20 @@ async function bootstrap() {
   const port = process.env.PORT || 4404;
   await app.listen(port);
 
-  logger.log(`🚀 MonetRAPOS API running on http://localhost:${port}`);
+  // Auto-seed landing page default content
+  try {
+    const landingService = app.get(LandingService);
+    await landingService.seedDefaults();
+    logger.log('✅ Landing page content seeded');
+  } catch (e) {
+    logger.warn('⚠️  Landing page seed skipped:', e.message);
+  }
+
+  logger.log(`🚀 MonetraPOS API running on http://localhost:${port}`);
   logger.log(`📚 Swagger docs: http://localhost:${port}/api/docs`);
   logger.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   logger.log(`🔒 CORS enabled for: ${allowedOrigins.join(', ')}`);
 }
 
 bootstrap();
+

@@ -93,6 +93,23 @@ export default function PlatformSettingsPage() {
         </div>
       </Link>
 
+      {/* Email Config Card */}
+      <Link href="/dashboard/settings/email" style={{ textDecoration: 'none' }}>
+        <div className="glass-panel animate-fade-in" style={{ maxWidth: '800px', padding: 'var(--space-lg)', marginBottom: 'var(--space-lg)', display: 'flex', alignItems: 'center', gap: 'var(--space-md)', cursor: 'pointer', transition: 'border-color var(--transition-fast)', border: '1px solid var(--border-subtle)' }}
+          onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent-base)')}
+          onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border-subtle)')}
+        >
+          <div style={{ width: '44px', height: '44px', borderRadius: 'var(--radius-md)', background: 'rgba(16,185,129,0.15)', color: 'var(--success)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Mail size={22} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 600, marginBottom: '2px' }}>Konfigurasi Email</div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Setup Mailtrap (testing) atau Gmail (production) untuk email verifikasi & notifikasi</div>
+          </div>
+          <span style={{ color: 'var(--text-tertiary)', fontSize: '1.2rem' }}>→</span>
+        </div>
+      </Link>
+
       <div className="glass-panel animate-fade-in" style={{ maxWidth: '800px' }}>
         <form onSubmit={handleSave}>
           

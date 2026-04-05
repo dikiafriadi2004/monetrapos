@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { X, Percent, DollarSign } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 interface ItemDiscountModalProps {
   isOpen: boolean;
@@ -41,17 +42,17 @@ export default function ItemDiscountModal({
   const handleApply = () => {
     const value = parseFloat(discountValue) || 0;
     if (value <= 0) {
-      alert('Please enter a valid discount value');
+      toast.error('Please enter a valid discount value');
       return;
     }
 
     if (discountType === 'percentage' && value > 100) {
-      alert('Percentage discount cannot exceed 100%');
+      toast.error('Percentage discount cannot exceed 100%');
       return;
     }
 
     if (discountType === 'fixed' && value > itemSubtotal) {
-      alert('Fixed discount cannot exceed item subtotal');
+      toast.error('Fixed discount cannot exceed item subtotal');
       return;
     }
 

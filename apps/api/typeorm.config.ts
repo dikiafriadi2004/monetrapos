@@ -1,4 +1,4 @@
-import { DataSource } from 'typeorm';
+﻿import { DataSource } from 'typeorm';
 import { config } from 'dotenv';
 
 // Load environment variables
@@ -16,3 +16,4 @@ export default new DataSource({
   synchronize: false,
   logging: true,
 });
+

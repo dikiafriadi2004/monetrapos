@@ -8,16 +8,27 @@ import {
   Param,
   Query,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
+  Request,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiBearerAuth,
   ApiOperation,
   ApiQuery,
+  ApiConsumes,
+  ApiBody,
 } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import * as path from 'path';
+import * as fs from 'fs';
 import { PermissionGuard, RequirePermissions } from '../auth/guards';
 import { ProductsService } from './products.service';
+import { deleteOldFile } from '../../common/utils/file.utils';
 import {
   CreateProductDto,
   UpdateProductDto,
@@ -39,14 +50,25 @@ export class ProductsController {
   @Post('products')
   @RequirePermissions('product.create')
   @ApiOperation({ summary: 'Create a new product' })
-  createProduct(@Body() dto: CreateProductDto) {
+  async createProduct(@Body() dto: CreateProductDto, @Request() req: any) {
+    const companyId = req.user.companyId;
+    // Auto-inject storeId from company's first store if not provided
+    if (!dto.storeId) {
+      const defaultStoreId = await this.productsService.getDefaultStoreId(companyId);
+      if (!defaultStoreId) {
+        throw new BadRequestException('Tidak ada toko aktif. Pastikan subscription sudah aktif dan toko sudah dibuat.');
+      }
+      dto.storeId = defaultStoreId;
+    }
+    // Inject companyId from JWT
+    (dto as any).companyId = companyId;
     return this.productsService.createProduct(dto);
   }
 
   @Get('products')
   @RequirePermissions('product.view')
   @ApiOperation({ summary: 'Get all products for a store' })
-  @ApiQuery({ name: 'storeId', required: true })
+  @ApiQuery({ name: 'storeId', required: false })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'search', required: false, type: String })
@@ -54,6 +76,7 @@ export class ProductsController {
   @ApiQuery({ name: 'isActive', required: false, type: Boolean })
   @ApiQuery({ name: 'lowStock', required: false, type: Boolean })
   findAllProducts(
+    @Request() req: any,
     @Query('storeId') storeId: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
@@ -69,7 +92,19 @@ export class ProductsController {
       categoryId,
       isActive: isActive !== undefined ? (isActive === true || (isActive as any) === 'true') : undefined,
       lowStock: lowStock === true || (lowStock as any) === 'true',
+      companyId: req.user.companyId, // fallback if no storeId
     });
+  }
+
+  @Get('products/barcode/:barcode')
+  @RequirePermissions('product.view')
+  @ApiOperation({ summary: 'Get product by barcode' })
+  @ApiQuery({ name: 'storeId', required: true })
+  findByBarcode(
+    @Param('barcode') barcode: string,
+    @Query('storeId') storeId: string,
+  ) {
+    return this.productsService.findByBarcode(barcode, storeId);
   }
 
   @Get('products/:id')
@@ -91,6 +126,57 @@ export class ProductsController {
   @ApiOperation({ summary: 'Delete product' })
   removeProduct(@Param('id') id: string) {
     return this.productsService.removeProduct(id);
+  }
+
+  @Post('products/:id/image')
+  @RequirePermissions('product.edit')
+  @ApiOperation({ summary: 'Upload product image' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { file: { type: 'string', format: 'binary' } },
+    },
+  })
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: (req, file, cb) => {
+          const uploadDir = path.join(process.cwd(), 'uploads', 'products');
+          if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+          }
+          cb(null, uploadDir);
+        },
+        filename: (req, file, cb) => {
+          const ext = path.extname(file.originalname).toLowerCase();
+          cb(null, `product-${Date.now()}${ext}`);
+        },
+      }),
+      fileFilter: (req, file, cb) => {
+        const allowed = ['.jpg', '.jpeg', '.png', '.webp'];
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (!allowed.includes(ext)) {
+          return cb(new BadRequestException('Only image files are allowed (jpg, jpeg, png, webp)'), false);
+        }
+        cb(null, true);
+      },
+      limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+    }),
+  )
+  async uploadProductImage(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) throw new BadRequestException('No file uploaded');
+    const imageUrl = `/uploads/products/${file.filename}`;
+
+    // Delete old image
+    const product = await this.productsService.findOneProduct(id);
+    deleteOldFile(product.imageUrl);
+
+    const updated = await this.productsService.updateProduct(id, { imageUrl } as any);
+    return { imageUrl, product: updated };
   }
 
   @Patch('products/:id/stock')
@@ -132,7 +218,17 @@ export class ProductsController {
   @Post('categories')
   @RequirePermissions('product.create')
   @ApiOperation({ summary: 'Create a new category' })
-  createCategory(@Body() dto: CreateCategoryDto) {
+  async createCategory(@Body() dto: CreateCategoryDto, @Request() req: any) {
+    // Inject companyId from JWT if not provided
+    if (!dto.companyId) dto.companyId = req.user.companyId;
+    // Inject storeId from company's first store if not provided
+    if (!dto.storeId) {
+      const defaultStoreId = await this.productsService.getDefaultStoreId(req.user.companyId);
+      if (!defaultStoreId) {
+        throw new BadRequestException('Tidak ada toko aktif. Pastikan subscription sudah aktif dan toko sudah dibuat.');
+      }
+      dto.storeId = defaultStoreId;
+    }
     return this.productsService.createCategory(dto);
   }
 
@@ -192,6 +288,48 @@ export class ProductsController {
     @Query('companyId') companyId: string,
   ) {
     return this.productsService.removeCategory(id, companyId);
+  }
+
+  @Post('categories/:id/image')
+  @RequirePermissions('product.edit')
+  @ApiOperation({ summary: 'Upload category image' })
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: (req, file, cb) => {
+          const uploadDir = path.join(process.cwd(), 'uploads', 'categories');
+          if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+          cb(null, uploadDir);
+        },
+        filename: (req, file, cb) => {
+          const ext = path.extname(file.originalname).toLowerCase();
+          cb(null, `category-${Date.now()}${ext}`);
+        },
+      }),
+      fileFilter: (req, file, cb) => {
+        const allowed = ['.jpg', '.jpeg', '.png', '.webp'];
+        const ext = path.extname(file.originalname).toLowerCase();
+        if (!allowed.includes(ext)) return cb(new BadRequestException('Only image files allowed'), false);
+        cb(null, true);
+      },
+      limits: { fileSize: 5 * 1024 * 1024 },
+    }),
+  )
+  async uploadCategoryImage(
+    @Param('id') id: string,
+    @Request() req: any,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) throw new BadRequestException('No file uploaded');
+    const imageUrl = `/uploads/categories/${file.filename}`;
+
+    // Delete old image
+    const category = await this.productsService.findOneCategory(id, req.user.companyId);
+    deleteOldFile(category.imageUrl);
+
+    await this.productsService.updateCategory(id, req.user.companyId, { imageUrl });
+    return { imageUrl };
   }
 
   // ────── Variants ──────

@@ -145,10 +145,12 @@ export class SubscriptionsController {
   @Get('current')
   async getCurrentSubscription(@Request() req: any) {
     const companyId = req.user.companyId;
-    const subscription = await this.subscriptionsService.findActiveByCompany(companyId);
-    
-    // Return null instead of throwing error if no subscription found
-    // This allows frontend to handle gracefully
+    // Try active first, then fall back to any latest subscription (pending, expired, etc.)
+    let subscription = await this.subscriptionsService.findActiveByCompany(companyId);
+    if (!subscription) {
+      const all = await this.subscriptionsService.findByCompany(companyId);
+      subscription = all[0] || null; // most recent
+    }
     return subscription || null;
   }
 

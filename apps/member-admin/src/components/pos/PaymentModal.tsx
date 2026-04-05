@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X, CreditCard, Smartphone, Building2, Wallet, QrCode } from 'lucide-react';
 import { PaymentMethod, PaymentMethodType as PMType } from '@/types/payment-method.types';
+import toast from 'react-hot-toast';
 
 type PaymentMethodType = 'cash' | 'card' | 'transfer' | 'qris';
 
@@ -88,12 +89,12 @@ export default function PaymentModal({ isOpen, onClose, total, paymentMethods, o
 
   const handleConfirm = async () => {
     if (selectedMethod === 'cash' && paid < total) {
-      alert('Paid amount must be greater than or equal to total');
+      toast.error('Paid amount must be greater than or equal to total');
       return;
     }
 
     if (requiresReference && !referenceNumber.trim()) {
-      alert('Please enter a reference number');
+      toast.error('Please enter a reference number');
       return;
     }
 
@@ -103,7 +104,7 @@ export default function PaymentModal({ isOpen, onClose, total, paymentMethods, o
       onClose();
     } catch (error) {
       console.error('Payment failed:', error);
-      alert('Payment failed. Please try again.');
+      toast.error('Payment failed. Please try again.');
     } finally {
       setLoading(false);
     }

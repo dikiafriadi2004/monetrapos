@@ -99,9 +99,9 @@ export class Company extends BaseEntity {
     length: 20, 
     nullable: true, 
     name: 'payment_gateway_preference',
-    default: 'midtrans'
+    default: 'xendit'
   })
-  paymentGatewayPreference: string; // midtrans, xendit
+  paymentGatewayPreference: string; // xendit
 
   // Metadata
   @Column({ type: 'json', default: '{}' })

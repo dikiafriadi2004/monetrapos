@@ -14,6 +14,8 @@ import { PasswordResetToken } from './password-reset-token.entity';
 import { SubscriptionsModule } from '../subscriptions/subscriptions.module';
 import { BillingModule } from '../billing/billing.module';
 import { PaymentGatewayModule } from '../payment-gateway/payment-gateway.module';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
@@ -38,6 +40,8 @@ import { PaymentGatewayModule } from '../payment-gateway/payment-gateway.module'
     SubscriptionsModule,
     BillingModule,
     PaymentGatewayModule,
+    NotificationsModule,
+    EmailModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy],

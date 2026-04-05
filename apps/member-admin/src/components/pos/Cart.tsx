@@ -1,6 +1,6 @@
 'use client';
 
-import { Trash2, Plus, Minus, Tag } from 'lucide-react';
+import { Trash2, Plus, Minus, Tag, ShoppingCart } from 'lucide-react';
 import { CartItem } from '@/types';
 
 interface CartProps {
@@ -14,109 +14,80 @@ interface CartProps {
   total: number;
 }
 
-export default function Cart({
-  items,
-  onUpdateQuantity,
-  onRemoveItem,
-  onItemDiscount,
-  subtotal,
-  tax,
-  discount,
-  total,
-}: CartProps) {
+export default function Cart({ items, onUpdateQuantity, onRemoveItem, onItemDiscount, subtotal, tax, discount, total }: CartProps) {
+  const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
+
   return (
-    <div className="flex flex-col h-full">
-      {/* Cart Items */}
-      <div className="flex-1 overflow-y-auto">
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, fontWeight: 600 }}>
+        <ShoppingCart size={18} style={{ color: 'var(--accent-base)' }} />
+        Cart {items.length > 0 && <span style={{ background: 'var(--accent-base)', color: 'white', borderRadius: 'var(--radius-full)', padding: '2px 8px', fontSize: '0.75rem' }}>{items.length}</span>}
+      </div>
+
+      {/* Items */}
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
         {items.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-gray-400">
-            <div className="text-center">
-              <p className="text-lg">Cart is empty</p>
-              <p className="text-sm">Add products to start</p>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', color: 'var(--text-tertiary)', gap: 8 }}>
+            <ShoppingCart size={40} style={{ opacity: 0.3 }} />
+            <p style={{ fontSize: '0.9rem' }}>Cart is empty</p>
+            <p style={{ fontSize: '0.8rem' }}>Add products to start</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {items.map((item, index) => (
-              <div
-                key={index}
-                className="bg-white p-3 rounded-lg border border-gray-200"
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex-1">
-                    <div className="font-medium text-gray-900">{item.product.name}</div>
-                    <div className="text-sm text-gray-500">
-                      Rp {item.price.toLocaleString('id-ID')}
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-1">
-                    {onItemDiscount && (
-                      <button
-                        onClick={() => onItemDiscount(index)}
-                        className="text-green-500 hover:text-green-700 p-1"
-                        title="Apply item discount"
-                      >
-                        <Tag size={18} />
-                      </button>
-                    )}
-                    <button
-                      onClick={() => onRemoveItem(index)}
-                      className="text-red-500 hover:text-red-700 p-1"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
+          items.map((item, index) => (
+            <div key={index} style={{ background: 'var(--bg-tertiary)', padding: 12, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>{item.product.name}</div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{fmt(item.price)}</div>
                 </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => onUpdateQuantity(index, item.quantity - 1)}
-                      disabled={item.quantity <= 1}
-                      className="p-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
-                    >
-                      <Minus size={16} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  {onItemDiscount && (
+                    <button onClick={() => onItemDiscount(index)} title="Apply item discount"
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--success)', padding: 4 }}>
+                      <Tag size={16} />
                     </button>
-                    <span className="w-12 text-center font-medium">{item.quantity}</span>
-                    <button
-                      onClick={() => onUpdateQuantity(index, item.quantity + 1)}
-                      disabled={item.quantity >= item.product.stock}
-                      className="p-1 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50"
-                    >
-                      <Plus size={16} />
-                    </button>
-                  </div>
-                  <div className="font-semibold text-gray-900">
-                    Rp {item.subtotal.toLocaleString('id-ID')}
-                  </div>
+                  )}
+                  <button onClick={() => onRemoveItem(index)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', padding: 4 }}>
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               </div>
-            ))}
-          </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button onClick={() => onUpdateQuantity(index, item.quantity - 1)} disabled={item.quantity <= 1}
+                    style={{ padding: 4, borderRadius: 'var(--radius-sm)', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', cursor: 'pointer', opacity: item.quantity <= 1 ? 0.5 : 1 }}>
+                    <Minus size={14} />
+                  </button>
+                  <span style={{ width: 32, textAlign: 'center', fontWeight: 600, fontSize: '0.9rem' }}>{item.quantity}</span>
+                  <button onClick={() => onUpdateQuantity(index, item.quantity + 1)} disabled={item.quantity >= item.product.stock}
+                    style={{ padding: 4, borderRadius: 'var(--radius-sm)', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', cursor: 'pointer', opacity: item.quantity >= item.product.stock ? 0.5 : 1 }}>
+                    <Plus size={14} />
+                  </button>
+                </div>
+                <div style={{ fontWeight: 700, color: 'var(--success)' }}>{fmt(item.subtotal)}</div>
+              </div>
+            </div>
+          ))
         )}
       </div>
 
       {/* Summary */}
-      <div className="border-t border-gray-200 pt-4 mt-4 space-y-2">
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-600">Subtotal</span>
-          <span className="font-medium">Rp {subtotal.toLocaleString('id-ID')}</span>
-        </div>
-        {tax > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-600">Tax</span>
-            <span className="font-medium">Rp {tax.toLocaleString('id-ID')}</span>
+      <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: 16, marginTop: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {[
+          { label: 'Subtotal', value: fmt(subtotal), show: true },
+          { label: 'Tax', value: fmt(tax), show: tax > 0 },
+          { label: 'Discount', value: `-${fmt(discount)}`, show: discount > 0, color: 'var(--success)' },
+        ].filter(r => r.show).map(row => (
+          <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: row.color || 'var(--text-secondary)' }}>
+            <span>{row.label}</span>
+            <span style={{ fontWeight: 500 }}>{row.value}</span>
           </div>
-        )}
-        {discount > 0 && (
-          <div className="flex justify-between text-sm text-green-600">
-            <span>Discount</span>
-            <span className="font-medium">-Rp {discount.toLocaleString('id-ID')}</span>
-          </div>
-        )}
-        <div className="flex justify-between text-lg font-bold border-t border-gray-200 pt-2">
+        ))}
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.1rem', fontWeight: 700, borderTop: '1px solid var(--border-color)', paddingTop: 8, marginTop: 4 }}>
           <span>Total</span>
-          <span>Rp {total.toLocaleString('id-ID')}</span>
+          <span style={{ color: 'var(--success)' }}>{fmt(total)}</span>
         </div>
       </div>
     </div>

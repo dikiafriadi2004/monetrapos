@@ -29,8 +29,16 @@ export class CustomersController {
 
   @Post()
   @ApiOperation({ summary: 'Create a new customer' })
-  create(@Request() req: any, @Body() dto: CreateCustomerDto) {
+  async create(@Request() req: any, @Body() dto: CreateCustomerDto) {
     const companyId = req.user.companyId;
+    // Auto-inject storeId if not provided
+    if (!dto.storeId) {
+      const result = await this.customersService['customerRepo'].manager.query(
+        `SELECT id FROM stores WHERE company_id = ? AND is_active = 1 ORDER BY created_at ASC LIMIT 1`,
+        [companyId]
+      );
+      if (result?.[0]?.id) dto.storeId = result[0].id;
+    }
     return this.customersService.create(dto, companyId);
   }
 

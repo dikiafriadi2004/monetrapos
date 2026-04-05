@@ -1,37 +1,50 @@
 import { api } from '../lib/api';
 
-export interface Feature {
-  id: string;
-  name: string;
-  code: string;
-  description?: string;
-}
-
 export interface SubscriptionPlan {
   id: string;
   name: string;
+  slug: string;
   description?: string;
-  price: number;
-  durationDays: number;
-  maxOutlets: number;
+  priceMonthly: number;   // backend field name
+  priceYearly: number;    // backend field name
+  maxStores: number;      // backend field name (was maxOutlets)
+  maxUsers: number;
+  maxEmployees: number;
   maxProducts: number;
-  sortOrder: number;
+  maxTransactionsPerMonth: number;
+  trialDays: number;
+  features: Record<string, boolean>;
   isActive: boolean;
-  features: Feature[];
-  subscriptions?: any[];
+  isPopular: boolean;
+  sortOrder: number;
+  durations?: SubscriptionDuration[];
   createdAt: string;
   updatedAt: string;
 }
 
+export interface SubscriptionDuration {
+  id: string;
+  planId: string;
+  durationMonths: number;
+  discountPercentage: number;
+  finalPrice: number;
+}
+
 export interface CreatePlanDto {
   name: string;
+  slug: string;
   description?: string;
-  price: number;
-  durationDays: number;
-  maxOutlets: number;
+  priceMonthly: number;
+  priceYearly: number;
+  maxStores: number;
+  maxUsers: number;
+  maxEmployees: number;
   maxProducts: number;
+  maxTransactionsPerMonth?: number;
+  trialDays?: number;
+  features?: Record<string, boolean>;
+  isPopular?: boolean;
   sortOrder?: number;
-  featureIds: string[];
   isActive?: boolean;
 }
 
@@ -50,7 +63,7 @@ class SubscriptionsService {
   }
 
   async updatePlan(id: string, data: Partial<CreatePlanDto>): Promise<SubscriptionPlan> {
-    return await api.patch(`/subscription-plans/${id}`, data);
+    return await api.put(`/subscription-plans/${id}`, data);
   }
 
   async deletePlan(id: string): Promise<void> {
@@ -58,24 +71,19 @@ class SubscriptionsService {
   }
 
   async togglePlanStatus(id: string, isActive: boolean): Promise<SubscriptionPlan> {
-    return await api.patch(`/subscription-plans/${id}`, { isActive });
+    return await api.put(`/subscription-plans/${id}`, { isActive });
   }
 
-  async getAllFeatures(): Promise<Feature[]> {
-    const data = await api.get('/features');
-    return Array.isArray(data) ? data : [];
+  async seedPlans(): Promise<void> {
+    await api.post('/subscription-plans/seed', {});
   }
 
-  async createFeature(data: { name: string; code: string; description?: string }): Promise<Feature> {
-    return await api.post('/features', data);
+  async createDuration(planId: string, durationMonths: number): Promise<SubscriptionDuration> {
+    return await api.post(`/subscription-plans/${planId}/durations`, { durationMonths });
   }
 
-  async updateFeature(id: string, data: Partial<Feature>): Promise<Feature> {
-    return await api.patch(`/features/${id}`, data);
-  }
-
-  async deleteFeature(id: string): Promise<void> {
-    await api.delete(`/features/${id}`);
+  async deleteDuration(planId: string, durationMonths: number): Promise<void> {
+    await api.delete(`/subscription-plans/${planId}/durations/${durationMonths}`);
   }
 }
 

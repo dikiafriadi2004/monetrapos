@@ -22,6 +22,14 @@ class AuthService {
     return response.data;
   }
 
+  async loginEmployee(credentials: LoginRequest): Promise<LoginResponse> {
+    const response = await apiClient.post<LoginResponse>(
+      API_ENDPOINTS.AUTH.LOGIN_EMPLOYEE,
+      credentials
+    );
+    return response.data;
+  }
+
   async register(data: RegisterCompanyRequest): Promise<RegisterResponse> {
     const response = await apiClient.post<RegisterResponse>(
       API_ENDPOINTS.AUTH.REGISTER,
@@ -31,11 +39,11 @@ class AuthService {
   }
 
   async logout(): Promise<void> {
-    try {
-      await apiClient.post(API_ENDPOINTS.AUTH.LOGOUT);
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
+    // JWT is stateless - just clear local storage
+    // No server call needed
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    localStorage.removeItem('user');
   }
 
   async verifyEmail(token: string): Promise<{ message: string }> {

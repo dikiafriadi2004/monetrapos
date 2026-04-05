@@ -23,7 +23,7 @@ export class TablesController {
 
   @Post()
   create(@Body() createTableDto: CreateTableDto, @Request() req) {
-    return this.tablesService.create(createTableDto, req.user.company_id);
+    return this.tablesService.create(createTableDto, req.user.companyId);
   }
 
   @Get()
@@ -35,7 +35,7 @@ export class TablesController {
     @Query('status') status?: TableStatus,
   ) {
     return this.tablesService.findAll(
-      req.user.company_id,
+      req.user.companyId,
       storeId,
       floor,
       section,
@@ -52,12 +52,12 @@ export class TablesController {
     if (!storeId) {
       throw new Error('store_id is required');
     }
-    return this.tablesService.getFloorPlan(req.user.company_id, storeId, floor);
+    return this.tablesService.getFloorPlan(req.user.companyId, storeId, floor);
   }
 
   @Get(':id')
   findOne(@Param('id') id: string, @Request() req) {
-    return this.tablesService.findOne(id, req.user.company_id);
+    return this.tablesService.findOne(id, req.user.companyId);
   }
 
   @Patch(':id')
@@ -66,7 +66,7 @@ export class TablesController {
     @Body() updateTableDto: UpdateTableDto,
     @Request() req,
   ) {
-    return this.tablesService.update(id, updateTableDto, req.user.company_id);
+    return this.tablesService.update(id, updateTableDto, req.user.companyId);
   }
 
   @Patch(':id/status')
@@ -75,11 +75,11 @@ export class TablesController {
     @Body() updateStatusDto: UpdateTableStatusDto,
     @Request() req,
   ) {
-    return this.tablesService.updateStatus(id, updateStatusDto, req.user.company_id);
+    return this.tablesService.updateStatus(id, updateStatusDto, req.user.companyId);
   }
 
   @Delete(':id')
   remove(@Param('id') id: string, @Request() req) {
-    return this.tablesService.remove(id, req.user.company_id);
+    return this.tablesService.remove(id, req.user.companyId);
   }
 }

@@ -1,34 +1,36 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Warehouse, Plus, ArrowDownToLine, ArrowUpFromLine, RotateCcw, Filter, Package, AlertTriangle, ArrowRightLeft, TrendingDown } from 'lucide-react';
-import { api } from '../../../lib/api';
+import { Warehouse, Plus, ArrowDownToLine, ArrowUpFromLine, RotateCcw, Package, AlertTriangle, ArrowRightLeft, TrendingDown, Loader2 } from 'lucide-react';
+import { inventoryService, InventoryItem, StockMovement } from '@/services/inventory.service';
+import apiClient from '@/lib/api-client';
+import toast from 'react-hot-toast';
+import { Modal, PageHeader, StatusBadge, EmptyState, LoadingSpinner } from '@/components/ui';
 
-const MOVEMENT_LABELS: Record<string, { label: string; color: string; icon: string }> = {
-  IN: { label: 'Stock In', color: 'var(--success)', icon: '↓' },
-  OUT: { label: 'Stock Out', color: 'var(--danger)', icon: '↑' },
-  SALE: { label: 'Sale', color: 'var(--warning)', icon: '⚡' },
-  ADJUSTMENT: { label: 'Adjustment', color: '#38bdf8', icon: '⟳' },
-  RETURN: { label: 'Return', color: '#8b5cf6', icon: '↩' },
-  TRANSFER: { label: 'Transfer', color: '#10b981', icon: '⇄' },
+interface Product { id: string; name: string; sku: string; minStock: number; }
+interface SimpleStore { id: string; name: string; }
+type ModalType = 'movement' | 'transfer' | 'reserve' | 'release' | null;
+
+const MOVEMENT_LABELS: Record<string, { label: string; badge: string }> = {
+  IN: { label: 'Stock In', badge: 'badge-success' }, OUT: { label: 'Stock Out', badge: 'badge-danger' },
+  SALE: { label: 'Sale', badge: 'badge-warning' }, ADJUSTMENT: { label: 'Adjustment', badge: 'badge-info' },
+  RETURN: { label: 'Return', badge: 'bg-purple-100 text-purple-700' }, TRANSFER: { label: 'Transfer', badge: 'badge-primary' },
 };
 
-type ModalType = 'movement' | 'transfer' | 'lowStock' | null;
-
 export default function InventoryPage() {
-  const [movements, setMovements] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
-  const [stores, setStores] = useState<any[]>([]);
-  const [lowStockItems, setLowStockItems] = useState<any[]>([]);
-  const [inventory, setInventory] = useState<any[]>([]);
+  const [movements, setMovements] = useState<StockMovement[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [stores, setStores] = useState<SimpleStore[]>([]);
+  const [lowStockItems, setLowStockItems] = useState<InventoryItem[]>([]);
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'movements' | 'inventory' | 'lowStock'>('inventory');
-
-  // Form
+  const [activeTab, setActiveTab] = useState<'inventory' | 'movements' | 'lowStock'>('inventory');
   const [modalType, setModalType] = useState<ModalType>(null);
   const [formData, setFormData] = useState({ type: 'IN', quantity: '', productId: '', storeId: '', reason: '', reference: '' });
   const [transferData, setTransferData] = useState({ fromStoreId: '', toStoreId: '', items: [{ productId: '', quantity: '' }], notes: '' });
+  const [reserveData, setReserveData] = useState({ productId: '', quantity: '', reference: '' });
   const [saving, setSaving] = useState(false);
+  const [sendingAlert, setSendingAlert] = useState(false);
   const [activeStoreId, setActiveStoreId] = useState('');
 
   useEffect(() => { fetchData(); }, [activeStoreId]);
@@ -36,513 +38,225 @@ export default function InventoryPage() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const storesRes: any = await api.get('/stores');
-      setStores(storesRes || []);
+      const storesRes = await apiClient.get('/stores').then((r: any) => (r.data ?? r) as SimpleStore[]).catch(() => [] as SimpleStore[]);
+      setStores(Array.isArray(storesRes) ? storesRes : []);
       const storeId = activeStoreId || storesRes[0]?.id || '';
-      if (!activeStoreId) setActiveStoreId(storeId);
-
-      const [movRes, prodRes, invRes, lowStockRes]: any = await Promise.all([
-        api.get(`/inventory/movements?storeId=${storeId}`),
-        api.get('/products'),
-        api.get(`/inventory?storeId=${storeId}`),
-        api.get(`/inventory/low-stock?storeId=${storeId}`)
+      if (!activeStoreId && storeId) setActiveStoreId(storeId);
+      const [movRes, prodRes, invRes, lowStockRes] = await Promise.all([
+        inventoryService.getMovements(storeId).catch(() => []),
+        apiClient.get('/products').then((r: any) => (r.data ?? r) as Product[]).catch(() => [] as Product[]),
+        inventoryService.getInventory(storeId).catch(() => []),
+        inventoryService.getLowStock(storeId).catch(() => []),
       ]);
-      setMovements(movRes || []);
-      setProducts(prodRes || []);
-      setInventory(invRes || []);
-      setLowStockItems(lowStockRes || []);
-    } catch (err) { console.error(err); }
+      setMovements(Array.isArray(movRes) ? movRes : []);
+      setProducts(Array.isArray(prodRes) ? prodRes : []);
+      setInventory(Array.isArray(invRes) ? invRes : []);
+      setLowStockItems(Array.isArray(lowStockRes) ? lowStockRes : []);
+    } catch (err) { console.error('Failed to fetch inventory:', err); toast.error('Failed to load inventory data'); }
     finally { setLoading(false); }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
+    e.preventDefault(); setSaving(true);
     try {
-      await api.post('/inventory/movements', {
-        ...formData,
-        quantity: parseInt(formData.quantity as string) || 1,
-        storeId: activeStoreId
-      });
-      setModalType(null);
-      setFormData({ type: 'IN', quantity: '', productId: '', storeId: '', reason: '', reference: '' });
-      await fetchData();
-    } catch (err: any) { alert(err.message || 'Failed'); }
+      await inventoryService.createMovement({ ...formData, quantity: parseInt(formData.quantity as string) || 1, storeId: activeStoreId });
+      toast.success('Stock adjustment saved'); setModalType(null); setFormData({ type: 'IN', quantity: '', productId: '', storeId: '', reason: '', reference: '' }); await fetchData();
+    } catch (err: any) { toast.error(err?.response?.data?.message || 'Failed to save adjustment'); }
     finally { setSaving(false); }
   };
 
-  const handleTransferSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
+  const handleTransfer = async (e: React.FormEvent) => {
+    e.preventDefault(); setSaving(true);
     try {
-      await api.post('/inventory/transfer', {
-        fromStoreId: transferData.fromStoreId,
-        toStoreId: transferData.toStoreId,
-        items: transferData.items.map(item => ({
-          productId: item.productId,
-          quantity: parseInt(item.quantity as string) || 1
-        })),
-        notes: transferData.notes
-      });
-      setModalType(null);
-      setTransferData({ fromStoreId: '', toStoreId: '', items: [{ productId: '', quantity: '' }], notes: '' });
-      await fetchData();
-    } catch (err: any) { alert(err.message || 'Failed to transfer stock'); }
+      await inventoryService.transfer({ fromStoreId: transferData.fromStoreId, toStoreId: transferData.toStoreId, items: transferData.items.map(i => ({ productId: i.productId, quantity: parseInt(i.quantity as string) || 1 })), notes: transferData.notes });
+      toast.success('Stock transferred'); setModalType(null); setTransferData({ fromStoreId: '', toStoreId: '', items: [{ productId: '', quantity: '' }], notes: '' }); await fetchData();
+    } catch (err: any) { toast.error(err?.response?.data?.message || 'Failed to transfer stock'); }
     finally { setSaving(false); }
   };
 
-  const addTransferItem = () => {
-    setTransferData({
-      ...transferData,
-      items: [...transferData.items, { productId: '', quantity: '' }]
-    });
+  const handleReserveRelease = async (e: React.FormEvent, type: 'reserve' | 'release') => {
+    e.preventDefault();
+    if (!reserveData.productId || !reserveData.quantity) { toast.error('Product and quantity required'); return; }
+    setSaving(true);
+    try {
+      const dto = { storeId: activeStoreId, productId: reserveData.productId, quantity: parseInt(reserveData.quantity) || 1, reference: reserveData.reference || undefined };
+      if (type === 'reserve') await inventoryService.reserve(dto); else await inventoryService.release(dto);
+      toast.success(`Stock ${type}d`); setModalType(null); setReserveData({ productId: '', quantity: '', reference: '' }); await fetchData();
+    } catch (err: any) { toast.error(err?.response?.data?.message || `Failed to ${type} stock`); }
+    finally { setSaving(false); }
   };
 
-  const removeTransferItem = (index: number) => {
-    setTransferData({
-      ...transferData,
-      items: transferData.items.filter((_, i) => i !== index)
-    });
-  };
-
-  const updateTransferItem = (index: number, field: string, value: string) => {
-    const newItems = [...transferData.items];
-    newItems[index] = { ...newItems[index], [field]: value };
-    setTransferData({ ...transferData, items: newItems });
-  };
+  const TABS = [
+    { id: 'inventory', label: 'Current Stock', icon: Package },
+    { id: 'movements', label: 'Movement History', icon: RotateCcw },
+    { id: 'lowStock', label: `Low Stock${lowStockItems.length > 0 ? ` (${lowStockItems.length})` : ''}`, icon: TrendingDown },
+  ];
 
   return (
     <div>
-      <div className="flex-between" style={{ marginBottom: 'var(--space-xl)' }}>
-        <div>
-          <h1 style={{ fontSize: '1.75rem', marginBottom: 'var(--space-xs)' }}>Inventory Management</h1>
-          <p style={{ color: 'var(--text-secondary)' }}>Track stock levels, movements, and manage inventory across stores.</p>
-        </div>
-        <div style={{ display: 'flex', gap: 'var(--space-md)' }}>
-          <button className="btn btn-outline" onClick={() => setModalType('transfer')} style={{ borderColor: 'var(--primary)' }}>
-            <ArrowRightLeft size={16} style={{ marginRight: '6px' }} /> Transfer Stock
-          </button>
-          <button className="btn btn-primary" onClick={() => setModalType('movement')} style={{ background: 'var(--success)' }}>
-            <Plus size={16} style={{ marginRight: '6px' }} /> Stock Adjustment
-          </button>
-        </div>
-      </div>
+      <PageHeader title="Inventory Management" description="Track stock levels, movements, and manage inventory across stores."
+        action={
+          <div className="flex gap-2">
+            <button onClick={() => { setReserveData({ productId: '', quantity: '', reference: '' }); setModalType('release'); }} className="btn btn-outline btn-sm"><ArrowUpFromLine size={14}/> Release</button>
+            <button onClick={() => { setReserveData({ productId: '', quantity: '', reference: '' }); setModalType('reserve'); }} className="btn btn-outline btn-sm"><ArrowDownToLine size={14}/> Reserve</button>
+            <button onClick={() => setModalType('transfer')} className="btn btn-outline btn-sm"><ArrowRightLeft size={14}/> Transfer</button>
+            <button onClick={() => setModalType('movement')} className="btn btn-success btn-sm"><Plus size={14}/> Adjustment</button>
+          </div>
+        } />
 
-      {/* Store Selector */}
       {stores.length > 1 && (
-        <div style={{ marginBottom: 'var(--space-lg)' }}>
-          <label className="form-label">Select Store</label>
-          <select 
-            className="form-input" 
-            value={activeStoreId} 
-            onChange={(e) => setActiveStoreId(e.target.value)}
-            style={{ maxWidth: '300px' }}
-          >
-            {stores.map((store: any) => (
-              <option key={store.id} value={store.id}>{store.name}</option>
-            ))}
+        <div className="flex items-center gap-3 mb-4">
+          <label className="text-sm font-medium text-gray-700">Store:</label>
+          <select className="form-input w-48" value={activeStoreId} onChange={e => setActiveStoreId(e.target.value)}>
+            {stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
       )}
 
-      {/* Low Stock Alert Banner */}
       {lowStockItems.length > 0 && (
-        <div className="glass-panel" style={{ marginBottom: 'var(--space-xl)', padding: 'var(--space-lg)', background: 'rgba(239, 68, 68, 0.1)', borderLeft: '4px solid var(--danger)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-              <AlertTriangle size={24} style={{ color: 'var(--danger)' }} />
-              <div>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '4px' }}>Low Stock Alert</h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                  {lowStockItems.length} product{lowStockItems.length > 1 ? 's' : ''} running low on stock
-                </p>
-              </div>
-            </div>
-            <button 
-              className="btn btn-outline" 
-              onClick={() => setActiveTab('lowStock')}
-              style={{ borderColor: 'var(--danger)', color: 'var(--danger)' }}
-            >
-              View Details
-            </button>
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-3"><AlertTriangle size={20} className="text-red-500"/><div><p className="font-semibold text-red-800">Low Stock Alert</p><p className="text-sm text-red-600">{lowStockItems.length} product{lowStockItems.length > 1 ? 's' : ''} running low</p></div></div>
+          <div className="flex gap-2">
+            <button onClick={async () => { setSendingAlert(true); try { await inventoryService.sendLowStockAlerts(activeStoreId); toast.success('Alerts sent!'); } catch { toast.error('Failed to send alerts'); } finally { setSendingAlert(false); } }} disabled={sendingAlert} className="btn btn-warning btn-sm">{sendingAlert ? <Loader2 size={13} className="animate-spin"/> : null}Send Alert</button>
+            <button onClick={() => setActiveTab('lowStock')} className="btn btn-outline btn-sm text-red-600 border-red-300">View Details</button>
           </div>
         </div>
       )}
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 'var(--space-md)', marginBottom: 'var(--space-xl)', borderBottom: '2px solid var(--border-subtle)' }}>
-        <button 
-          onClick={() => setActiveTab('inventory')}
-          style={{ 
-            padding: 'var(--space-md)', 
-            background: 'none', 
-            border: 'none', 
-            borderBottom: activeTab === 'inventory' ? '2px solid var(--primary)' : '2px solid transparent',
-            color: activeTab === 'inventory' ? 'var(--primary)' : 'var(--text-secondary)',
-            fontWeight: activeTab === 'inventory' ? 600 : 400,
-            cursor: 'pointer',
-            marginBottom: '-2px'
-          }}
-        >
-          <Package size={16} style={{ display: 'inline', marginRight: '6px' }} />
-          Current Stock
-        </button>
-        <button 
-          onClick={() => setActiveTab('movements')}
-          style={{ 
-            padding: 'var(--space-md)', 
-            background: 'none', 
-            border: 'none', 
-            borderBottom: activeTab === 'movements' ? '2px solid var(--primary)' : '2px solid transparent',
-            color: activeTab === 'movements' ? 'var(--primary)' : 'var(--text-secondary)',
-            fontWeight: activeTab === 'movements' ? 600 : 400,
-            cursor: 'pointer',
-            marginBottom: '-2px'
-          }}
-        >
-          <RotateCcw size={16} style={{ display: 'inline', marginRight: '6px' }} />
-          Movement History
-        </button>
-        <button 
-          onClick={() => setActiveTab('lowStock')}
-          style={{ 
-            padding: 'var(--space-md)', 
-            background: 'none', 
-            border: 'none', 
-            borderBottom: activeTab === 'lowStock' ? '2px solid var(--primary)' : '2px solid transparent',
-            color: activeTab === 'lowStock' ? 'var(--primary)' : 'var(--text-secondary)',
-            fontWeight: activeTab === 'lowStock' ? 600 : 400,
-            cursor: 'pointer',
-            marginBottom: '-2px',
-            position: 'relative'
-          }}
-        >
-          <TrendingDown size={16} style={{ display: 'inline', marginRight: '6px' }} />
-          Low Stock Alerts
-          {lowStockItems.length > 0 && (
-            <span style={{ 
-              position: 'absolute', 
-              top: '8px', 
-              right: '8px', 
-              background: 'var(--danger)', 
-              color: 'white', 
-              borderRadius: '10px', 
-              padding: '2px 6px', 
-              fontSize: '0.7rem',
-              fontWeight: 700
-            }}>
-              {lowStockItems.length}
-            </span>
-          )}
-        </button>
+      <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-lg w-fit">
+        {TABS.map(tab => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id as any)}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeTab === tab.id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+            <tab.icon size={14}/>{tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Current Stock Tab */}
-      {activeTab === 'inventory' && (
-        <div className="glass-panel" style={{ padding: 0 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 'var(--space-md)', padding: 'var(--space-sm) var(--space-lg)', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)', fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase' }}>
-            <div>Product</div><div>SKU</div><div>Available</div><div>Reserved</div><div>Min Stock</div>
-          </div>
-          <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
-            {loading ? (
-              <div style={{ padding: 'var(--space-2xl)', textAlign: 'center', color: 'var(--text-tertiary)' }}>Loading...</div>
-            ) : inventory.length === 0 ? (
-              <div style={{ padding: 'var(--space-2xl)', textAlign: 'center', color: 'var(--text-tertiary)' }}>No inventory data available.</div>
-            ) : inventory.map((item: any) => {
-              const isLowStock = item.availableQuantity <= (item.product?.minStock || 0);
-              return (
-                <div key={item.id} className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 'var(--space-md)', padding: 'var(--space-md) var(--space-lg)', borderBottom: '1px solid var(--border-subtle)', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontWeight: 500 }}>{item.product?.name || 'Unknown'}</div>
-                    {isLowStock && (
-                      <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.2)', color: 'var(--danger)', fontSize: '0.7rem', marginTop: '4px' }}>
-                        Low Stock
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{item.product?.sku || '-'}</div>
-                  <div style={{ fontWeight: 600, color: isLowStock ? 'var(--danger)' : 'var(--success)' }}>{item.availableQuantity}</div>
-                  <div style={{ color: 'var(--text-secondary)' }}>{item.reservedQuantity || 0}</div>
-                  <div style={{ color: 'var(--text-tertiary)' }}>{item.product?.minStock || 0}</div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Movement History Tab */}
-      {activeTab === 'movements' && (
+      {loading ? <LoadingSpinner /> : (
         <>
-          {/* Summary Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 'var(--space-md)', marginBottom: 'var(--space-xl)' }}>
-            {Object.keys(MOVEMENT_LABELS).map(type => {
-              const info = MOVEMENT_LABELS[type];
-              const count = movements.filter(m => m.type === type).length;
-              return (
-                <div key={type} className="glass-panel" style={{ textAlign: 'center', padding: 'var(--space-md)' }}>
-                  <div style={{ fontSize: '2rem', marginBottom: '4px' }}>{info.icon}</div>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: info.color }}>{count}</div>
-                  <div style={{ color: 'var(--text-tertiary)', fontSize: '0.85rem' }}>{info.label}</div>
-                </div>
-              );
-            })}
-          </div>
+          {activeTab === 'inventory' && (
+            <div className="card">
+              <div className="table-container border-0">
+                <table className="table">
+                  <thead><tr><th>Product</th><th>SKU</th><th>Available</th><th>Reserved</th><th>Min Stock</th></tr></thead>
+                  <tbody>
+                    {inventory.length === 0 ? <tr><td colSpan={5} className="text-center py-12 text-gray-400">No inventory data</td></tr> :
+                      inventory.map(item => {
+                        const isLow = item.availableQuantity <= (item.product?.minStock || 0);
+                        return (
+                          <tr key={item.id}>
+                            <td><div className="font-medium">{item.product?.name || 'Unknown'}</div>{isLow && <span className="badge badge-danger text-xs mt-0.5">Low Stock</span>}</td>
+                            <td className="text-gray-400 font-mono text-xs">{item.product?.sku || '—'}</td>
+                            <td><span className={`font-bold ${isLow ? 'text-red-600' : 'text-emerald-600'}`}>{item.availableQuantity}</span></td>
+                            <td className="text-gray-500">{item.reservedQuantity || 0}</td>
+                            <td className="text-gray-400">{item.product?.minStock || 0}</td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
-          {/* Movement Log Table */}
-          <div className="glass-panel" style={{ padding: 0 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr 1fr 2fr 1.5fr', gap: 'var(--space-md)', padding: 'var(--space-sm) var(--space-lg)', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)', fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase' }}>
-              <div>Type</div><div>Product</div><div>Qty</div><div>Stock After</div><div>Reason</div><div>Date</div>
+          {activeTab === 'movements' && (
+            <div className="card">
+              <div className="table-container border-0">
+                <table className="table">
+                  <thead><tr><th>Type</th><th>Product</th><th>Qty</th><th>Stock After</th><th>Reason</th><th>Date</th></tr></thead>
+                  <tbody>
+                    {movements.length === 0 ? <tr><td colSpan={6} className="text-center py-12 text-gray-400">No movements recorded</td></tr> :
+                      movements.map(m => {
+                        const info = MOVEMENT_LABELS[m.type] || { label: m.type, badge: 'badge-gray' };
+                        return (
+                          <tr key={m.id}>
+                            <td><span className={`badge ${info.badge}`}>{info.label}</span></td>
+                            <td className="font-medium">{m.product?.name || m.productId}</td>
+                            <td><span className={`font-bold ${['IN','RETURN'].includes(m.type) ? 'text-emerald-600' : 'text-red-600'}`}>{['IN','RETURN'].includes(m.type) ? '+' : '-'}{m.quantity}</span></td>
+                            <td>{m.stockAfter}</td>
+                            <td className="text-gray-500 text-sm">{m.reason || '—'}</td>
+                            <td className="text-gray-400 text-sm whitespace-nowrap">{new Date(m.createdAt).toLocaleString('id-ID')}</td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
-              {loading ? (
-                <div style={{ padding: 'var(--space-2xl)', textAlign: 'center', color: 'var(--text-tertiary)' }}>Loading...</div>
-              ) : movements.length === 0 ? (
-                <div style={{ padding: 'var(--space-2xl)', textAlign: 'center', color: 'var(--text-tertiary)' }}>No stock movements recorded yet.</div>
-              ) : movements.map(m => {
-                const info = MOVEMENT_LABELS[m.type] || { label: m.type, color: 'var(--text-secondary)', icon: '?' };
-                return (
-                  <div key={m.id} className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr 1fr 2fr 1.5fr', gap: 'var(--space-md)', padding: 'var(--space-md) var(--space-lg)', borderBottom: '1px solid var(--border-subtle)', alignItems: 'center' }}>
-                    <div><span className="badge" style={{ background: `${info.color}20`, color: info.color }}>{info.label}</span></div>
-                    <div style={{ fontWeight: 500 }}>{m.product?.name || m.productId}</div>
-                    <div style={{ fontWeight: 600, color: ['IN', 'RETURN'].includes(m.type) ? 'var(--success)' : 'var(--danger)' }}>
-                      {['IN', 'RETURN'].includes(m.type) ? '+' : '-'}{m.quantity}
-                    </div>
-                    <div>{m.stockAfter}</div>
-                    <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{m.reason || '-'}</div>
-                    <div style={{ color: 'var(--text-tertiary)', fontSize: '0.85rem' }}>{new Date(m.createdAt).toLocaleString()}</div>
-                  </div>
-                );
-              })}
+          )}
+
+          {activeTab === 'lowStock' && (
+            <div className="card">
+              <div className="table-container border-0">
+                <table className="table">
+                  <thead><tr><th>Product</th><th>SKU</th><th>Current Stock</th><th>Min Stock</th><th>Status</th></tr></thead>
+                  <tbody>
+                    {lowStockItems.length === 0 ? <tr><td colSpan={5} className="text-center py-12 text-emerald-600">✓ All products are well stocked!</td></tr> :
+                      lowStockItems.map(item => {
+                        const isCritical = (item.availableQuantity / (item.product?.minStock || 1)) * 100 < 50;
+                        return (
+                          <tr key={item.id}>
+                            <td className="font-medium">{item.product?.name || 'Unknown'}</td>
+                            <td className="text-gray-400 font-mono text-xs">{item.product?.sku || '—'}</td>
+                            <td><span className={`font-bold ${isCritical ? 'text-red-600' : 'text-amber-600'}`}>{item.availableQuantity}</span></td>
+                            <td className="text-gray-400">{item.product?.minStock || 0}</td>
+                            <td><span className={`badge ${isCritical ? 'badge-danger' : 'badge-warning'}`}>{isCritical ? 'Critical' : 'Low Stock'}</span></td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          )}
         </>
       )}
 
-      {/* Low Stock Alerts Tab */}
-      {activeTab === 'lowStock' && (
-        <div className="glass-panel" style={{ padding: 0 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1.5fr', gap: 'var(--space-md)', padding: 'var(--space-sm) var(--space-lg)', borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)', fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase' }}>
-            <div>Product</div><div>SKU</div><div>Current Stock</div><div>Min Stock</div><div>Status</div>
-          </div>
-          <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
-            {loading ? (
-              <div style={{ padding: 'var(--space-2xl)', textAlign: 'center', color: 'var(--text-tertiary)' }}>Loading...</div>
-            ) : lowStockItems.length === 0 ? (
-              <div style={{ padding: 'var(--space-2xl)', textAlign: 'center', color: 'var(--text-tertiary)' }}>
-                <AlertTriangle size={48} style={{ color: 'var(--success)', marginBottom: 'var(--space-md)' }} />
-                <p>All products are well stocked!</p>
-              </div>
-            ) : lowStockItems.map((item: any) => {
-              const stockPercentage = (item.availableQuantity / item.product?.minStock) * 100;
-              const isCritical = stockPercentage < 50;
-              return (
-                <div key={item.id} className="animate-fade-in" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1.5fr', gap: 'var(--space-md)', padding: 'var(--space-md) var(--space-lg)', borderBottom: '1px solid var(--border-subtle)', alignItems: 'center' }}>
-                  <div>
-                    <div style={{ fontWeight: 500 }}>{item.product?.name || 'Unknown'}</div>
-                  </div>
-                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{item.product?.sku || '-'}</div>
-                  <div style={{ fontWeight: 600, color: isCritical ? 'var(--danger)' : 'var(--warning)' }}>{item.availableQuantity}</div>
-                  <div style={{ color: 'var(--text-tertiary)' }}>{item.product?.minStock || 0}</div>
-                  <div>
-                    <span className="badge" style={{ background: isCritical ? 'rgba(239, 68, 68, 0.2)' : 'rgba(251, 191, 36, 0.2)', color: isCritical ? 'var(--danger)' : 'var(--warning)' }}>
-                      {isCritical ? 'Critical' : 'Low Stock'}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* Stock Adjustment Modal */}
-      {modalType === 'movement' && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div className="glass-panel animate-fade-in" style={{ width: '450px', padding: 'var(--space-xl)', background: '#111827' }}>
-            <h2 style={{ fontSize: '1.25rem', marginBottom: 'var(--space-lg)' }}>Stock Adjustment</h2>
-            <form onSubmit={handleSubmit}>
-              <div className="form-group" style={{ marginBottom: 'var(--space-md)' }}>
-                <label className="form-label">Adjustment Type</label>
-                <select className="form-input" value={formData.type} onChange={e => setFormData({...formData, type: e.target.value})}>
-                  <option value="IN">Stock In (Restock/Purchase)</option>
-                  <option value="OUT">Stock Out (Disposal/Loss/Damage)</option>
-                  <option value="ADJUSTMENT">Manual Adjustment (Correction)</option>
-                  <option value="RETURN">Customer Return</option>
-                </select>
-              </div>
-              <div className="form-group" style={{ marginBottom: 'var(--space-md)' }}>
-                <label className="form-label">Product *</label>
-                <select className="form-input" value={formData.productId} onChange={e => setFormData({...formData, productId: e.target.value})} required>
-                  <option value="">Select a product...</option>
-                  {products.map((p: any) => {
-                    const invItem = inventory.find((i: any) => i.productId === p.id);
-                    return (
-                      <option key={p.id} value={p.id}>
-                        {p.name} (Current: {invItem?.availableQuantity || 0})
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-              <div className="form-group" style={{ marginBottom: 'var(--space-md)' }}>
-                <label className="form-label">Quantity *</label>
-                <input 
-                  type="number" 
-                  className="form-input" 
-                  value={formData.quantity} 
-                  onChange={e => setFormData({...formData, quantity: e.target.value})} 
-                  required 
-                  min="1" 
-                  placeholder="Enter quantity"
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: 'var(--space-md)' }}>
-                <label className="form-label">Reason / Notes *</label>
-                <textarea 
-                  className="form-input" 
-                  value={formData.reason} 
-                  onChange={e => setFormData({...formData, reason: e.target.value})} 
-                  placeholder="e.g. Weekly restock from supplier, Damaged items, Stock count correction"
-                  rows={3}
-                  required
-                  style={{ resize: 'vertical' }}
-                />
-              </div>
-              <div className="form-group" style={{ marginBottom: 'var(--space-lg)' }}>
-                <label className="form-label">Reference (Optional)</label>
-                <input 
-                  type="text" 
-                  className="form-input" 
-                  value={formData.reference} 
-                  onChange={e => setFormData({...formData, reference: e.target.value})} 
-                  placeholder="Invoice #, PO #, or other reference"
-                />
-              </div>
-              <div style={{ display: 'flex', gap: 'var(--space-md)' }}>
-                <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={() => setModalType(null)} disabled={saving}>Cancel</button>
-                <button type="submit" className="btn btn-primary" style={{ flex: 1, background: 'var(--success)' }} disabled={saving}>
-                  {saving ? 'Saving...' : 'Submit Adjustment'}
-                </button>
-              </div>
-            </form>
+      <Modal open={modalType === 'movement'} onClose={() => setModalType(null)} title="Stock Adjustment"
+        footer={<><button onClick={() => setModalType(null)} className="btn btn-outline" disabled={saving}>Cancel</button><button form="movement-form" type="submit" className="btn btn-success" disabled={saving}>{saving ? <Loader2 size={14} className="animate-spin"/> : null}Submit</button></>}>
+        <form id="movement-form" onSubmit={handleSubmit} className="space-y-4">
+          <div className="form-group"><label className="form-label">Type</label><select className="form-input" value={formData.type} onChange={e => setFormData({...formData,type:e.target.value})}><option value="IN">Stock In</option><option value="OUT">Stock Out</option><option value="ADJUSTMENT">Manual Adjustment</option><option value="RETURN">Customer Return</option></select></div>
+          <div className="form-group"><label className="form-label">Product *</label><select className="form-input" value={formData.productId} onChange={e => setFormData({...formData,productId:e.target.value})} required><option value="">Select product...</option>{products.map(p => { const inv = inventory.find(i => i.productId === p.id); return <option key={p.id} value={p.id}>{p.name} (Stock: {inv?.availableQuantity || 0})</option>; })}</select></div>
+          <div className="form-group"><label className="form-label">Quantity *</label><input type="number" className="form-input" value={formData.quantity} onChange={e => setFormData({...formData,quantity:e.target.value})} required min="1" placeholder="Enter quantity"/></div>
+          <div className="form-group"><label className="form-label">Reason *</label><textarea className="form-input" value={formData.reason} onChange={e => setFormData({...formData,reason:e.target.value})} rows={2} required placeholder="e.g. Weekly restock, Damaged items"/></div>
+          <div className="form-group"><label className="form-label">Reference (Optional)</label><input className="form-input" value={formData.reference} onChange={e => setFormData({...formData,reference:e.target.value})} placeholder="Invoice #, PO #"/></div>
+        </form>
+      </Modal>
+
+      {/* Transfer Modal */}
+      <Modal open={modalType === 'transfer'} onClose={() => setModalType(null)} title="Transfer Stock" size="lg"
+        footer={<><button onClick={() => setModalType(null)} className="btn btn-outline" disabled={saving}>Cancel</button><button form="transfer-form" type="submit" className="btn btn-primary" disabled={saving}>{saving ? <Loader2 size={14} className="animate-spin"/> : null}Transfer</button></>}>
+        <form id="transfer-form" onSubmit={handleTransfer} className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="form-group"><label className="form-label">From Store *</label><select className="form-input" value={transferData.fromStoreId} onChange={e => setTransferData({...transferData,fromStoreId:e.target.value})} required><option value="">Select source...</option>{stores.map(s => <option key={s.id} value={s.id} disabled={s.id===transferData.toStoreId}>{s.name}</option>)}</select></div>
+            <div className="form-group"><label className="form-label">To Store *</label><select className="form-input" value={transferData.toStoreId} onChange={e => setTransferData({...transferData,toStoreId:e.target.value})} required><option value="">Select destination...</option>{stores.map(s => <option key={s.id} value={s.id} disabled={s.id===transferData.fromStoreId}>{s.name}</option>)}</select></div>
           </div>
-        </div>
-      )}
-
-      {/* Stock Transfer Modal */}
-      {modalType === 'transfer' && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', overflowY: 'auto' }}>
-          <div className="glass-panel animate-fade-in" style={{ width: '550px', padding: 'var(--space-xl)', background: '#111827', margin: 'var(--space-xl)' }}>
-            <h2 style={{ fontSize: '1.25rem', marginBottom: 'var(--space-lg)' }}>Transfer Stock Between Stores</h2>
-            <form onSubmit={handleTransferSubmit}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)', marginBottom: 'var(--space-md)' }}>
-                <div className="form-group">
-                  <label className="form-label">From Store *</label>
-                  <select 
-                    className="form-input" 
-                    value={transferData.fromStoreId} 
-                    onChange={e => setTransferData({...transferData, fromStoreId: e.target.value})} 
-                    required
-                  >
-                    <option value="">Select source store...</option>
-                    {stores.map((store: any) => (
-                      <option key={store.id} value={store.id} disabled={store.id === transferData.toStoreId}>
-                        {store.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">To Store *</label>
-                  <select 
-                    className="form-input" 
-                    value={transferData.toStoreId} 
-                    onChange={e => setTransferData({...transferData, toStoreId: e.target.value})} 
-                    required
-                  >
-                    <option value="">Select destination store...</option>
-                    {stores.map((store: any) => (
-                      <option key={store.id} value={store.id} disabled={store.id === transferData.fromStoreId}>
-                        {store.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+          <div>
+            <label className="form-label mb-2">Items</label>
+            {transferData.items.map((item, i) => (
+              <div key={i} className="flex gap-2 mb-2">
+                <select className="form-input flex-1" value={item.productId} onChange={e => { const items=[...transferData.items]; items[i]={...items[i],productId:e.target.value}; setTransferData({...transferData,items}); }} required><option value="">Select product...</option>{products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
+                <input type="number" className="form-input w-24" value={item.quantity} onChange={e => { const items=[...transferData.items]; items[i]={...items[i],quantity:e.target.value}; setTransferData({...transferData,items}); }} placeholder="Qty" required min="1"/>
+                {transferData.items.length > 1 && <button type="button" onClick={() => setTransferData({...transferData,items:transferData.items.filter((_,j)=>j!==i)})} className="btn btn-ghost btn-icon text-red-500">×</button>}
               </div>
-
-              <div style={{ marginBottom: 'var(--space-md)' }}>
-                <label className="form-label" style={{ marginBottom: 'var(--space-sm)' }}>Items to Transfer</label>
-                {transferData.items.map((item, index) => (
-                  <div key={index} style={{ display: 'flex', gap: 'var(--space-sm)', marginBottom: 'var(--space-sm)' }}>
-                    <select 
-                      className="form-input" 
-                      value={item.productId} 
-                      onChange={e => updateTransferItem(index, 'productId', e.target.value)}
-                      required
-                      style={{ flex: 2 }}
-                    >
-                      <option value="">Select product...</option>
-                      {products.map((p: any) => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
-                    <input 
-                      type="number" 
-                      className="form-input" 
-                      value={item.quantity} 
-                      onChange={e => updateTransferItem(index, 'quantity', e.target.value)}
-                      placeholder="Qty"
-                      required
-                      min="1"
-                      style={{ flex: 1 }}
-                    />
-                    {transferData.items.length > 1 && (
-                      <button 
-                        type="button" 
-                        className="btn btn-outline" 
-                        onClick={() => removeTransferItem(index)}
-                        style={{ padding: '0 var(--space-md)', borderColor: 'var(--danger)', color: 'var(--danger)' }}
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
-                ))}
-                <button 
-                  type="button" 
-                  className="btn btn-outline" 
-                  onClick={addTransferItem}
-                  style={{ width: '100%', marginTop: 'var(--space-sm)' }}
-                >
-                  + Add Another Item
-                </button>
-              </div>
-
-              <div className="form-group" style={{ marginBottom: 'var(--space-lg)' }}>
-                <label className="form-label">Transfer Notes (Optional)</label>
-                <textarea 
-                  className="form-input" 
-                  value={transferData.notes} 
-                  onChange={e => setTransferData({...transferData, notes: e.target.value})} 
-                  placeholder="Reason for transfer, delivery details, etc."
-                  rows={2}
-                  style={{ resize: 'vertical' }}
-                />
-              </div>
-
-              <div style={{ display: 'flex', gap: 'var(--space-md)' }}>
-                <button type="button" className="btn btn-outline" style={{ flex: 1 }} onClick={() => setModalType(null)} disabled={saving}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary" style={{ flex: 1, background: 'var(--primary)' }} disabled={saving}>
-                  {saving ? 'Processing...' : 'Transfer Stock'}
-                </button>
-              </div>
-            </form>
+            ))}
+            <button type="button" onClick={() => setTransferData({...transferData,items:[...transferData.items,{productId:'',quantity:''}]})} className="btn btn-outline btn-sm w-full">+ Add Item</button>
           </div>
-        </div>
-      )}
+          <div className="form-group"><label className="form-label">Notes</label><textarea className="form-input" value={transferData.notes} onChange={e => setTransferData({...transferData,notes:e.target.value})} rows={2}/></div>
+        </form>
+      </Modal>
+
+      {/* Reserve/Release Modal */}
+      <Modal open={modalType === 'reserve' || modalType === 'release'} onClose={() => setModalType(null)} title={modalType === 'reserve' ? 'Reserve Stock' : 'Release Stock'}
+        footer={<><button onClick={() => setModalType(null)} className="btn btn-outline" disabled={saving}>Cancel</button><button form="reserve-form" type="submit" className={`btn ${modalType === 'reserve' ? 'btn-warning' : 'btn-primary'}`} disabled={saving}>{saving ? <Loader2 size={14} className="animate-spin"/> : null}{modalType === 'reserve' ? 'Reserve' : 'Release'}</button></>}>
+        <form id="reserve-form" onSubmit={e => handleReserveRelease(e, modalType as 'reserve' | 'release')} className="space-y-4">
+          <div className="form-group"><label className="form-label">Product *</label><select className="form-input" value={reserveData.productId} onChange={e => setReserveData({...reserveData,productId:e.target.value})} required><option value="">Select product...</option>{products.map(p => { const inv = inventory.find(i => i.productId === p.id); return <option key={p.id} value={p.id}>{p.name} (Available: {inv?.availableQuantity ?? 0}, Reserved: {inv?.reservedQuantity ?? 0})</option>; })}</select></div>
+          <div className="form-group"><label className="form-label">Quantity *</label><input type="number" className="form-input" value={reserveData.quantity} onChange={e => setReserveData({...reserveData,quantity:e.target.value})} required min="1"/></div>
+          <div className="form-group"><label className="form-label">Reference</label><input className="form-input" value={reserveData.reference} onChange={e => setReserveData({...reserveData,reference:e.target.value})} placeholder="Order #, reference..."/></div>
+        </form>
+      </Modal>
     </div>
   );
 }

@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { Plus, Edit, Trash2, Percent, Loader2, X } from 'lucide-react';
 
+import toast from 'react-hot-toast';
+
 export function TaxesTab({ taxes, onSave, onDelete }: { taxes: any[], onSave: (d: any) => Promise<void>, onDelete: (i: string) => Promise<void> }) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingData, setEditingData] = useState<any>(null);
@@ -32,8 +34,9 @@ export function TaxesTab({ taxes, onSave, onDelete }: { taxes: any[], onSave: (d
         type
       });
       setIsModalOpen(false);
-    } catch {
-      alert("Failed to save tax");
+    } catch (err: any) {
+      console.error('Failed to save tax:', err);
+      toast.error(err?.response?.data?.message || 'Failed to save tax');
     }
     setLoading(false);
   };

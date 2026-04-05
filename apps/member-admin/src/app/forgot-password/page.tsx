@@ -1,114 +1,83 @@
 'use client';
 
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import toast from 'react-hot-toast';
-import { authService } from '@/services/auth.service';
 import Link from 'next/link';
+import axios from 'axios';
+import toast from 'react-hot-toast';
+import { Mail, ArrowLeft, CheckCircle } from 'lucide-react';
 
-const forgotPasswordSchema = z.object({
-  email: z.string().email('Invalid email address'),
-});
-
-type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4404/api/v1';
 
 export default function ForgotPasswordPage() {
-  const [isLoading, setIsLoading] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [sent, setSent] = useState(false);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<ForgotPasswordFormData>({
-    resolver: zodResolver(forgotPasswordSchema),
-  });
-
-  const onSubmit = async (data: ForgotPasswordFormData) => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) return;
+    setLoading(true);
     try {
-      setIsLoading(true);
-      const response = await authService.forgotPassword(data.email);
-      toast.success(response.message || 'Password reset email sent!');
-      setIsSuccess(true);
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to send reset email');
+      await axios.post(`${API_URL}/auth/forgot-password`, { email });
+      setSent(true);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to send reset email');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="text-center text-3xl font-bold text-gray-900">
-            Forgot your password?
+    <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '3rem 1rem' }}>
+      <div style={{ maxWidth: '28rem', width: '100%' }}>
+        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
+          <h2 style={{ fontSize: '1.875rem', fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
+            Forgot Password
           </h2>
-          <p className="mt-2 text-center text-sm text-gray-600">
-            Enter your email and we&apos;ll send you a reset link
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+            Enter your email to receive a password reset link
           </p>
         </div>
 
-        <div className="bg-white shadow rounded-lg p-8">
-          {!isSuccess ? (
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                  Email address
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  {...register('email')}
-                  className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-                {errors.email && (
-                  <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
-                )}
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? 'Sending...' : 'Send Reset Link'}
-              </button>
-            </form>
-          ) : (
-            <div className="text-center">
-              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
-                <svg
-                  className="h-6 w-6 text-green-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-              </div>
-              <h3 className="mt-4 text-lg font-medium text-gray-900">Check your email</h3>
-              <p className="mt-2 text-sm text-gray-600">
-                We&apos;ve sent you a password reset link. Please check your email.
+        <div className="card" style={{ padding: '2rem' }}>
+          {sent ? (
+            <div style={{ textAlign: 'center' }}>
+              <CheckCircle size={48} style={{ color: 'var(--success)', margin: '0 auto var(--space-lg)' }} />
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: 'var(--space-sm)' }}>Check your email</h3>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: 'var(--space-lg)' }}>
+                We sent a password reset link to <strong>{email}</strong>
               </p>
+              <Link href="/login" style={{ color: 'var(--accent-base)', fontWeight: 500, fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <ArrowLeft size={16} /> Back to login
+              </Link>
             </div>
+          ) : (
+            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              <div className="form-group">
+                <label htmlFor="email" className="form-label">Email address</label>
+                <div style={{ position: 'relative' }}>
+                  <Mail size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-tertiary)' }} />
+                  <input
+                    id="email"
+                    type="email"
+                    className="form-input"
+                    style={{ paddingLeft: 36 }}
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    required
+                  />
+                </div>
+              </div>
+              <button type="submit" disabled={loading || !email} className="btn btn-primary btn-lg" style={{ width: '100%' }}>
+                {loading ? 'Sending...' : 'Send Reset Link'}
+              </button>
+              <Link href="/login" style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <ArrowLeft size={14} /> Back to login
+              </Link>
+            </form>
           )}
         </div>
-
-        <p className="text-center text-sm text-gray-600">
-          Remember your password?{' '}
-          <Link href="/login" className="text-blue-600 hover:text-blue-700 font-medium">
-            Sign in
-          </Link>
-        </p>
       </div>
     </div>
   );

@@ -1,127 +1,82 @@
 'use client';
 
 import { useEffect, useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { authService } from '@/services/auth.service';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { CheckCircle, XCircle, Loader2, ArrowRight } from 'lucide-react';
+import axios from 'axios';
 import Link from 'next/link';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4404/api/v1';
+
 function VerifyEmailContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const token = searchParams.get('token');
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    const verifyEmail = async () => {
-      const token = searchParams.get('token');
+    if (!token) {
+      setStatus('error');
+      setMessage('Token verifikasi tidak ditemukan.');
+      return;
+    }
 
-      if (!token) {
-        setStatus('error');
-        setMessage('Invalid verification link');
-        return;
-      }
-
-      try {
-        const response = await authService.verifyEmail(token);
+    axios.post(`${API_URL}/auth/verify-email`, { token })
+      .then(() => {
         setStatus('success');
-        setMessage(response.message || 'Email verified successfully!');
-        
-        // Redirect to login after 3 seconds
-        setTimeout(() => {
-          router.push('/login');
-        }, 3000);
-      } catch (error: any) {
+        setMessage('Email Anda berhasil diverifikasi! Akun Anda sekarang aktif.');
+        setTimeout(() => router.push('/login'), 3000);
+      })
+      .catch(err => {
         setStatus('error');
-        setMessage(error.response?.data?.message || 'Email verification failed');
-      }
-    };
-
-    verifyEmail();
-  }, [searchParams, router]);
+        setMessage(err.response?.data?.message || 'Token tidak valid atau sudah kadaluarsa.');
+      });
+  }, [token]);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="text-center text-3xl font-bold text-gray-900">
-            Email Verification
-          </h2>
-        </div>
-
-        <div className="bg-white shadow rounded-lg p-8">
-          {status === 'loading' && (
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-4 text-gray-600">Verifying your email...</p>
-            </div>
-          )}
-
-          {status === 'success' && (
-            <div className="text-center">
-              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
-                <svg
-                  className="h-6 w-6 text-green-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-              </div>
-              <h3 className="mt-4 text-lg font-medium text-gray-900">Success!</h3>
-              <p className="mt-2 text-sm text-gray-600">{message}</p>
-              <p className="mt-4 text-sm text-gray-500">
-                Redirecting to login page...
-              </p>
-            </div>
-          )}
-
-          {status === 'error' && (
-            <div className="text-center">
-              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
-                <svg
-                  className="h-6 w-6 text-red-600"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="2"
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </div>
-              <h3 className="mt-4 text-lg font-medium text-gray-900">Verification Failed</h3>
-              <p className="mt-2 text-sm text-gray-600">{message}</p>
-              <div className="mt-6">
-                <Link
-                  href="/login"
-                  className="text-blue-600 hover:text-blue-700 font-medium"
-                >
-                  Go to Login
-                </Link>
-              </div>
-            </div>
-          )}
-        </div>
+    <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
+      <div className="card" style={{ maxWidth: '480px', width: '100%', padding: '3rem 2rem', textAlign: 'center' }}>
+        {status === 'loading' && (
+          <>
+            <Loader2 size={56} style={{ color: 'var(--accent-base)', animation: 'spin 1s linear infinite', margin: '0 auto 1.5rem' }} />
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem' }}>Memverifikasi Email...</h2>
+            <p style={{ color: 'var(--text-secondary)' }}>Mohon tunggu sebentar.</p>
+          </>
+        )}
+        {status === 'success' && (
+          <>
+            <CheckCircle size={56} style={{ color: 'var(--success)', margin: '0 auto 1.5rem' }} />
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--success)', marginBottom: '0.5rem' }}>Email Terverifikasi!</h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>{message}</p>
+            <p style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem', marginBottom: '1rem' }}>Mengarahkan ke halaman login...</p>
+            <Link href="/login" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+              Login Sekarang <ArrowRight size={16} />
+            </Link>
+          </>
+        )}
+        {status === 'error' && (
+          <>
+            <XCircle size={56} style={{ color: 'var(--danger)', margin: '0 auto 1.5rem' }} />
+            <h2 style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--danger)', marginBottom: '0.5rem' }}>Verifikasi Gagal</h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>{message}</p>
+            <Link href="/login" className="btn btn-outline" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+              Kembali ke Login
+            </Link>
+          </>
+        )}
       </div>
+      <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { 100% { transform: rotate(360deg); } }` }} />
     </div>
   );
 }
 
-
 export default function VerifyEmailPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Loader2 size={40} style={{ animation: 'spin 1s linear infinite' }} />
+        <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { 100% { transform: rotate(360deg); } }` }} />
       </div>
     }>
       <VerifyEmailContent />

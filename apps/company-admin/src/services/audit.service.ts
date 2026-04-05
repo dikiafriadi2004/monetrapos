@@ -44,13 +44,22 @@ class AuditService {
     if (params?.userId) queryParams.append('userId', params.userId);
     if (params?.companyId) queryParams.append('companyId', params.companyId);
     if (params?.action) queryParams.append('action', params.action);
-    if (params?.resource) queryParams.append('resource', params.resource);
-    if (params?.startDate) queryParams.append('startDate', params.startDate);
-    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    if (params?.resource) queryParams.append('entityType', params.resource); // backend uses entityType
+    if (params?.startDate) queryParams.append('dateFrom', params.startDate); // backend uses dateFrom
+    if (params?.endDate) queryParams.append('dateTo', params.endDate);       // backend uses dateTo
     if (params?.page) queryParams.append('page', String(params.page));
     if (params?.limit) queryParams.append('limit', String(params.limit));
 
-    const data = await api.get(`/audit?${queryParams.toString()}`) as any;
+    const data = await api.get(`/audit/logs?${queryParams.toString()}`) as any;
+    // Backend returns { data, total, page, limit }
+    if (data && typeof data === 'object' && Array.isArray(data.data)) {
+      return {
+        data: data.data,
+        total: data.total || data.data.length,
+        page: data.page || params?.page || 1,
+        limit: data.limit || params?.limit || 50,
+      };
+    }
     return {
       data: Array.isArray(data) ? data : [],
       total: Array.isArray(data) ? data.length : 0,
@@ -60,7 +69,11 @@ class AuditService {
   }
 
   async getById(id: string): Promise<AuditLog> {
-    return await api.get(`/audit/${id}`);
+    // Backend doesn't have GET /audit/:id — use logs with filter
+    const result = await this.getAll({ limit: 1 });
+    const found = result.data.find(l => l.id === id);
+    if (!found) throw new Error('Audit log not found');
+    return found;
   }
 
   async getStats(): Promise<AuditStats> {
@@ -83,12 +96,14 @@ class AuditService {
     endDate?: string;
     format?: 'csv' | 'json';
   }): Promise<Blob> {
-    const queryParams = new URLSearchParams();
-    if (params?.startDate) queryParams.append('startDate', params.startDate);
-    if (params?.endDate) queryParams.append('endDate', params.endDate);
-    if (params?.format) queryParams.append('format', params.format);
-
-    return await api.get(`/audit/export?${queryParams.toString()}`, { responseType: 'blob' });
+    // Backend doesn't have export endpoint — fetch all logs and convert client-side
+    const { data } = await this.getAll({
+      startDate: params?.startDate,
+      endDate: params?.endDate,
+      limit: 1000,
+    });
+    const json = JSON.stringify(data, null, 2);
+    return new Blob([json], { type: 'application/json' });
   }
 }
 

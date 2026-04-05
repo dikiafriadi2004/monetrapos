@@ -66,8 +66,9 @@ export class CreateProductDto {
   lowStockAlert?: number;
 
   @ApiProperty({ example: 'store-uuid' })
+  @IsOptional()
   @IsString()
-  storeId: string;
+  storeId?: string;
 
   @ApiPropertyOptional({ example: 'category-uuid' })
   @IsOptional()
@@ -176,12 +177,14 @@ export class CreateCategoryDto {
   sortOrder?: number;
 
   @ApiProperty({ example: 'company-uuid' })
+  @IsOptional()
   @IsString()
-  companyId: string;
+  companyId?: string;
 
   @ApiProperty({ example: 'store-uuid' })
+  @IsOptional()
   @IsString()
-  storeId: string;
+  storeId?: string;
 
   @ApiPropertyOptional({ example: 'parent-category-uuid' })
   @IsOptional()

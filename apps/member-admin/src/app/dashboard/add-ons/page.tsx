@@ -59,11 +59,17 @@ export default function AddOnsMarketplacePage() {
       setPurchasing(addOn.id);
       const result = await addOnsService.purchaseAddOn(addOn.id);
       
-      // Redirect to payment URL
-      window.location.href = result.paymentUrl;
+      // Redirect ke checkout page kita, bukan langsung ke Xendit
+      if (result.paymentUrl) {
+        const checkoutUrl = `/checkout?invoice=${encodeURIComponent(result.companyAddOn?.invoice_id || '')}&amount=${addOn.price}&paymentUrl=${encodeURIComponent(result.paymentUrl)}`;
+        router.push(checkoutUrl);
+      } else {
+        toast.error('Gagal mendapatkan URL pembayaran');
+        setPurchasing(null);
+      }
     } catch (error: any) {
       console.error('Failed to purchase add-on:', error);
-      toast.error(error.response?.data?.message || 'Failed to purchase add-on');
+      toast.error(error.response?.data?.message || 'Gagal membeli add-on');
       setPurchasing(null);
     }
   };

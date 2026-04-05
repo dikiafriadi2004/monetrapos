@@ -1,6 +1,6 @@
-# Design Document - MonetRAPOS Complete System
+﻿# Design Document - MonetraPOS Complete System
 
-**Feature Name**: MonetRAPOS Complete System  
+**Feature Name**: MonetraPOS Complete System  
 **Type**: SaaS Multi-Tenant POS System  
 **Status**: In Design  
 **Created**: 28 Maret 2026
@@ -9,7 +9,7 @@
 
 ## Overview
 
-MonetRAPOS is a comprehensive SaaS-based Point of Sale system designed for Indonesian SMEs in the FnB, Laundry, and Retail sectors. The system follows a multi-tenant architecture where a single platform serves multiple businesses (members), each with their own isolated data and configurations.
+MonetraPOS is a comprehensive SaaS-based Point of Sale system designed for Indonesian SMEs in the FnB, Laundry, and Retail sectors. The system follows a multi-tenant architecture where a single platform serves multiple businesses (members), each with their own isolated data and configurations.
 
 ### Key Design Principles
 
@@ -23,7 +23,7 @@ MonetRAPOS is a comprehensive SaaS-based Point of Sale system designed for Indon
 ### System Components
 
 - **Backend API (NestJS)**: Port 4404, MySQL database, Redis cache, Bull queue, JWT authentication
-- **Company Admin (Next.js)**: Port 4402, for MonetRAPOS administrators
+- **Company Admin (Next.js)**: Port 4402, for MonetraPOS administrators
 - **Member Admin (Next.js)**: Port 4403, for business owners and staff
 - **Mobile POS (Flutter)**: Future phase, for cashiers and mobile transactions
 
@@ -1333,14 +1333,14 @@ Together, unit tests catch concrete bugs while property tests verify general cor
 **Test Configuration**:
 - Minimum 100 iterations per property test (due to randomization)
 - Each property test must reference its design document property
-- Tag format: `Feature: monetrapos-complete-system, Property {number}: {property_text}`
+- Tag format: `Feature: MonetraPOS-complete-system, Property {number}: {property_text}`
 
 **Example Property Test**:
 
 ```typescript
 import * as fc from 'fast-check';
 
-describe('Feature: monetrapos-complete-system, Property 3: Subscription End Date Calculation', () => {
+describe('Feature: MonetraPOS-complete-system, Property 3: Subscription End Date Calculation', () => {
   it('should calculate end_date correctly for any start_date and duration', () => {
     fc.assert(
       fc.property(
@@ -1530,4 +1530,5 @@ describe('Feature: monetrapos-complete-system, Property 3: Subscription End Date
 **Document Status**: Complete  
 **Last Updated**: 28 Maret 2026  
 **Next Step**: Create implementation tasks
+
 

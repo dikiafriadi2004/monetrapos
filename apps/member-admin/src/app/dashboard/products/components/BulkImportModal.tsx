@@ -2,6 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { X, Upload, FileText, Download, AlertCircle } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 interface BulkImportModalProps {
   isOpen: boolean;
@@ -37,7 +38,7 @@ export function BulkImportModal({ isOpen, onClose, onImport }: BulkImportModalPr
       if (droppedFile.type === 'text/csv' || droppedFile.name.endsWith('.csv')) {
         setFile(droppedFile);
       } else {
-        alert('Please upload a CSV file');
+        toast.error('Please upload a CSV file');
       }
     }
   };

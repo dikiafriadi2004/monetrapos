@@ -43,30 +43,60 @@ class TransactionsService {
     page?: number;
     limit?: number;
   }): Promise<{ data: PaymentTransaction[]; total: number; page: number; limit: number }> {
-    const queryParams = new URLSearchParams();
-    if (params?.status) queryParams.append('status', params.status);
-    if (params?.startDate) queryParams.append('startDate', params.startDate);
-    if (params?.endDate) queryParams.append('endDate', params.endDate);
-    if (params?.page) queryParams.append('page', String(params.page));
-    if (params?.limit) queryParams.append('limit', String(params.limit));
+    // Use billing admin invoices as the source of truth for platform transactions
+    const data = await api.get('/billing/admin/invoices') as any;
+    const invoices = Array.isArray(data) ? data : [];
 
-    const data = await api.get(`/admin/transactions?${queryParams.toString()}`) as any;
+    // Map invoices to transaction format
+    const mapped: PaymentTransaction[] = invoices.map((inv: any) => ({
+      id: inv.id,
+      companyId: inv.companyId,
+      company: inv.company,
+      subscriptionId: inv.subscriptionId,
+      amount: Number(inv.total || 0),
+      currency: 'IDR',
+      status: inv.status === 'paid' ? 'paid' : inv.status === 'pending' ? 'pending' : inv.status === 'cancelled' ? 'failed' : 'pending',
+      paymentMethod: 'xendit',
+      paymentGateway: 'xendit' as const,
+      externalId: inv.invoiceNumber,
+      paidAt: inv.paidAt,
+      createdAt: inv.createdAt,
+      updatedAt: inv.updatedAt,
+    }));
+
+    // Apply filters
+    let filtered = mapped;
+    if (params?.status && params.status !== 'all') {
+      filtered = filtered.filter(t => t.status === params.status);
+    }
+
     return {
-      data: Array.isArray(data) ? data : [],
-      total: Array.isArray(data) ? data.length : 0,
+      data: filtered,
+      total: filtered.length,
       page: params?.page || 1,
       limit: params?.limit || 20,
     };
   }
 
   async getById(id: string): Promise<PaymentTransaction> {
-    return await api.get(`/admin/transactions/${id}`);
+    const data = await api.get(`/billing/invoices/${id}`) as any;
+    return {
+      id: data.id,
+      companyId: data.companyId,
+      amount: Number(data.total || 0),
+      currency: 'IDR',
+      status: data.status === 'paid' ? 'paid' : 'pending',
+      paymentMethod: 'xendit',
+      paymentGateway: 'xendit' as const,
+      externalId: data.invoiceNumber,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt,
+    };
   }
 
   async getStats(): Promise<TransactionStats> {
     const { data } = await this.getAll();
     const paid = data.filter(t => t.status === 'paid');
-    
     return {
       total: data.length,
       totalAmount: data.reduce((sum, t) => sum + t.amount, 0),
@@ -78,7 +108,8 @@ class TransactionsService {
   }
 
   async refund(id: string, reason?: string): Promise<PaymentTransaction> {
-    return await api.post(`/admin/transactions/${id}/refund`, { reason });
+    // Not implemented in backend yet
+    throw new Error('Refund not available');
   }
 }
 

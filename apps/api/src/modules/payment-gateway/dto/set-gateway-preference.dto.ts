@@ -4,10 +4,10 @@ import { ApiProperty } from '@nestjs/swagger';
 export class SetGatewayPreferenceDto {
   @ApiProperty({
     description: 'Preferred payment gateway',
-    enum: ['midtrans', 'xendit'],
-    example: 'midtrans',
+    enum: ['xendit'],
+    example: 'xendit',
   })
-  @IsEnum(['midtrans', 'xendit'])
+  @IsEnum(['xendit'])
   @IsNotEmpty()
-  gateway: 'midtrans' | 'xendit';
+  gateway: 'xendit';
 }

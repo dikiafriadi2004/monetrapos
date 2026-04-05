@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -16,6 +17,7 @@ import {
   CreateVariantDto,
   UpdateVariantDto,
 } from './dto';
+import { deleteOldFile } from '../../common/utils/file.utils';
 
 @Injectable()
 export class ProductsService {
@@ -26,6 +28,17 @@ export class ProductsService {
     private variantRepo: Repository<ProductVariant>,
   ) {}
 
+  /**
+   * Get first active store for a company (used as default storeId)
+   */
+  async getDefaultStoreId(companyId: string): Promise<string | null> {
+    const result = await this.productRepo.manager.query(
+      `SELECT id FROM stores WHERE company_id = ? AND is_active = 1 ORDER BY created_at ASC LIMIT 1`,
+      [companyId]
+    );
+    return result?.[0]?.id || null;
+  }
+
   // ────── Products ──────
 
   async createProduct(dto: CreateProductDto): Promise<Product> {
@@ -35,7 +48,7 @@ export class ProductsService {
         where: { sku: dto.sku, storeId: dto.storeId },
       });
       if (existingSku) {
-        throw new ConflictException(`Product with SKU "${dto.sku}" already exists`);
+        throw new ConflictException(`Product dengan SKU "${dto.sku}" sudah ada`);
       }
     }
 
@@ -45,11 +58,35 @@ export class ProductsService {
         where: { barcode: dto.barcode, storeId: dto.storeId },
       });
       if (existingBarcode) {
-        throw new ConflictException(`Product with barcode "${dto.barcode}" already exists`);
+        throw new ConflictException(`Product dengan barcode "${dto.barcode}" sudah ada`);
       }
     }
 
-    const product = this.productRepo.create(dto);
+    // Map DTO fields to entity fields
+    const productData: Partial<Product> = {
+      name: dto.name,
+      description: dto.description,
+      sku: dto.sku,
+      barcode: dto.barcode,
+      price: dto.price,
+      cost: (dto as any).costPrice || (dto as any).cost || 0,
+      categoryId: dto.categoryId,
+      storeId: dto.storeId,
+      companyId: (dto as any).companyId,
+      trackInventory: (dto as any).trackStock ?? (dto as any).trackInventory ?? true,
+      stock: (dto as any).stock || 0,
+      lowStockThreshold: (dto as any).lowStockAlert || (dto as any).lowStockThreshold || 10,
+      isActive: (dto as any).isActive !== undefined ? (dto as any).isActive : true,
+      hasVariants: (dto as any).hasVariants || false,
+    };
+
+    // Handle image — could be imageUrl or image field
+    const imageValue = (dto as any).imageUrl || (dto as any).image;
+    if (imageValue && !imageValue.startsWith('blob:')) {
+      productData.imageUrl = imageValue;
+    }
+
+    const product = this.productRepo.create(productData);
     return this.productRepo.save(product);
   }
 
@@ -62,6 +99,7 @@ export class ProductsService {
       categoryId?: string;
       isActive?: boolean;
       lowStock?: boolean;
+      companyId?: string;
     },
   ): Promise<{ data: Product[]; total: number; page: number; limit: number }> {
     const page = options?.page || 1;
@@ -71,12 +109,18 @@ export class ProductsService {
     const queryBuilder = this.productRepo
       .createQueryBuilder('product')
       .leftJoinAndSelect('product.category', 'category')
-      .leftJoinAndSelect('product.variants', 'variants')
-      .where('product.storeId = :storeId', { storeId });
+      .leftJoinAndSelect('product.variants', 'variants');
+
+    // Filter by storeId or companyId
+    if (storeId) {
+      queryBuilder.where('product.storeId = :storeId', { storeId });
+    } else if (options?.companyId) {
+      queryBuilder.where('product.companyId = :companyId', { companyId: options.companyId });
+    }
 
     if (options?.search) {
       queryBuilder.andWhere(
-        '(product.name ILIKE :search OR product.sku ILIKE :search OR product.barcode ILIKE :search)',
+        '(product.name LIKE :search OR product.sku LIKE :search OR product.barcode LIKE :search)',
         { search: `%${options.search}%` },
       );
     }
@@ -116,6 +160,15 @@ export class ProductsService {
     return product;
   }
 
+  async findByBarcode(barcode: string, storeId: string): Promise<Product> {
+    const product = await this.productRepo.findOne({
+      where: { barcode, storeId },
+      relations: ['category', 'variants'],
+    });
+    if (!product) throw new NotFoundException(`Product with barcode "${barcode}" not found`);
+    return product;
+  }
+
   async updateProduct(id: string, dto: UpdateProductDto): Promise<Product> {
     const product = await this.findOneProduct(id);
 
@@ -125,7 +178,7 @@ export class ProductsService {
         where: { sku: dto.sku, storeId: product.storeId },
       });
       if (existingSku && existingSku.id !== id) {
-        throw new ConflictException(`Product with SKU "${dto.sku}" already exists`);
+        throw new ConflictException(`Product dengan SKU "${dto.sku}" sudah ada`);
       }
     }
 
@@ -135,16 +188,45 @@ export class ProductsService {
         where: { barcode: dto.barcode, storeId: product.storeId },
       });
       if (existingBarcode && existingBarcode.id !== id) {
-        throw new ConflictException(`Product with barcode "${dto.barcode}" already exists`);
+        throw new ConflictException(`Product dengan barcode "${dto.barcode}" sudah ada`);
       }
     }
 
-    Object.assign(product, dto);
+    // Map DTO fields to entity fields
+    if (dto.name !== undefined) product.name = dto.name;
+    if (dto.description !== undefined) product.description = dto.description;
+    if (dto.sku !== undefined) product.sku = dto.sku;
+    if (dto.barcode !== undefined) product.barcode = dto.barcode;
+    if (dto.price !== undefined) product.price = dto.price;
+    if (dto.categoryId !== undefined) product.categoryId = dto.categoryId;
+    if (dto.isActive !== undefined) product.isActive = dto.isActive;
+
+    // Handle aliased fields
+    const d = dto as any;
+    if (d.costPrice !== undefined) product.cost = d.costPrice;
+    if (d.cost !== undefined) product.cost = d.cost;
+    if (d.trackStock !== undefined) product.trackInventory = d.trackStock;
+    if (d.trackInventory !== undefined) product.trackInventory = d.trackInventory;
+    if (d.lowStockAlert !== undefined) product.lowStockThreshold = d.lowStockAlert;
+    if (d.lowStockThreshold !== undefined) product.lowStockThreshold = d.lowStockThreshold;
+    if (d.stock !== undefined) product.stock = d.stock;
+    if (d.hasVariants !== undefined) product.hasVariants = d.hasVariants;
+
+    // Handle image
+    const imageValue = d.imageUrl || d.image;
+    if (imageValue && !imageValue.startsWith('blob:')) {
+      product.imageUrl = imageValue;
+    }
+
     return this.productRepo.save(product);
   }
 
   async removeProduct(id: string): Promise<void> {
     const product = await this.findOneProduct(id);
+    // Delete image file if exists
+    if (product.imageUrl) {
+      deleteOldFile(product.imageUrl);
+    }
     await this.productRepo.remove(product);
   }
 
@@ -349,18 +431,17 @@ export class ProductsService {
     });
     if (!category) throw new NotFoundException('Category not found');
 
-    // Check if category has children
     if (category.children && category.children.length > 0) {
-      throw new ConflictException(
-        'Cannot delete category with subcategories. Delete subcategories first.',
-      );
+      throw new ConflictException('Cannot delete category with subcategories. Delete subcategories first.');
     }
 
-    // Check if category has products
     if (category.products && category.products.length > 0) {
-      throw new ConflictException(
-        'Cannot delete category with products. Move or delete products first.',
-      );
+      throw new ConflictException('Cannot delete category with products. Move or delete products first.');
+    }
+
+    // Delete image file if exists
+    if (category.imageUrl) {
+      deleteOldFile(category.imageUrl);
     }
 
     await this.categoryRepo.remove(category);

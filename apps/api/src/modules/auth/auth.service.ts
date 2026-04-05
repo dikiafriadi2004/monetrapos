@@ -20,6 +20,8 @@ import { SubscriptionsService } from '../subscriptions/subscriptions.service';
 import { SubscriptionPlansService } from '../subscriptions/subscription-plans.service';
 import { BillingService } from '../billing/billing.service';
 import { PaymentGatewayService } from '../payment-gateway/payment-gateway.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { EmailService } from '../email/email.service';
 import {
   LoginDto,
   RegisterCompanyDto,
@@ -47,6 +49,8 @@ export class AuthService {
     private subscriptionPlansService: SubscriptionPlansService,
     private billingService: BillingService,
     private paymentGatewayService: PaymentGatewayService,
+    private notificationsService: NotificationsService,
+    private emailService: EmailService,
   ) {}
 
   async registerCompany(dto: RegisterCompanyDto) {
@@ -98,6 +102,7 @@ export class AuthService {
         email: dto.companyEmail,
         phone: dto.companyPhone,
         address: dto.companyAddress,
+        businessType: dto.businessType || 'retail',
         status: 'pending',
         subscriptionStatus: 'pending',
       })
@@ -123,6 +128,7 @@ export class AuthService {
       planId: plan.id,
       billingCycle: 'monthly' as any,
       startTrial: false,
+      durationMonths: dto.durationMonths,
     });
 
     // Generate invoice
@@ -160,9 +166,16 @@ export class AuthService {
       })
     );
 
+    // Send verification email (non-blocking - don't await)
+    const frontendUrl = this.configService.get<string>('MEMBER_ADMIN_URL') || 'http://localhost:4403';
+    this.emailService.sendVerificationEmail(user.email, user.name, verificationToken, frontendUrl)
+      .then(() => this.logger.log(`Verification email sent to ${user.email}`))
+      .catch(e => this.logger.warn(`Failed to send verification email: ${e.message}`));
+
     // Generate payment URL (non-blocking)
     let paymentUrl = '';
     let paymentToken = '';
+    let paymentError = '';
     try {
       const frontendUrl = this.configService.get<string>('MEMBER_ADMIN_URL') || 'http://localhost:4403';
       const paymentResponse = await this.paymentGatewayService.createPaymentUrl({
@@ -182,8 +195,17 @@ export class AuthService {
       });
       paymentUrl = paymentResponse.redirectUrl;
       paymentToken = paymentResponse.token || '';
-    } catch (paymentError) {
-      this.logger.warn(`Payment URL generation failed: ${paymentError.message}`);
+    } catch (paymentError_: any) {
+      this.logger.warn(`Payment URL generation failed: ${paymentError_.message}`);
+      // Provide user-friendly error messages
+      const rawMsg: string = paymentError_.message || '';
+      if (rawMsg.includes('UNAUTHORIZED_SENDER_IP') || rawMsg.includes('IP Allowlist')) {
+        paymentError = 'IP server belum terdaftar di Xendit IP Allowlist. Silakan login ke dashboard.xendit.co → Settings → Developers → IP Allowlist dan tambahkan IP server, atau nonaktifkan IP restriction untuk development.';
+      } else if (rawMsg.includes('INVALID_API_KEY') || rawMsg.includes('401')) {
+        paymentError = 'API Key Xendit tidak valid. Pastikan menggunakan Secret Key (bukan Public Key) dari Xendit Dashboard.';
+      } else {
+        paymentError = rawMsg;
+      }
     }
 
     return {
@@ -198,6 +220,7 @@ export class AuthService {
       discountPercentage: selectedDuration.discountPercentage,
       paymentUrl,
       paymentToken,
+      paymentError: paymentError || null,
       dueDate: invoice.dueDate,
       verificationToken,
     };
@@ -259,15 +282,35 @@ export class AuthService {
       throw new UnauthorizedException('Account is deactivated');
     }
 
-    if (user.company.status !== 'active' && user.company.status !== 'pending') {
-      throw new UnauthorizedException('Company account is not active');
-    }
+    const isCompanyAdmin = (user.company as any)?.slug === 'super-admin';
 
-    // Check subscription status - block if suspended
-    if (user.company.subscriptionStatus === 'suspended') {
-      throw new UnauthorizedException(
-        'Your subscription has been suspended. Please renew your subscription to continue. Visit your account settings to renew.',
-      );
+    // Company admin: no email verification or subscription check needed
+    if (!isCompanyAdmin) {
+      // Block login if email not verified
+      if (!user.emailVerified) {
+        throw new UnauthorizedException(
+          'Email belum diverifikasi. Silakan cek email Anda dan klik link verifikasi sebelum login.',
+        );
+      }
+
+      // Block login if company status is not active or pending
+      if (user.company.status !== 'active' && user.company.status !== 'pending') {
+        throw new UnauthorizedException('Company account is not active');
+      }
+
+      // Block login if subscription is still pending (belum bayar)
+      if (user.company.subscriptionStatus === 'pending') {
+        throw new UnauthorizedException(
+          'Subscription belum aktif. Silakan selesaikan pembayaran terlebih dahulu untuk mengaktifkan akun Anda.',
+        );
+      }
+
+      // Block login if subscription is suspended
+      if (user.company.subscriptionStatus === 'suspended') {
+        throw new UnauthorizedException(
+          'Subscription Anda telah disuspend. Silakan perpanjang subscription untuk melanjutkan.',
+        );
+      }
     }
 
     // Update last login
@@ -300,15 +343,26 @@ export class AuthService {
     // For now, no permissions until Role relation is added
     const permissions: string[] = [];
 
+    const accessToken = this.jwtService.sign({
+      sub: employee.id,
+      email: employee.email,
+      type: 'employee',
+      companyId: employee.store.companyId,
+      storeId: employee.storeId,
+      permissions,
+    });
+
+    const refreshToken = this.jwtService.sign({
+      sub: employee.id,
+      email: employee.email,
+      type: 'employee',
+      companyId: employee.store.companyId,
+      storeId: employee.storeId,
+    }, { expiresIn: '7d' });
+
     return {
-      accessToken: this.jwtService.sign({
-        sub: employee.id,
-        email: employee.email,
-        type: 'employee',
-        companyId: employee.store.companyId,
-        storeId: employee.storeId,
-        permissions,
-      }),
+      accessToken,
+      refreshToken,
       user: {
         id: employee.id,
         name: employee.name,
@@ -338,12 +392,15 @@ export class AuthService {
     });
     await this.passwordTokenRepo.save(passwordToken);
 
-    // TODO: Send reset email
-    // await this.emailService.sendPasswordResetEmail(user.email, resetToken);
+    // Send reset email via EmailService (non-blocking)
+    const frontendUrl = this.configService.get<string>('FRONTEND_URL') || 'http://localhost:4403';
+    this.emailService.sendPasswordResetEmail(user.email, user.name, resetToken, frontendUrl)
+      .catch(e => this.logger.warn('Failed to send reset email:', e.message));
 
     return {
       message: 'If email exists, reset link has been sent',
-      resetToken, // Remove in production
+      // Only return token in development for testing
+      ...(this.configService.get('NODE_ENV') === 'development' && { resetToken }),
     };
   }
 
@@ -402,14 +459,24 @@ export class AuthService {
       subscription = subscriptionResult[0] || null;
     }
 
+    // Split name into firstName/lastName for frontend compatibility
+    const nameParts = (user.name || '').split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+
     return {
       user: {
         id: user.id,
         name: user.name,
+        firstName,
+        lastName,
         email: user.email,
         role: user.role,
-        type: 'user',
+        type: (user.company as any)?.slug === 'super-admin' ? 'company_admin' : 'member',
         companyId: user.companyId,
+        isActive: user.isActive,
+        emailVerified: user.emailVerified,
+        permissions: user.permissions || [],
       },
       company: user.company ? {
         id: user.company.id,
@@ -419,6 +486,7 @@ export class AuthService {
         phone: user.company.phone,
         status: user.company.status,
         subscriptionStatus: user.company.subscriptionStatus,
+        businessType: (user.company as any).businessType || 'retail',
       } : null,
       subscription,
     };
@@ -444,21 +512,34 @@ export class AuthService {
 
   private generateTokens(user: User) {
     const isCompanyAdmin = (user.company as any)?.slug === 'super-admin';
+    const userType = isCompanyAdmin ? 'company_admin' : 'member';
+    const isOwner = user.role === UserRole.OWNER;
+
+    // Owner gets all permissions implicitly (handled by PermissionGuard via role check)
+    // Non-owner members include their explicit permissions in JWT for guard checks
+    const permissions = isOwner || isCompanyAdmin ? [] : (user.permissions || []);
+
     const payload = {
       sub: user.id,
       email: user.email,
-      type: isCompanyAdmin ? 'company_admin' : 'user',
+      type: userType,
       companyId: user.companyId,
       role: user.role,
+      permissions,
     };
 
     const accessToken = this.jwtService.sign(payload, {
-      expiresIn: '15m',
+      expiresIn: isCompanyAdmin ? '8h' : '1d',
     });
 
     const refreshToken = this.jwtService.sign(payload, {
       expiresIn: '7d',
     });
+
+    // Split name into firstName/lastName for frontend compatibility
+    const nameParts = (user.name || '').split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
 
     return {
       accessToken,
@@ -466,10 +547,26 @@ export class AuthService {
       user: {
         id: user.id,
         name: user.name,
+        firstName,
+        lastName,
         email: user.email,
         role: user.role,
+        type: userType,
         companyId: user.companyId,
+        isActive: user.isActive,
+        emailVerified: user.emailVerified,
+        permissions: user.permissions || [],
       },
+      company: user.company ? {
+        id: user.company.id,
+        name: user.company.name,
+        slug: user.company.slug,
+        email: user.company.email,
+        phone: user.company.phone,
+        status: user.company.status,
+        subscriptionStatus: user.company.subscriptionStatus,
+        businessType: (user.company as any).businessType || 'retail',
+      } : null,
     };
   }
 }

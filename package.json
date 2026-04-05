@@ -1,8 +1,8 @@
-{
+﻿{
   "name": "monetrapos",
   "version": "1.0.0",
   "private": true,
-  "description": "MonetRAPOS - Multi-Business POS Application",
+  "description": "MonetraPOS - Multi-Business POS Application",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -23,3 +23,4 @@
     "node": ">=20.0.0"
   }
 }
+

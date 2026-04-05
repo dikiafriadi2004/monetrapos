@@ -68,16 +68,11 @@ export class SubscriptionAccessMiddleware implements NestMiddleware {
       order: { createdAt: 'DESC' },
     });
 
-    // If no subscription found, block access
+    // If no subscription found, allow access (company might be newly registered)
+    // The billing/subscription pages will guide them to subscribe
     if (!subscription) {
-      this.logger.warn(`No subscription found for company ${companyId}`);
-      throw new ForbiddenException({
-        statusCode: 403,
-        message:
-          'No active subscription found. Please subscribe to a plan to access this feature.',
-        error: 'SUBSCRIPTION_REQUIRED',
-        renewalUrl: '/subscriptions/plans',
-      });
+      this.logger.debug(`No subscription found for company ${companyId} - allowing access`);
+      return next();
     }
 
     const httpMethod = req.method.toUpperCase();

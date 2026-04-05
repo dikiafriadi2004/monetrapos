@@ -1,9 +1,10 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { subscriptionService, Subscription } from '@/services/subscription.service';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, XCircle, RefreshCcw } from 'lucide-react';
+import apiClient from '@/lib/api-client';
 import toast from 'react-hot-toast';
 
 export default function SubscriptionPage() {
@@ -42,6 +43,7 @@ export default function SubscriptionPage() {
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('id-ID', {
+      timeZone: 'Asia/Jakarta',
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -106,19 +108,21 @@ export default function SubscriptionPage() {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
         </div>
-        <h2 className="empty-state-title">No Active Subscription</h2>
-        <p className="empty-state-description">You don't have an active subscription yet. Subscribe now to start using MonetRAPOS.</p>
+        <h2 className="empty-state-title">Subscription Tidak Ditemukan</h2>
+        <p className="empty-state-description">
+          Subscription Anda tidak aktif atau sudah berakhir. Silakan perpanjang untuk melanjutkan akses.
+        </p>
         <button
-          onClick={() => router.push('/register')}
+          onClick={() => router.push('/dashboard/subscription/renew')}
           className="btn btn-primary"
         >
-          Subscribe Now
+          Perpanjang Sekarang
         </button>
       </div>
     );
   }
 
-  const daysRemaining = getDaysRemaining(subscription.endDate);
+  const daysRemaining = subscription.endDate ? getDaysRemaining(subscription.endDate) : 0;
   const isExpiringSoon = daysRemaining <= 7 && daysRemaining > 0;
   const isExpired = subscription.status === 'expired';
   const isSuspended = subscription.status === 'suspended';
@@ -163,7 +167,7 @@ export default function SubscriptionPage() {
               {isSuspended
                 ? 'Your subscription has been suspended. Please renew to restore access.'
                 : isExpired
-                ? `Your subscription expired on ${formatDate(subscription.endDate)}. You have ${subscription.gracePeriodEndDate ? getDaysRemaining(subscription.gracePeriodEndDate) : 0} days of grace period remaining.`
+                ? `Your subscription expired on ${subscription.endDate ? formatDate(subscription.endDate) : 'N/A'}. You have ${subscription.gracePeriodEndDate ? getDaysRemaining(subscription.gracePeriodEndDate) : 0} days of grace period remaining.`
                 : `Your subscription will expire in ${daysRemaining} days. Renew now to avoid service interruption.`}
             </p>
             <button
@@ -214,7 +218,7 @@ export default function SubscriptionPage() {
               </div>
               <div className="flex-between">
                 <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>End Date:</span>
-                <span style={{ fontWeight: '600', fontSize: '0.875rem' }}>{formatDate(subscription.endDate)}</span>
+                <span style={{ fontWeight: '600', fontSize: '0.875rem' }}>{subscription.endDate ? formatDate(subscription.endDate) : '—'}</span>
               </div>
               <div className="flex-between">
                 <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Duration:</span>
@@ -238,7 +242,7 @@ export default function SubscriptionPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
               <div className="flex-between">
                 <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Billing Cycle:</span>
-                <span style={{ fontWeight: '600', fontSize: '0.875rem', textTransform: 'capitalize' }}>{subscription.billingCycle}</span>
+                <span style={{ fontWeight: '600', fontSize: '0.875rem', textTransform: 'capitalize' }}>{subscription.billingCycle || 'Monthly'}</span>
               </div>
               <div className="flex-between">
                 <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Amount Paid:</span>
@@ -246,7 +250,7 @@ export default function SubscriptionPage() {
               </div>
               <div className="flex-between">
                 <span style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Currency:</span>
-                <span style={{ fontWeight: '600', fontSize: '0.875rem' }}>{subscription.currency}</span>
+                <span style={{ fontWeight: '600', fontSize: '0.875rem' }}>{subscription.currency || 'IDR'}</span>
               </div>
             </div>
           </div>
@@ -280,21 +284,31 @@ export default function SubscriptionPage() {
         {/* Action Buttons */}
         <div style={{ marginTop: 'var(--space-xl)', paddingTop: 'var(--space-xl)', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-md)' }}>
           {subscription.status === 'active' && (
-            <button
-              onClick={() => {
-                toast.loading('Redirecting to renewal page...');
-                router.push('/dashboard/subscription/renew');
-              }}
-              className="btn btn-primary"
-            >
-              Renew Early
-            </button>
+            <>
+              <CancelSubscriptionButton onCancelled={loadSubscription} />
+              <ChangePlanButton currentPlanId={subscription.plan?.id} onChanged={loadSubscription} />
+              <button
+                onClick={() => {
+                  toast.loading('Redirecting to renewal page...');
+                  router.push('/dashboard/subscription/renew');
+                }}
+                className="btn btn-primary"
+              >
+                Renew Early
+              </button>
+            </>
           )}
           {(subscription.status === 'expired' || subscription.status === 'suspended') && (
             <button
-              onClick={() => {
-                toast.loading('Redirecting to renewal page...');
-                router.push('/dashboard/subscription/renew');
+              onClick={async () => {
+                try {
+                  await subscriptionService.reactivateSubscription();
+                  toast.success('Subscription reactivated');
+                  loadSubscription();
+                } catch {
+                  toast.error('Failed to reactivate. Please renew instead.');
+                  router.push('/dashboard/subscription/renew');
+                }
               }}
               className="btn btn-primary"
             >
@@ -306,3 +320,137 @@ export default function SubscriptionPage() {
     </div>
   );
 }
+
+// ── Cancel Subscription Button ────────────────────────────────────────────────
+function CancelSubscriptionButton({ onCancelled }: { onCancelled: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleCancel = async () => {
+    setLoading(true);
+    try {
+      await subscriptionService.cancelSubscription(reason);
+      toast.success('Subscription cancelled');
+      setOpen(false);
+      onCancelled();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to cancel subscription');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      <button onClick={() => setOpen(true)} className="btn btn-outline" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}>
+        <XCircle size={16} /> Cancel Plan
+      </button>
+      {open && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div onClick={() => setOpen(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
+          <div className="glass-panel animate-fade-in" style={{ position: 'relative', width: 440, maxWidth: '90vw', padding: 'var(--space-xl)', zIndex: 101 }}>
+            <h3 style={{ fontSize: '1.1rem', color: 'var(--danger)', marginBottom: 'var(--space-md)' }}>Cancel Subscription</h3>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: 'var(--space-md)', fontSize: '0.9rem' }}>
+              Are you sure you want to cancel your subscription? You will lose access at the end of your billing period.
+            </p>
+            <div className="form-group">
+              <label className="form-label">Reason (optional)</label>
+              <textarea className="form-input" rows={3} value={reason} onChange={e => setReason(e.target.value)} placeholder="Tell us why you're cancelling..." style={{ resize: 'vertical' }} />
+            </div>
+            <div style={{ display: 'flex', gap: 'var(--space-md)', justifyContent: 'flex-end', marginTop: 'var(--space-lg)' }}>
+              <button onClick={() => setOpen(false)} className="btn btn-outline">Keep Subscription</button>
+              <button onClick={handleCancel} disabled={loading} className="btn btn-primary" style={{ background: 'var(--danger)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                {loading && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
+                Confirm Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { 100% { transform: rotate(360deg); } }` }} />
+    </>
+  );
+}
+
+// ── Change Plan Button ────────────────────────────────────────────────────────
+function ChangePlanButton({ currentPlanId, onChanged }: { currentPlanId?: string; onChanged: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [plans, setPlans] = useState<any[]>([]);
+  const [selectedPlan, setSelectedPlan] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [loadingPlans, setLoadingPlans] = useState(false);
+
+  const loadPlans = async () => {
+    setLoadingPlans(true);
+    try {
+      const res = await apiClient.get('/subscription-plans/with-durations');
+      setPlans(Array.isArray(res.data) ? res.data : []);
+    } catch { toast.error('Failed to load plans'); }
+    finally { setLoadingPlans(false); }
+  };
+
+  const handleOpen = () => { setOpen(true); loadPlans(); };
+
+  const handleChange = async () => {
+    if (!selectedPlan) { toast.error('Select a plan'); return; }
+    setLoading(true);
+    try {
+      await subscriptionService.changePlan(selectedPlan);
+      toast.success('Plan changed successfully');
+      setOpen(false);
+      onChanged();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to change plan');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fmt = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n || 0);
+
+  return (
+    <>
+      <button onClick={handleOpen} className="btn btn-outline" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <RefreshCcw size={16} /> Change Plan
+      </button>
+      {open && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div onClick={() => setOpen(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
+          <div className="glass-panel animate-fade-in" style={{ position: 'relative', width: 520, maxWidth: '90vw', maxHeight: '80vh', overflowY: 'auto', padding: 'var(--space-xl)', zIndex: 101 }}>
+            <h3 style={{ fontSize: '1.1rem', marginBottom: 'var(--space-lg)' }}>Change Subscription Plan</h3>
+            {loadingPlans ? (
+              <div style={{ textAlign: 'center', padding: 'var(--space-xl)' }}>
+                <Loader2 size={32} style={{ animation: 'spin 1s linear infinite', color: 'var(--primary)', margin: '0 auto' }} />
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)', marginBottom: 'var(--space-lg)' }}>
+                {plans.filter(p => p.id !== currentPlanId).map(plan => (
+                  <label key={plan.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 'var(--space-md)', border: `2px solid ${selectedPlan === plan.id ? 'var(--primary)' : 'var(--border-subtle)'}`, borderRadius: 'var(--radius-md)', cursor: 'pointer', background: selectedPlan === plan.id ? 'rgba(99,102,241,0.05)' : 'transparent' }}>
+                    <input type="radio" name="plan" value={plan.id} checked={selectedPlan === plan.id} onChange={() => setSelectedPlan(plan.id)} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600 }}>{plan.name}</div>
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{plan.description}</div>
+                    </div>
+                    <div style={{ fontWeight: 700, color: 'var(--primary)' }}>{fmt(plan.priceMonthly)}/mo</div>
+                  </label>
+                ))}
+                {plans.filter(p => p.id !== currentPlanId).length === 0 && (
+                  <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: 'var(--space-lg)' }}>No other plans available</p>
+                )}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 'var(--space-md)', justifyContent: 'flex-end' }}>
+              <button onClick={() => setOpen(false)} className="btn btn-outline">Cancel</button>
+              <button onClick={handleChange} disabled={loading || !selectedPlan} className="btn btn-primary" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {loading && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
+                Confirm Change
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+

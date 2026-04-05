@@ -1,13 +1,13 @@
-import { Injectable } from '@nestjs/common';
+﻿import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class AppService {
   getWelcome() {
     return {
-      name: 'MonetRAPOS API',
+      name: 'MonetraPOS API',
       version: '1.0.0',
       status: 'running',
-      message: 'Welcome to MonetRAPOS API',
+      message: 'Welcome to MonetraPOS API',
       documentation: '/api/docs',
       endpoints: {
         health: '/api/v1/health',
@@ -18,3 +18,4 @@ export class AppService {
     };
   }
 }
+

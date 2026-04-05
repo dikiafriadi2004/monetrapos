@@ -37,7 +37,7 @@ export interface Subscription {
   durationId: string;
   status: SubscriptionStatus;
   startDate: string;
-  endDate: string;
+  endDate?: string;
   trialEndDate?: string;
   gracePeriodEndDate?: string;
   autoRenew: boolean;

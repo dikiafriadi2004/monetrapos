@@ -1,0 +1,45 @@
+﻿version: '3.8'
+
+# Development override - only runs infrastructure services
+# Run API and frontends locally with: npm run dev
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: monetrapos-mysql-dev
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: monetrapos
+    ports:
+      - '3306:3306'
+    volumes:
+      - mysql_dev_data:/var/lib/mysql
+
+  redis:
+    image: redis:7-alpine
+    container_name: monetrapos-redis-dev
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_dev_data:/data
+
+  # Optional: phpMyAdmin for DB management
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: monetrapos-phpmyadmin
+    restart: unless-stopped
+    ports:
+      - '8080:80'
+    environment:
+      PMA_HOST: mysql
+      PMA_USER: root
+      PMA_PASSWORD: root
+    depends_on:
+      - mysql
+
+volumes:
+  mysql_dev_data:
+  redis_dev_data:
+

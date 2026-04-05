@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+﻿import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -32,7 +32,7 @@ export class AdminSeeder implements OnModuleInit {
     const company = this.companyRepo.create({
       name: 'Super Admin Company',
       slug: 'super-admin',
-      email: 'admin@monetrapos.com',
+      email: 'admin@MonetraPOS.com',
       phone: '081234567890',
       status: 'active',
       subscriptionStatus: 'active',
@@ -44,7 +44,7 @@ export class AdminSeeder implements OnModuleInit {
     const adminUser = this.userRepo.create({
       companyId: company.id,
       name: 'Super Admin',
-      email: 'admin@monetrapos.com',
+      email: 'admin@MonetraPOS.com',
       passwordHash: hashedPassword,
       role: UserRole.OWNER,
       isActive: true,
@@ -54,7 +54,8 @@ export class AdminSeeder implements OnModuleInit {
     await this.userRepo.save(adminUser);
 
     this.logger.log('✅ Seeded initial Admin account:');
-    this.logger.log('Email: admin@monetrapos.com');
+    this.logger.log('Email: admin@MonetraPOS.com');
     this.logger.log('Password: admin123');
   }
 }
+

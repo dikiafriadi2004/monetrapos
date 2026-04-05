@@ -25,12 +25,16 @@ export class Shift extends BaseEntity {
   @JoinColumn({ name: 'store_id' })
   store: Store;
 
-  @Column({ name: 'employee_id' })
+  @Column({ name: 'employee_id', nullable: true })
   employeeId: string;
 
-  @ManyToOne(() => Employee)
+  @ManyToOne(() => Employee, { nullable: true })
   @JoinColumn({ name: 'employee_id' })
   employee: Employee;
+
+  // User ID (for non-employee users like owners)
+  @Column({ name: 'user_id', nullable: true })
+  userId: string;
 
   // Shift Times
   @Column({ type: 'timestamp', nullable: true, name: 'opened_at' })

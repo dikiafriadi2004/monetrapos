@@ -35,15 +35,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         // Try to get current user from API
-        const userData = await authService.getCurrentUser();
-        setUser(userData.user);
-        setCompany(userData.company);
-        if (userData.subscription) {
-          setSubscription(userData.subscription);
+        try {
+          const userData = await authService.getCurrentUser();
+          const user = {
+            ...userData.user,
+            type: (userData as any).type ?? userData.user.type,
+            permissions: (userData as any).permissions ?? userData.user.permissions ?? [],
+          };
+          setUser(user);
+          setCompany(userData.company);
+          if (userData.subscription) {
+            setSubscription(userData.subscription);
+          }
+        } catch {
+          // Token might be for employee — try to decode it
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            if (payload.type === 'employee') {
+              // Employee token — set minimal user data
+              setUser({
+                id: payload.sub,
+                email: payload.email,
+                name: payload.name || 'Employee',
+                firstName: payload.name?.split(' ')[0] || 'Employee',
+                lastName: payload.name?.split(' ').slice(1).join(' ') || '',
+                role: 'cashier' as any,
+                type: 'employee',
+                companyId: payload.companyId,
+                isActive: true,
+                emailVerified: true,
+                permissions: payload.permissions || [],
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+              } as any);
+              // Don't set company for employees — they have limited access
+            } else {
+              throw new Error('Invalid token');
+            }
+          } catch {
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+          }
         }
       } catch (err) {
         console.error('Failed to load user:', err);
-        // Clear invalid tokens
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
       } finally {
@@ -66,15 +101,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('refresh_token', response.refreshToken);
 
       // Set user and company
-      setUser(response.user);
+      const userData = {
+        ...response.user,
+        type: (response as any).type ?? response.user.type,
+        permissions: (response as any).permissions ?? response.user.permissions ?? [],
+      };
+      setUser(userData);
       setCompany(response.company);
 
-      toast.success('Login successful!');
+      // Load subscription after login
+      try {
+        const meData = await authService.getCurrentUser();
+        if (meData.subscription) setSubscription(meData.subscription);
+      } catch {
+        // Non-critical — subscription will load on next page visit
+      }
+
+      toast.success('Login berhasil!');
     } catch (err: any) {
-      const errorMessage = err.response?.data?.message || 'Login failed';
+      const errorMessage = err.response?.data?.message || err.message || 'Login gagal';
       setError(errorMessage);
-      toast.error(errorMessage);
-      throw err;
+      throw err; // Re-throw so login page can catch it
     } finally {
       setIsLoading(false);
     }
@@ -103,7 +150,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshUser = async () => {
     try {
       const userData = await authService.getCurrentUser();
-      setUser(userData.user);
+      // Merge type/permissions from response
+      const user = {
+        ...userData.user,
+        type: (userData as any).type ?? userData.user.type,
+        permissions: (userData as any).permissions ?? userData.user.permissions ?? [],
+      };
+      setUser(user);
       setCompany(userData.company);
       if (userData.subscription) {
         setSubscription(userData.subscription);

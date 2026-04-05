@@ -1,4 +1,4 @@
-import { NestFactory } from '@nestjs/core';
+﻿import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
 import { UsersService } from '../modules/users/users.service';
 import { CompaniesService } from '../modules/companies/companies.service';
@@ -30,7 +30,7 @@ async function question(query: string): Promise<string> {
 }
 
 async function createSuperAdmin() {
-  console.log('\n=== MonetRAPOS - Create Super Admin ===\n');
+  console.log('\n=== MonetraPOS - Create Super Admin ===\n');
   console.log('⚠️  SECURITY: This is the ONLY way to create Company Admin accounts\n');
 
   try {
@@ -118,3 +118,4 @@ async function createSuperAdmin() {
 }
 
 createSuperAdmin();
+

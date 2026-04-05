@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4404/api/v1';
+import apiClient from '@/lib/api-client';
 
 export enum DiscountType {
   PERCENTAGE = 'percentage',
@@ -61,87 +59,46 @@ export interface UpdateDiscountDto {
 }
 
 class DiscountsService {
-  private getAuthHeader() {
-    const token = localStorage.getItem('access_token');
-    return {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    };
-  }
-
-  async getAll(params?: {
-    storeId?: string;
-    isActive?: boolean;
-  }): Promise<Discount[]> {
-    const queryParams = new URLSearchParams();
-    if (params?.storeId) queryParams.append('store_id', params.storeId);
-    if (params?.isActive !== undefined) queryParams.append('is_active', String(params.isActive));
-
-    const response = await axios.get(
-      `${API_URL}/discounts?${queryParams.toString()}`,
-      this.getAuthHeader()
-    );
-    return response.data;
+  async getAll(params?: { storeId?: string; isActive?: boolean }): Promise<Discount[]> {
+    const q = new URLSearchParams();
+    if (params?.storeId) q.append('store_id', params.storeId);
+    if (params?.isActive !== undefined) q.append('is_active', String(params.isActive));
+    const res = await apiClient.get(`/discounts?${q.toString()}`);
+    return Array.isArray(res.data) ? res.data : (res.data?.data || []);
   }
 
   async getById(id: string): Promise<Discount> {
-    const response = await axios.get(
-      `${API_URL}/discounts/${id}`,
-      this.getAuthHeader()
-    );
-    return response.data;
+    const res = await apiClient.get(`/discounts/${id}`);
+    return res.data;
   }
 
   async create(data: CreateDiscountDto): Promise<Discount> {
-    const response = await axios.post(
-      `${API_URL}/discounts`,
-      data,
-      this.getAuthHeader()
-    );
-    return response.data;
+    const res = await apiClient.post('/discounts', data);
+    return res.data;
   }
 
   async update(id: string, data: UpdateDiscountDto): Promise<Discount> {
-    const response = await axios.patch(
-      `${API_URL}/discounts/${id}`,
-      data,
-      this.getAuthHeader()
-    );
-    return response.data;
+    const res = await apiClient.patch(`/discounts/${id}`, data);
+    return res.data;
   }
 
   async delete(id: string): Promise<void> {
-    await axios.delete(
-      `${API_URL}/discounts/${id}`,
-      this.getAuthHeader()
-    );
+    await apiClient.delete(`/discounts/${id}`);
   }
 
   async getUsageStats(id: string): Promise<any> {
-    const response = await axios.get(
-      `${API_URL}/discounts/${id}/stats`,
-      this.getAuthHeader()
-    );
-    return response.data;
+    const res = await apiClient.get(`/discounts/${id}/stats`);
+    return res.data;
   }
 
   async generatePromoCode(prefix?: string, length: number = 8): Promise<string> {
-    const response = await axios.post(
-      `${API_URL}/discounts/generate-code`,
-      { prefix, length },
-      this.getAuthHeader()
-    );
-    return response.data.promoCode;
+    const res = await apiClient.post('/discounts/generate-code', { prefix, length });
+    return res.data.promoCode;
   }
 
   async validatePromoCode(promoCode: string, totalAmount: number): Promise<any> {
-    const response = await axios.post(
-      `${API_URL}/discounts/validate`,
-      { promoCode, totalAmount },
-      this.getAuthHeader()
-    );
-    return response.data;
+    const res = await apiClient.post('/discounts/validate', { promoCode, totalAmount });
+    return res.data;
   }
 }
 

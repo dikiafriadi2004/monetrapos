@@ -1,63 +1,37 @@
 import axios from 'axios';
+import apiClient from '@/lib/api-client';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4404/api/v1';
 
 export interface PaymentGateway {
-  gateway: 'midtrans' | 'xendit';
+  gateway: 'xendit';
   name: string;
   enabled: boolean;
 }
 
 export interface PaymentGatewayPreference {
-  gateway: 'midtrans' | 'xendit';
+  gateway: 'xendit';
   available: PaymentGateway[];
 }
 
 class PaymentGatewayService {
-  private getAuthHeader() {
-    const token = localStorage.getItem('access_token');
-    return {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    };
-  }
-
-  /**
-   * Get available payment gateways
-   */
   async getAvailableGateways(): Promise<{ gateways: PaymentGateway[] }> {
-    const response = await axios.get(
-      `${API_URL}/payment-gateway/available`,
-    );
+    const response = await axios.get(`${API_URL}/payment-gateway/available`);
     return response.data;
   }
 
-  /**
-   * Get current payment gateway preference
-   */
   async getPreference(): Promise<PaymentGatewayPreference> {
-    const response = await axios.get(
-      `${API_URL}/payment-gateway/preference`,
-      this.getAuthHeader(),
-    );
-    return response.data;
+    const res = await apiClient.get('/payment-gateway/preference');
+    return res.data;
   }
 
-  /**
-   * Set payment gateway preference
-   */
-  async setPreference(gateway: 'midtrans' | 'xendit'): Promise<{
+  async setPreference(gateway: 'xendit'): Promise<{
     success: boolean;
     message: string;
     gateway: string;
   }> {
-    const response = await axios.put(
-      `${API_URL}/payment-gateway/preference`,
-      { gateway },
-      this.getAuthHeader(),
-    );
-    return response.data;
+    const res = await apiClient.patch('/payment-gateway/preference', { gateway });
+    return res.data;
   }
 }
 

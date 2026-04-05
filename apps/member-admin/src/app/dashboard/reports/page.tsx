@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { BarChart3, TrendingUp, Package, Download, Calendar, Store, Filter, X } from 'lucide-react';
 import apiClient from '../../../lib/api-client';
+import toast from 'react-hot-toast';
 
 // Types
 interface SalesReport {
@@ -121,10 +122,13 @@ export default function ReportsPage() {
         apiClient.get('/stores'),
         apiClient.get('/categories'),
       ]);
-      setStores(storesRes.data || storesRes || []);
-      setCategories(categoriesRes.data || categoriesRes || []);
+      const storeData = storesRes.data;
+      const catData = categoriesRes.data;
+      setStores(Array.isArray(storeData) ? storeData : (storeData?.data || []));
+      setCategories(Array.isArray(catData) ? catData : (catData?.data || []));
     } catch (err) {
       console.error('Failed to fetch stores and categories:', err);
+      // silent - non-critical
     }
   };
 
@@ -139,9 +143,10 @@ export default function ReportsPage() {
       if (salesFilters.storeId) params.append('storeId', salesFilters.storeId);
 
       const res: any = await apiClient.get(`/reports/sales?${params.toString()}`);
-      setSalesReport(res.data || res);
+      setSalesReport(res.data ?? res);
     } catch (err) {
       console.error('Failed to fetch sales report:', err);
+      toast.error('Gagal memuat laporan penjualan');
     } finally {
       setLoading(false);
     }
@@ -159,9 +164,10 @@ export default function ReportsPage() {
       if (productFilters.categoryId) params.append('categoryId', productFilters.categoryId);
 
       const res: any = await apiClient.get(`/reports/products?${params.toString()}`);
-      setProductReport(res.data || res);
+      setProductReport(res.data ?? res);
     } catch (err) {
       console.error('Failed to fetch product report:', err);
+      toast.error('Gagal memuat laporan produk');
     } finally {
       setLoading(false);
     }
@@ -177,9 +183,10 @@ export default function ReportsPage() {
       if (inventoryFilters.categoryId) params.append('categoryId', inventoryFilters.categoryId);
 
       const res: any = await apiClient.get(`/reports/inventory?${params.toString()}`);
-      setInventoryReport(res.data || res);
+      setInventoryReport(res.data ?? res);
     } catch (err) {
       console.error('Failed to fetch inventory report:', err);
+      toast.error('Gagal memuat laporan inventori');
     } finally {
       setLoading(false);
     }
@@ -198,6 +205,7 @@ export default function ReportsPage() {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
+      timeZone: 'Asia/Jakarta',
     });
   };
 
@@ -207,7 +215,7 @@ export default function ReportsPage() {
 
   const exportToCSV = (data: any[], filename: string) => {
     if (!data || data.length === 0) {
-      alert('No data to export');
+      toast.error('No data to export');
       return;
     }
 

@@ -73,6 +73,7 @@ export default function InvoicesPage() {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
+      timeZone: 'Asia/Jakarta',
     });
   };
 

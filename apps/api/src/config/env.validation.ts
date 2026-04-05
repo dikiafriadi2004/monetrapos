@@ -102,19 +102,6 @@ class EnvironmentVariables {
   @IsString()
   SMTP_FROM?: string;
 
-  // Midtrans Payment Gateway
-  @IsOptional()
-  @IsString()
-  MIDTRANS_SERVER_KEY?: string;
-
-  @IsOptional()
-  @IsString()
-  MIDTRANS_CLIENT_KEY?: string;
-
-  @IsOptional()
-  @IsEnum(['sandbox', 'production'])
-  MIDTRANS_ENVIRONMENT?: string;
-
   // App URLs
   @IsOptional()
   @IsUrl({ require_tld: false })

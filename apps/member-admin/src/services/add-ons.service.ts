@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4404/api/v1';
+import apiClient from '@/lib/api-client';
 
 export interface AddOn {
   id: string;
@@ -44,96 +42,40 @@ export interface PurchaseResponse {
 }
 
 class AddOnsService {
-  private getAuthHeader() {
-    const token = localStorage.getItem('access_token');
-    return {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    };
-  }
-
-  /**
-   * Get all available add-ons
-   */
   async getAvailableAddOns(category?: string): Promise<AddOn[]> {
-    const params = category ? { category } : {};
-    const response = await axios.get(`${API_URL}/add-ons`, {
-      params,
-      ...this.getAuthHeader(),
-    });
-    return response.data;
+    const q = category ? `?category=${category}` : '';
+    const res = await apiClient.get(`/add-ons${q}`);
+    return Array.isArray(res.data) ? res.data : (res.data?.data || []);
   }
 
-  /**
-   * Get add-on by ID
-   */
   async getAddOn(id: string): Promise<AddOn> {
-    const response = await axios.get(`${API_URL}/add-ons/${id}`, this.getAuthHeader());
-    return response.data;
+    const res = await apiClient.get(`/add-ons/${id}`);
+    return res.data;
   }
 
-  /**
-   * Get purchased add-ons
-   */
   async getPurchasedAddOns(): Promise<CompanyAddOn[]> {
-    const response = await axios.get(
-      `${API_URL}/add-ons/purchased/list`,
-      this.getAuthHeader(),
-    );
-    return response.data;
+    const res = await apiClient.get('/add-ons/purchased/list');
+    return Array.isArray(res.data) ? res.data : (res.data?.data || []);
   }
 
-  /**
-   * Get active add-ons
-   */
   async getActiveAddOns(): Promise<CompanyAddOn[]> {
-    const response = await axios.get(
-      `${API_URL}/add-ons/purchased/active`,
-      this.getAuthHeader(),
-    );
-    return response.data;
+    const res = await apiClient.get('/add-ons/purchased/active');
+    return Array.isArray(res.data) ? res.data : (res.data?.data || []);
   }
 
-  /**
-   * Purchase an add-on
-   */
-  async purchaseAddOn(
-    addOnId: string,
-    configuration?: Record<string, any>,
-  ): Promise<PurchaseResponse> {
-    const response = await axios.post(
-      `${API_URL}/add-ons/purchase`,
-      {
-        add_on_id: addOnId,
-        configuration,
-      },
-      this.getAuthHeader(),
-    );
-    return response.data;
+  async purchaseAddOn(addOnId: string, configuration?: Record<string, any>): Promise<PurchaseResponse> {
+    const res = await apiClient.post('/add-ons/purchase', { add_on_id: addOnId, configuration });
+    return res.data;
   }
 
-  /**
-   * Cancel add-on subscription
-   */
   async cancelAddOn(companyAddOnId: string): Promise<CompanyAddOn> {
-    const response = await axios.post(
-      `${API_URL}/add-ons/${companyAddOnId}/cancel`,
-      {},
-      this.getAuthHeader(),
-    );
-    return response.data;
+    const res = await apiClient.post(`/add-ons/${companyAddOnId}/cancel`);
+    return res.data;
   }
 
-  /**
-   * Check if company has specific add-on
-   */
   async hasAddOn(slug: string): Promise<boolean> {
-    const response = await axios.get(
-      `${API_URL}/add-ons/check/${slug}`,
-      this.getAuthHeader(),
-    );
-    return response.data.hasAddOn;
+    const res = await apiClient.get(`/add-ons/check/${slug}`);
+    return res.data.hasAddOn;
   }
 }
 

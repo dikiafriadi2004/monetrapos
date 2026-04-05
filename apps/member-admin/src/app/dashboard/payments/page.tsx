@@ -2,7 +2,9 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Wallet, QrCode, Banknote, Building2, ToggleLeft, ToggleRight, Upload, CheckCircle, AlertCircle, X } from 'lucide-react';
-import { api } from '../../../lib/api';
+import apiClient from '@/lib/api-client';
+import { useAuth } from '@/contexts/AuthContext';
+import toast from 'react-hot-toast';
 
 interface PaymentMethod {
   id: string;
@@ -16,9 +18,11 @@ interface QrisConfig {
   id?: string;
   merchantName?: string;
   qrisImageUrl?: string;
+  imageUrl?: string;
 }
 
 export default function PaymentSettingsPage() {
+  const { company } = useAuth();
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [qrisConfig, setQrisConfig] = useState<QrisConfig | null>(null);
   const [loading, setLoading] = useState(true);
@@ -30,12 +34,12 @@ export default function PaymentSettingsPage() {
 
   const fetchData = async () => {
     try {
-      const [methodsData, qrisData]: any = await Promise.all([
-        api.get('/payments/methods').catch(() => []),
-        api.get('/payments/qris-config').catch(() => null),
-      ]);
-      setMethods(Array.isArray(methodsData) ? methodsData : []);
-      setQrisConfig(qrisData || null);
+      const methodsData: any = await apiClient.get('/payment-methods').catch(() => []);
+      const list = Array.isArray(methodsData.data) ? methodsData.data : (Array.isArray(methodsData) ? methodsData : (methodsData?.data || []));
+      setMethods(list);
+      // Get QRIS config from payment methods
+      const qris = list.find((m: PaymentMethod) => m.type === 'qris');
+      if (qris?.config) setQrisConfig(qris.config);
     } catch (err) {
       console.error(err);
     } finally {
@@ -47,9 +51,12 @@ export default function PaymentSettingsPage() {
 
   const handleToggleMethod = async (method: PaymentMethod) => {
     try {
-      await api.patch(`/payments/methods/${method.id}`, { isActive: !method.isActive });
+      await apiClient.patch(`/payment-methods/${method.id}/toggle`);
       setMethods(prev => prev.map(m => m.id === method.id ? { ...m, isActive: !m.isActive } : m));
-    } catch { alert('Failed to update payment method'); }
+    } catch (err: any) {
+      console.error('Failed to toggle payment method:', err);
+      toast.error(err?.response?.data?.message || 'Failed to update payment method');
+    }
   };
 
   const handleQrisUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -57,14 +64,23 @@ export default function PaymentSettingsPage() {
     if (!file) return;
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('qrisImage', file);
-      await api.post('/payments/qris-config/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      // Store QRIS image URL in payment method config
+      const qrisMethod = methods.find(m => m.type === 'qris');
+      const imageUrl = URL.createObjectURL(file); // local preview only
+      if (qrisMethod) {
+        await apiClient.patch(`/payment-methods/${qrisMethod.id}`, {
+          config: { ...qrisMethod.config, qrisImageUrl: imageUrl, merchantName: company?.name }
+        });
+      } else {
+        await apiClient.post('/payment-methods', {
+          name: 'QRIS', type: 'qris', isActive: true,
+          config: { qrisImageUrl: imageUrl, merchantName: company?.name }
+        });
+      }
+      toast.success('QRIS configured');
       await fetchData();
-    } catch {
-      alert('Failed to upload QRIS image');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to configure QRIS');
     } finally {
       setUploading(false);
     }
@@ -74,16 +90,19 @@ export default function PaymentSettingsPage() {
     if (!bankForm.bankName || !bankForm.accountNumber || !bankForm.accountHolder) return;
     setSubmitting(true);
     try {
-      await api.post('/payments/methods', {
-        name: 'Bank Transfer',
-        type: 'transfer',
-        isActive: true,
-        config: bankForm
-      });
+      const existing = methods.find(m => m.type === 'transfer');
+      if (existing) {
+        await apiClient.patch(`/payment-methods/${existing.id}`, { config: bankForm });
+      } else {
+        await apiClient.post('/payment-methods', { name: 'Bank Transfer', type: 'bank_transfer', isActive: true, config: bankForm });
+      }
+      toast.success('Bank transfer settings saved');
       await fetchData();
       setShowBankModal(false);
-    } catch { alert('Failed to save bank transfer settings'); }
-    finally { setSubmitting(false); }
+    } catch (err: any) {
+      console.error('Failed to save bank transfer:', err);
+      toast.error(err?.response?.data?.message || 'Failed to save bank transfer settings');
+    } finally { setSubmitting(false); }
   };
 
   const cashMethod = methods.find(m => m.type === 'cash');
@@ -155,7 +174,7 @@ export default function PaymentSettingsPage() {
           <div style={{ display: 'flex', gap: 'var(--space-lg)' }}>
             <div style={{ flex: 1 }}>
               <div style={{ padding: 'var(--space-md)', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-md)' }}>
-                {qrisConfig?.qrisImageUrl ? (
+                {qrisConfig?.qrisImageUrl || qrisConfig?.imageUrl ? (
                   <div style={{ textAlign: 'center' }}>
                     <div className="flex-center" style={{ marginBottom: 'var(--space-sm)' }}>
                       <CheckCircle size={16} style={{ color: 'var(--success)', marginRight: '6px' }} />

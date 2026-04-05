@@ -1,402 +1,193 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { Users, Building2, CreditCard, TrendingUp, Activity, DollarSign } from 'lucide-react';
+import { Users, CreditCard, TrendingUp, Activity, DollarSign, RefreshCcw } from 'lucide-react';
 import { api } from '../../lib/api';
+import { format } from 'date-fns';
 
-interface DashboardStats {
-  totalMembers: number;
-  activeMembers: number;
-  suspendedMembers: number;
-  totalRevenue: number;
-  monthlyRevenue: number;
-  totalPlans: number;
-  activePlans: number;
-}
-
-interface RecentMember {
-  id: string;
-  businessName: string;
-  email: string;
-  status: string;
-  createdAt: string;
-  subscriptionPlan?: {
-    name: string;
-  };
-}
+interface DashboardStats { totalMembers: number; activeMembers: number; suspendedMembers: number; pendingMembers: number; totalRevenue: number; monthlyRevenue: number; totalPlans: number; activePlans: number; totalTransactions: number; paidTransactions: number; }
+interface RevenuePoint { date: string; amount: number; transactions: number; }
+interface GrowthPoint { date: string; total: number; new: number; }
+interface TopPlan { planId: string; planName: string; subscribers: number; }
 
 export default function DashboardPage() {
-  const [stats, setStats] = useState<DashboardStats>({
-    totalMembers: 0,
-    activeMembers: 0,
-    suspendedMembers: 0,
-    totalRevenue: 0,
-    monthlyRevenue: 0,
-    totalPlans: 0,
-    activePlans: 0
-  });
-  const [recentMembers, setRecentMembers] = useState<RecentMember[]>([]);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [revenue, setRevenue] = useState<RevenuePoint[]>([]);
+  const [growth, setGrowth] = useState<GrowthPoint[]>([]);
+  const [topPlans, setTopPlans] = useState<TopPlan[]>([]);
+  const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState<'week' | 'month' | 'year'>('month');
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
+  useEffect(() => { fetchAll(); }, [period]);
 
-  const fetchDashboardData = async () => {
+  const fetchAll = async () => {
+    setLoading(true);
     try {
-      // Fetch members
-      const membersData: any = await api.get('/admin/companies');
-      const members = Array.isArray(membersData) ? membersData : (membersData?.data || []);
-
-      // Fetch subscription plans
-      const plansData: any = await api.get('/subscription-plans');
-      const plans = Array.isArray(plansData) ? plansData : [];
-
-      // Fetch invoices for revenue
-      let invoices: any[] = [];
-      try {
-        const invoicesData: any = await api.get('/billing/admin/invoices');
-        invoices = Array.isArray(invoicesData) ? invoicesData : [];
-      } catch {}
-
-      // Filter out super-admin company
-      const realMembers = members.filter((m: any) => m.slug !== 'super-admin');
-
-      // Calculate stats
-      const activeMembers = realMembers.filter((m: any) => m.status === 'active').length;
-      const suspendedMembers = realMembers.filter((m: any) => m.status === 'suspended').length;
-      const activePlans = plans.filter((p: any) => p.isActive).length;
-
-      // Revenue from paid invoices
-      const paidInvoices = invoices.filter((i: any) => i.status === 'paid');
-      const totalRevenue = paidInvoices.reduce((sum: number, i: any) => sum + Number(i.total || 0), 0);
-      const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const monthlyRevenue = paidInvoices
-        .filter((i: any) => new Date(i.createdAt) >= startOfMonth)
-        .reduce((sum: number, i: any) => sum + Number(i.total || 0), 0);
-
-      setStats({
-        totalMembers: realMembers.length,
-        activeMembers,
-        suspendedMembers,
-        totalRevenue,
-        monthlyRevenue,
-        totalPlans: plans.length,
-        activePlans
-      });
-
-      // Get recent members (last 5)
-      const recent = realMembers
-        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, 5);
-      setRecentMembers(recent);
-
-    } catch (err) {
-      console.error('Error fetching dashboard data:', err);
-    } finally {
-      setLoading(false);
-    }
+      const [statsData, revenueData, growthData, plansData, activityData] = await Promise.allSettled([
+        api.get('/admin/dashboard/stats'),
+        api.get(`/admin/dashboard/revenue?period=${period}`),
+        api.get(`/admin/dashboard/member-growth?period=${period}`),
+        api.get('/admin/dashboard/top-plans'),
+        api.get('/admin/dashboard/recent-activity?limit=8'),
+      ]);
+      if (statsData.status === 'fulfilled') {
+        const d = statsData.value as any;
+        setStats({
+          totalMembers: d?.totalMembers || 0,
+          activeMembers: d?.activeMembers || 0,
+          suspendedMembers: d?.suspendedMembers || 0,
+          pendingMembers: d?.pendingMembers || 0,
+          totalRevenue: d?.totalRevenue || 0,
+          monthlyRevenue: d?.monthlyRevenue || 0,
+          totalPlans: d?.totalPlans || 0,
+          activePlans: d?.activePlans || 0,
+          totalTransactions: d?.totalTransactions || 0,
+          paidTransactions: d?.paidTransactions || 0,
+        });
+      }
+      if (revenueData.status === 'fulfilled') setRevenue(Array.isArray(revenueData.value) ? revenueData.value as RevenuePoint[] : []);
+      if (growthData.status === 'fulfilled') setGrowth(Array.isArray(growthData.value) ? growthData.value as GrowthPoint[] : []);
+      if (plansData.status === 'fulfilled') setTopPlans(Array.isArray(plansData.value) ? plansData.value as TopPlan[] : []);
+      if (activityData.status === 'fulfilled') {
+        const d = activityData.value as any;
+        setRecentActivity(Array.isArray(d) ? d : []);
+      }
+    } catch (err) { console.error('Dashboard fetch error:', err); }
+    finally { setLoading(false); }
   };
 
-  const formatCurrency = (amount: number) => `Rp ${(amount || 0).toLocaleString('id-ID')}`;
+  const fmt = (n: number) => `Rp ${(n || 0).toLocaleString('id-ID')}`;
+  const fmtDate = (d: string) => { try { return format(new Date(d), 'dd/MM'); } catch { return d; } };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'active': return 'var(--success)';
-      case 'suspended': return 'var(--danger)';
-      case 'pending': return 'var(--warning)';
-      default: return 'var(--text-tertiary)';
-    }
-  };
-
-  const getStatusBg = (status: string) => {
-    switch (status) {
-      case 'active': return 'rgba(16, 185, 129, 0.15)';
-      case 'suspended': return 'rgba(239, 68, 68, 0.15)';
-      case 'pending': return 'rgba(245, 158, 11, 0.15)';
-      default: return 'var(--bg-tertiary)';
-    }
-  };
-
-  if (loading) {
-    return (
-      <div style={{ padding: 'var(--space-2xl)', textAlign: 'center' }}>
-        <div style={{ 
-          width: '48px', 
-          height: '48px', 
-          border: '4px solid var(--border-base)', 
-          borderTopColor: 'var(--accent-base)', 
-          borderRadius: '50%', 
-          animation: 'spin 1s linear infinite',
-          margin: '0 auto var(--space-md)'
-        }} />
-        <p style={{ color: 'var(--text-tertiary)' }}>Loading dashboard...</p>
-      </div>
-    );
-  }
+  const STATS = [
+    { label: 'Total Members', value: stats?.totalMembers || 0, icon: Users, color: 'text-indigo-600 bg-indigo-50', sub: `${stats?.activeMembers || 0} active` },
+    { label: 'Monthly Revenue', value: fmt(stats?.monthlyRevenue || 0), icon: DollarSign, color: 'text-amber-600 bg-amber-50', sub: `Total: ${fmt(stats?.totalRevenue || 0)}` },
+    { label: 'Active Plans', value: stats?.activePlans || 0, icon: CreditCard, color: 'text-pink-600 bg-pink-50', sub: `${stats?.totalPlans || 0} total plans` },
+    { label: 'Paid Invoices', value: stats?.paidTransactions || 0, icon: Activity, color: 'text-emerald-600 bg-emerald-50', sub: `${stats?.totalTransactions || 0} total` },
+  ];
 
   return (
-    <div>
-      {/* Header */}
-      <div style={{ marginBottom: 'var(--space-xl)' }}>
-        <h1 style={{ fontSize: '1.75rem', marginBottom: 'var(--space-xs)' }}>Dashboard</h1>
-        <p style={{ color: 'var(--text-secondary)' }}>Overview of your SaaS platform performance and member activity.</p>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="grid-cols-4" style={{ marginBottom: 'var(--space-xl)' }}>
-        {/* Total Members */}
-        <div className="glass-panel animate-fade-in" style={{ padding: 'var(--space-lg)' }}>
-          <div className="flex-between" style={{ marginBottom: 'var(--space-md)' }}>
-            <div style={{ 
-              width: '40px', 
-              height: '40px', 
-              borderRadius: 'var(--radius-md)', 
-              background: 'rgba(99, 102, 241, 0.15)', 
-              color: 'var(--accent-base)', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center' 
-            }}>
-              <Users size={20} />
-            </div>
-            <span className="badge" style={{ background: 'rgba(99, 102, 241, 0.15)', color: 'var(--accent-base)' }}>
-              Total
-            </span>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div><h1 className="text-2xl font-bold text-gray-900">Dashboard</h1><p className="text-sm text-gray-500 mt-1">Platform performance overview</p></div>
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+            {(['week','month','year'] as const).map(p => (
+              <button key={p} onClick={() => setPeriod(p)} className={`px-3 py-1 rounded-md text-xs font-medium capitalize transition-all ${period===p ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>{p}</button>
+            ))}
           </div>
-          <h3 style={{ fontSize: '2rem', marginBottom: '4px' }}>{stats.totalMembers}</h3>
-          <p style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>Total Members</p>
-        </div>
-
-        {/* Active Members */}
-        <div className="glass-panel animate-fade-in" style={{ padding: 'var(--space-lg)', animationDelay: '0.1s' }}>
-          <div className="flex-between" style={{ marginBottom: 'var(--space-md)' }}>
-            <div style={{ 
-              width: '40px', 
-              height: '40px', 
-              borderRadius: 'var(--radius-md)', 
-              background: 'rgba(16, 185, 129, 0.15)', 
-              color: 'var(--success)', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center' 
-            }}>
-              <Activity size={20} />
-            </div>
-            <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--success)' }}>
-              Active
-            </span>
-          </div>
-          <h3 style={{ fontSize: '2rem', marginBottom: '4px' }}>{stats.activeMembers}</h3>
-          <p style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>Active Members</p>
-        </div>
-
-        {/* Monthly Revenue */}
-        <div className="glass-panel animate-fade-in" style={{ padding: 'var(--space-lg)', animationDelay: '0.2s' }}>
-          <div className="flex-between" style={{ marginBottom: 'var(--space-md)' }}>
-            <div style={{ 
-              width: '40px', 
-              height: '40px', 
-              borderRadius: 'var(--radius-md)', 
-              background: 'rgba(245, 158, 11, 0.15)', 
-              color: 'var(--warning)', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center' 
-            }}>
-              <DollarSign size={20} />
-            </div>
-            <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.15)', color: 'var(--warning)' }}>
-              This Month
-            </span>
-          </div>
-          <h3 style={{ fontSize: '1.5rem', marginBottom: '4px' }}>{formatCurrency(stats.monthlyRevenue)}</h3>
-          <p style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>Monthly Revenue</p>
-        </div>
-
-        {/* Active Plans */}
-        <div className="glass-panel animate-fade-in" style={{ padding: 'var(--space-lg)', animationDelay: '0.3s' }}>
-          <div className="flex-between" style={{ marginBottom: 'var(--space-md)' }}>
-            <div style={{ 
-              width: '40px', 
-              height: '40px', 
-              borderRadius: 'var(--radius-md)', 
-              background: 'rgba(236, 72, 153, 0.15)', 
-              color: '#ec4899', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center' 
-            }}>
-              <CreditCard size={20} />
-            </div>
-            <span className="badge" style={{ background: 'rgba(236, 72, 153, 0.15)', color: '#ec4899' }}>
-              Plans
-            </span>
-          </div>
-          <h3 style={{ fontSize: '2rem', marginBottom: '4px' }}>{stats.activePlans}</h3>
-          <p style={{ color: 'var(--text-tertiary)', fontSize: '0.875rem' }}>Active Plans</p>
+          <button onClick={fetchAll} className="btn btn-outline btn-sm"><RefreshCcw size={14} className={loading ? 'animate-spin' : ''}/></button>
         </div>
       </div>
 
-      {/* Two Column Layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 'var(--space-xl)' }}>
-        {/* Recent Members */}
-        <div className="glass-panel animate-fade-in" style={{ padding: 'var(--space-xl)', animationDelay: '0.4s' }}>
-          <div className="flex-between" style={{ marginBottom: 'var(--space-lg)' }}>
-            <h3 style={{ fontSize: '1.125rem' }}>Recent Members</h3>
-            <a href="/dashboard/members" style={{ fontSize: '0.875rem', color: 'var(--accent-base)', textDecoration: 'none' }}>
-              View All →
-            </a>
+      {/* Stats */}
+      {loading ? (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">{Array.from({length:4}).map((_,i) => <div key={i} className="stat-card animate-pulse"><div className="h-10 w-10 bg-gray-200 rounded-lg mb-3"/><div className="h-7 bg-gray-200 rounded w-1/2 mb-2"/><div className="h-4 bg-gray-100 rounded w-3/4"/></div>)}</div>
+      ) : (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {STATS.map((s, i) => (
+            <div key={i} className="stat-card">
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center mb-3 ${s.color}`}><s.icon size={20}/></div>
+              <div className="stat-value">{s.value}</div>
+              <div className="stat-label mt-0.5">{s.label}</div>
+              <div className="text-xs text-gray-400 mt-0.5">{s.sub}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Charts */}
+      {!loading && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Revenue Chart */}
+          <div className="card">
+            <div className="card-header"><h3 className="text-sm font-semibold text-gray-700">Revenue</h3><span className="text-xs text-gray-400 capitalize">{period}</span></div>
+            <div className="card-body">
+              {revenue.length > 0 ? (() => {
+                const data = revenue.slice(-14);
+                const W=400, H=100, PAD=6;
+                const maxVal = Math.max(...data.map(d=>d.amount),1);
+                const pts = data.map((d,i) => ({ x: PAD+(i/(data.length-1||1))*(W-PAD*2), y: H-PAD-((d.amount/maxVal)*(H-PAD*2)), ...d }));
+                const pathD = pts.map((p,i)=>`${i===0?'M':'L'} ${p.x} ${p.y}`).join(' ');
+                const areaD = `${pathD} L ${pts[pts.length-1].x} ${H} L ${pts[0].x} ${H} Z`;
+                return (
+                  <div>
+                    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{height:100}}>
+                      <defs><linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#6366f1" stopOpacity="0.25"/><stop offset="100%" stopColor="#6366f1" stopOpacity="0"/></linearGradient></defs>
+                      <path d={areaD} fill="url(#cg)"/>
+                      <path d={pathD} fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      {pts.map((p,i) => <circle key={i} cx={p.x} cy={p.y} r="3" fill="#6366f1"><title>{fmtDate(p.date)}: {fmt(p.amount)}</title></circle>)}
+                    </svg>
+                    <div className="flex justify-between mt-1">{pts.filter((_,i)=>i%2===0).map((p,i)=><span key={i} className="text-xs text-gray-400">{fmtDate(p.date)}</span>)}</div>
+                    <div className="flex justify-between mt-3 pt-3 border-t border-gray-100">
+                      <div className="text-center"><div className="text-xs text-gray-400">Total</div><div className="text-sm font-bold text-emerald-600">{fmt(data.reduce((s,d)=>s+d.amount,0))}</div></div>
+                      <div className="text-center"><div className="text-xs text-gray-400">Transactions</div><div className="text-sm font-bold">{data.reduce((s,d)=>s+d.transactions,0)}</div></div>
+                    </div>
+                  </div>
+                );
+              })() : <p className="text-sm text-gray-400 text-center py-8">No data for this period</p>}
+            </div>
           </div>
 
-          {recentMembers.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 'var(--space-2xl)', color: 'var(--text-tertiary)' }}>
-              <Users size={48} style={{ margin: '0 auto var(--space-md)', opacity: 0.3 }} />
-              <p>No members yet</p>
+          {/* Top Plans */}
+          <div className="card">
+            <div className="card-header"><h3 className="text-sm font-semibold text-gray-700">Top Subscription Plans</h3></div>
+            <div className="card-body space-y-3">
+              {topPlans.length === 0 ? <p className="text-sm text-gray-400 text-center py-8">No plan data yet</p> :
+                topPlans.map((plan, i) => {
+                  const maxSubs = Math.max(...topPlans.map(p=>p.subscribers),1);
+                  const colors = ['bg-indigo-500','bg-emerald-500','bg-amber-500','bg-pink-500','bg-purple-500'];
+                  return (
+                    <div key={plan.planId}>
+                      <div className="flex justify-between items-center mb-1">
+                        <div className="flex items-center gap-2"><span className={`w-5 h-5 rounded-full ${colors[i]} text-white text-xs flex items-center justify-center font-bold`}>{i+1}</span><span className="text-sm font-medium">{plan.planName}</span></div>
+                        <span className="text-sm text-gray-500">{plan.subscribers} subscribers</span>
+                      </div>
+                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full ${colors[i]} rounded-full transition-all duration-500`} style={{width:`${(plan.subscribers/maxSubs)*100}%`}}/></div>
+                    </div>
+                  );
+                })}
             </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-              {recentMembers.map((member) => (
-                <div 
-                  key={member.id} 
-                  style={{ 
-                    padding: 'var(--space-md)', 
-                    background: 'var(--bg-tertiary)', 
-                    borderRadius: 'var(--radius-md)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 'var(--space-md)'
-                  }}
-                >
-                  <div style={{ 
-                    width: '40px', 
-                    height: '40px', 
-                    borderRadius: '50%', 
-                    background: 'var(--accent-base)', 
-                    color: 'white',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.125rem',
-                    fontWeight: 600,
-                    flexShrink: 0
-                  }}>
-                    {member.businessName?.charAt(0).toUpperCase() || 'M'}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <h4 style={{ fontSize: '0.9375rem', marginBottom: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {member.businessName}
-                    </h4>
-                    <p style={{ fontSize: '0.8125rem', color: 'var(--text-tertiary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {member.email}
-                    </p>
-                  </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    <span 
-                      className="badge" 
-                      style={{ 
-                        background: getStatusBg(member.status), 
-                        color: getStatusColor(member.status),
-                        marginBottom: '4px',
-                        display: 'inline-block'
-                      }}
-                    >
-                      {member.status}
-                    </span>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
-                      {formatDate(member.createdAt)}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          </div>
         </div>
+      )}
 
-        {/* Quick Stats */}
-        <div className="glass-panel animate-fade-in" style={{ padding: 'var(--space-xl)', animationDelay: '0.5s' }}>
-          <h3 style={{ fontSize: '1.125rem', marginBottom: 'var(--space-lg)' }}>Quick Stats</h3>
-          
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-            {/* Member Status Breakdown */}
-            <div style={{ padding: 'var(--space-md)', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
-              <div className="flex-between" style={{ marginBottom: '8px' }}>
-                <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Active</span>
-                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--success)' }}>{stats.activeMembers}</span>
-              </div>
-              <div style={{ 
-                height: '6px', 
-                background: 'var(--bg-secondary)', 
-                borderRadius: '3px', 
-                overflow: 'hidden' 
-              }}>
-                <div style={{ 
-                  height: '100%', 
-                  width: `${stats.totalMembers > 0 ? (stats.activeMembers / stats.totalMembers * 100) : 0}%`, 
-                  background: 'var(--success)',
-                  transition: 'width 0.3s'
-                }} />
-              </div>
+      {/* Recent Activity + Member Status */}
+      {!loading && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="card">
+            <div className="card-header"><h3 className="text-sm font-semibold text-gray-700">Recent Registrations</h3><a href="/dashboard/members" className="text-xs text-indigo-600 hover:underline">View All →</a></div>
+            <div className="card-body">
+              {recentActivity.length === 0 ? <p className="text-sm text-gray-400 text-center py-6">No recent activity</p> :
+                <div className="space-y-3">
+                  {recentActivity.map((item, i) => (
+                    <div key={i} className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-sm flex-shrink-0">{item.companyName?.charAt(0)?.toUpperCase()||'M'}</div>
+                      <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{item.companyName}</p><p className="text-xs text-gray-400">{new Date(item.createdAt).toLocaleDateString('id-ID')}</p></div>
+                      <span className={`badge ${item.status==='active'?'badge-success':item.status==='pending'?'badge-warning':'badge-danger'} text-xs`}>{item.status}</span>
+                    </div>
+                  ))}
+                </div>}
             </div>
+          </div>
 
-            <div style={{ padding: 'var(--space-md)', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)' }}>
-              <div className="flex-between" style={{ marginBottom: '8px' }}>
-                <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Suspended</span>
-                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--danger)' }}>{stats.suspendedMembers}</span>
-              </div>
-              <div style={{ 
-                height: '6px', 
-                background: 'var(--bg-secondary)', 
-                borderRadius: '3px', 
-                overflow: 'hidden' 
-              }}>
-                <div style={{ 
-                  height: '100%', 
-                  width: `${stats.totalMembers > 0 ? (stats.suspendedMembers / stats.totalMembers * 100) : 0}%`, 
-                  background: 'var(--danger)',
-                  transition: 'width 0.3s'
-                }} />
-              </div>
-            </div>
-
-            {/* Revenue Info */}
-            <div style={{ 
-              padding: 'var(--space-md)', 
-              background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1))', 
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid rgba(99, 102, 241, 0.2)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <TrendingUp size={16} style={{ color: 'var(--accent-base)' }} />
-                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--accent-base)' }}>Total Revenue</span>
-              </div>
-              <h4 style={{ fontSize: '1.5rem', color: 'var(--accent-base)' }}>{formatCurrency(stats.totalRevenue)}</h4>
-            </div>
-
-            {/* Plans Info */}
-            <div style={{ 
-              padding: 'var(--space-md)', 
-              background: 'var(--bg-tertiary)', 
-              borderRadius: 'var(--radius-md)'
-            }}>
-              <div className="flex-between" style={{ marginBottom: '8px' }}>
-                <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Total Plans</span>
-                <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>{stats.totalPlans}</span>
-              </div>
-              <div className="flex-between">
-                <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>Active Plans</span>
-                <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--success)' }}>{stats.activePlans}</span>
+          <div className="card">
+            <div className="card-header"><h3 className="text-sm font-semibold text-gray-700">Member Status Overview</h3></div>
+            <div className="card-body">
+              <div className="grid grid-cols-2 gap-3">
+                {[['Active', stats?.activeMembers||0, 'text-emerald-600 bg-emerald-50'], ['Pending', stats?.pendingMembers||0, 'text-amber-600 bg-amber-50'], ['Suspended', stats?.suspendedMembers||0, 'text-red-600 bg-red-50'], ['Total', stats?.totalMembers||0, 'text-indigo-600 bg-indigo-50']].map(([l,v,c]) => (
+                  <div key={l as string} className={`rounded-xl p-4 text-center ${(c as string).split(' ')[1]}`}>
+                    <div className={`text-2xl font-bold ${(c as string).split(' ')[0]}`}>{v}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">{l}</div>
+                    {stats?.totalMembers ? <div className="text-xs text-gray-400 mt-0.5">{Math.round((Number(v)/stats.totalMembers)*100)}%</div> : null}
+                  </div>
+                ))}
               </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

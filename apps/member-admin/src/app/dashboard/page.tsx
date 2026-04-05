@@ -1,46 +1,23 @@
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
-import { Package, Users, Receipt, TrendingUp, ArrowUp, ArrowDown, ShoppingCart, DollarSign } from 'lucide-react';
+import { Package, Users, Receipt, TrendingUp, ArrowUp, ArrowDown, ShoppingCart, DollarSign, AlertTriangle, RefreshCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import apiClient from '@/lib/api-client';
 import { format } from 'date-fns';
 import Link from 'next/link';
+import { StatsCard, LoadingSpinner } from '@/components/ui';
 
 interface DashboardMetrics {
-  period: {
-    startDate: string;
-    endDate: string;
-  };
+  period: { startDate: string; endDate: string };
   metrics: {
-    totalRevenue: number;
-    totalTransactions: number;
-    averageTransaction: number;
-    totalProducts: number;
-    activeProducts: number;
-    totalCustomers: number;
-    newCustomers: number;
-    lowStockProducts: number;
-    totalInventoryValue: number;
+    totalRevenue: number; totalTransactions: number; averageTransaction: number;
+    totalProducts: number; activeProducts: number; totalCustomers: number;
+    newCustomers: number; lowStockProducts: number; totalInventoryValue: number;
   };
-  topProducts: Array<{
-    productId: string;
-    productName: string;
-    quantitySold: number;
-    revenue: number;
-  }>;
-  lowStockAlerts: Array<{
-    productId: string;
-    productName: string;
-    sku: string;
-    currentStock: number;
-    lowStockThreshold: number;
-  }>;
-  revenueChart: Array<{
-    date: string;
-    revenue: number;
-    transactions: number;
-  }>;
+  topProducts: Array<{ productId: string; productName: string; quantitySold: number; revenue: number }>;
+  lowStockAlerts: Array<{ productId: string; productName: string; sku: string; currentStock: number; lowStockThreshold: number }>;
+  revenueChart: Array<{ date: string; revenue: number; transactions: number }>;
 }
 
 export default function DashboardPage() {
@@ -49,378 +26,161 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchDashboardMetrics();
-  }, []);
+  useEffect(() => { fetchMetrics(); }, []);
 
-  const fetchDashboardMetrics = async () => {
+  const fetchMetrics = async () => {
     try {
       setLoading(true);
-      const response = await apiClient.get<DashboardMetrics>('/reports/dashboard');
-      setMetrics(response.data);
+      const res = await apiClient.get<DashboardMetrics>('/reports/dashboard');
+      setMetrics(res.data);
       setError(null);
     } catch (err: any) {
-      console.error('Failed to fetch dashboard metrics:', err);
       setError(err.response?.data?.message || 'Failed to load dashboard data');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0,
-    }).format(amount);
-  };
-
-  const stats = [
-    {
-      name: 'Total Revenue',
-      value: loading ? 'Loading...' : formatCurrency(metrics?.metrics.totalRevenue || 0),
-      icon: DollarSign,
-      change: '+12.5%',
-      changeType: 'positive',
-      color: 'var(--success)',
-      bgColor: 'var(--success-light)',
-    },
-    {
-      name: 'Transactions',
-      value: loading ? 'Loading...' : (metrics?.metrics.totalTransactions || 0).toString(),
-      icon: Receipt,
-      change: '+8.2%',
-      changeType: 'positive',
-      color: 'var(--accent-base)',
-      bgColor: 'var(--accent-light)',
-    },
-    {
-      name: 'Products',
-      value: loading ? 'Loading...' : (metrics?.metrics.totalProducts || 0).toString(),
-      icon: Package,
-      change: '+3',
-      changeType: 'positive',
-      color: 'var(--info)',
-      bgColor: 'var(--info-light)',
-    },
-    {
-      name: 'Customers',
-      value: loading ? 'Loading...' : (metrics?.metrics.totalCustomers || 0).toString(),
-      icon: Users,
-      change: `+${metrics?.metrics.newCustomers || 0} new`,
-      changeType: 'positive',
-      color: 'var(--warning)',
-      bgColor: 'var(--warning-light)',
-    },
-  ];
+  const fmt = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
 
   return (
     <div className="space-y-6">
-      {/* Welcome Section */}
-      <div>
-        <h1 style={{ fontSize: '1.875rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
-          Welcome back, {user?.firstName || 'User'}! 👋
-        </h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-          Here&apos;s what&apos;s happening with your business today.
-        </p>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Welcome back, {user?.firstName || 'User'}! 👋</h1>
+          <p className="text-sm text-gray-500 mt-1">Here's what's happening with your business today.</p>
+        </div>
+        <button onClick={fetchMetrics} className="btn btn-outline btn-sm" disabled={loading}>
+          <RefreshCcw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
+        </button>
       </div>
 
-      {/* Error Message */}
       {error && (
-        <div className="alert alert-danger">
-          <div style={{ fontSize: '0.875rem' }}>{error}</div>
+        <div className="alert alert-danger"><AlertTriangle size={16} />{error}</div>
+      )}
+
+      {/* Stats */}
+      {loading ? <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">{Array.from({length:4}).map((_,i)=><div key={i} className="stat-card animate-pulse"><div className="h-10 w-10 bg-gray-200 rounded-lg mb-3"/><div className="h-7 bg-gray-200 rounded w-1/2 mb-2"/><div className="h-4 bg-gray-100 rounded w-3/4"/></div>)}</div> : (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatsCard label="Total Revenue" value={fmt(metrics?.metrics.totalRevenue || 0)} icon={DollarSign} color="green" sub="All time" />
+          <StatsCard label="Transactions" value={metrics?.metrics.totalTransactions || 0} icon={Receipt} color="indigo" sub="All time" />
+          <StatsCard label="Products" value={metrics?.metrics.totalProducts || 0} icon={Package} color="blue" sub={`${metrics?.metrics.activeProducts || 0} active`} />
+          <StatsCard label="Customers" value={metrics?.metrics.totalCustomers || 0} icon={Users} color="amber" sub={`+${metrics?.metrics.newCustomers || 0} new`} />
         </div>
       )}
 
-      {/* Stats Grid */}
-      <div className="grid-cols-4" style={{ display: 'grid', gap: 'var(--space-lg)' }}>
-        {stats.map((stat) => (
-          <div key={stat.name} className="stat-card">
-            <div className="flex-between" style={{ marginBottom: 'var(--space-md)' }}>
-              <div 
-                className="flex-center" 
-                style={{ 
-                  width: '48px', 
-                  height: '48px', 
-                  borderRadius: 'var(--radius-lg)',
-                  background: stat.bgColor 
-                }}
-              >
-                <stat.icon size={24} style={{ color: stat.color }} />
-              </div>
-            </div>
-            <div className="stat-label">{stat.name}</div>
-            <div className="stat-value">{stat.value}</div>
-            <div className={`stat-change ${stat.changeType}`}>
-              {stat.changeType === 'positive' ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
-              <span>{stat.change}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Charts and Data */}
+      {/* Charts */}
       {!loading && metrics && (
-        <div className="grid-cols-2" style={{ display: 'grid', gap: 'var(--space-lg)' }}>
-          {/* Revenue Trend */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Revenue Chart */}
           <div className="card">
             <div className="card-header">
-              <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Revenue Trend
-              </h3>
+              <h3 className="text-sm font-semibold text-gray-700">Revenue Trend (Last 7 Days)</h3>
             </div>
             <div className="card-body">
-              {metrics.revenueChart.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-                  {metrics.revenueChart.slice(0, 7).map((item) => {
-                    const maxRevenue = Math.max(...metrics.revenueChart.map(r => r.revenue));
-                    const percentage = maxRevenue > 0 ? (item.revenue / maxRevenue) * 100 : 0;
-                    
-                    return (
-                      <div key={item.date} style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-                        <span style={{ fontSize: '0.8125rem', color: 'var(--text-secondary)', minWidth: '60px' }}>
-                          {format(new Date(item.date), 'dd MMM')}
-                        </span>
-                        <div style={{ flex: 1, height: '8px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-full)', overflow: 'hidden' }}>
-                          <div
-                            style={{
-                              height: '100%',
-                              width: `${percentage}%`,
-                              background: 'var(--accent-base)',
-                              borderRadius: 'var(--radius-full)',
-                              transition: 'width 0.3s ease',
-                            }}
-                          />
+              {metrics.revenueChart.length > 0 ? (() => {
+                const data = metrics.revenueChart.slice(-7);
+                const W = 400, H = 120, PAD = 8;
+                const maxVal = Math.max(...data.map(d => d.revenue), 1);
+                const pts = data.map((d, i) => ({
+                  x: PAD + (i / (data.length - 1 || 1)) * (W - PAD * 2),
+                  y: H - PAD - ((d.revenue / maxVal) * (H - PAD * 2)),
+                  ...d,
+                }));
+                const pathD = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+                const areaD = `${pathD} L ${pts[pts.length-1].x} ${H} L ${pts[0].x} ${H} Z`;
+                return (
+                  <div>
+                    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{height:120}}>
+                      <defs>
+                        <linearGradient id="rg" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#6366f1" stopOpacity="0.25"/>
+                          <stop offset="100%" stopColor="#6366f1" stopOpacity="0"/>
+                        </linearGradient>
+                      </defs>
+                      <path d={areaD} fill="url(#rg)"/>
+                      <path d={pathD} fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      {pts.map((p,i) => <circle key={i} cx={p.x} cy={p.y} r="3.5" fill="#6366f1"><title>{format(new Date(p.date),'dd MMM')}: {fmt(p.revenue)}</title></circle>)}
+                    </svg>
+                    <div className="flex justify-between mt-1">
+                      {pts.map((p,i) => <span key={i} className="text-xs text-gray-400">{format(new Date(p.date),'dd/MM')}</span>)}
+                    </div>
+                    <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-gray-100">
+                      {[
+                        ['Total', fmt(data.reduce((s,d)=>s+d.revenue,0))],
+                        ['Avg/day', fmt(data.reduce((s,d)=>s+d.revenue,0)/data.length)],
+                        ['Peak', fmt(maxVal)],
+                      ].map(([l,v])=>(
+                        <div key={l} className="text-center">
+                          <div className="text-xs text-gray-400">{l}</div>
+                          <div className="text-sm font-bold text-gray-800 mt-0.5">{v}</div>
                         </div>
-                        <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-primary)', minWidth: '100px', textAlign: 'right' }}>
-                          {formatCurrency(item.revenue)}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="empty-state">
-                  <TrendingUp className="empty-state-icon" />
-                  <p className="empty-state-description">No revenue data available yet</p>
-                </div>
-              )}
+                      ))}
+                    </div>
+                  </div>
+                );
+              })() : <p className="text-sm text-gray-400 text-center py-8">No revenue data yet</p>}
             </div>
           </div>
 
           {/* Top Products */}
           <div className="card">
             <div className="card-header">
-              <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Top Selling Products
-              </h3>
+              <h3 className="text-sm font-semibold text-gray-700">Top Selling Products</h3>
             </div>
-            <div className="card-body">
-              {metrics.topProducts.length > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-                  {metrics.topProducts.slice(0, 5).map((product, index) => (
-                    <div key={product.productId} className="flex-between">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)' }}>
-                        <div 
-                          className="flex-center" 
-                          style={{ 
-                            width: '32px', 
-                            height: '32px', 
-                            borderRadius: 'var(--radius-full)',
-                            background: 'var(--accent-light)',
-                            color: 'var(--accent-base)',
-                            fontSize: '0.8125rem',
-                            fontWeight: 700
-                          }}
-                        >
-                          {index + 1}
-                        </div>
-                        <div>
-                          <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                            {product.productName}
-                          </p>
-                          <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                            {product.quantitySold} sold
-                          </p>
-                        </div>
+            <div className="card-body space-y-3">
+              {metrics.topProducts.length > 0 ? metrics.topProducts.slice(0,5).map((p, i) => {
+                const maxRev = Math.max(...metrics.topProducts.map(x=>x.revenue),1);
+                const colors = ['bg-indigo-500','bg-emerald-500','bg-amber-500','bg-pink-500','bg-purple-500'];
+                return (
+                  <div key={p.productId}>
+                    <div className="flex justify-between items-center mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-5 h-5 rounded-full ${colors[i]} text-white text-xs flex items-center justify-center font-bold`}>{i+1}</span>
+                        <span className="text-sm font-medium text-gray-800">{p.productName}</span>
                       </div>
-                      <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                        {formatCurrency(product.revenue)}
-                      </span>
+                      <div className="text-right">
+                        <div className="text-sm font-bold text-gray-900">{fmt(p.revenue)}</div>
+                        <div className="text-xs text-gray-400">{p.quantitySold} sold</div>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="empty-state">
-                  <Package className="empty-state-icon" />
-                  <p className="empty-state-description">No sales data available yet</p>
-                </div>
-              )}
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div className={`h-full ${colors[i]} rounded-full transition-all duration-500`} style={{width:`${(p.revenue/maxRev)*100}%`}}/>
+                    </div>
+                  </div>
+                );
+              }) : <p className="text-sm text-gray-400 text-center py-8">No sales data yet</p>}
             </div>
           </div>
         </div>
       )}
 
-      {/* Low Stock Alerts */}
+      {/* Low Stock */}
       {!loading && metrics && metrics.lowStockAlerts.length > 0 && (
         <div className="card">
-          <div className="card-header flex-between">
-            <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-              Low Stock Alerts
+          <div className="card-header">
+            <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <AlertTriangle size={16} className="text-amber-500" /> Low Stock Alerts
             </h3>
-            <span className="badge badge-danger">
-              {metrics.lowStockAlerts.length} items
-            </span>
+            <span className="badge badge-warning">{metrics.lowStockAlerts.length} items</span>
           </div>
-          <div className="card-body">
-            <div className="table-container">
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Product</th>
-                    <th>SKU</th>
-                    <th>Current Stock</th>
-                    <th>Threshold</th>
+          <div className="table-container rounded-none rounded-b-xl border-0 border-t border-gray-100">
+            <table className="table">
+              <thead><tr><th>Product</th><th>SKU</th><th>Current Stock</th><th>Threshold</th><th>Status</th></tr></thead>
+              <tbody>
+                {metrics.lowStockAlerts.map(item => (
+                  <tr key={item.productId}>
+                    <td className="font-medium">{item.productName}</td>
+                    <td className="text-gray-500 font-mono text-xs">{item.sku}</td>
+                    <td><span className="font-bold text-red-600">{item.currentStock}</span></td>
+                    <td className="text-gray-500">{item.lowStockThreshold}</td>
+                    <td><span className="badge badge-warning">Low Stock</span></td>
                   </tr>
-                </thead>
-                <tbody>
-                  {metrics.lowStockAlerts.slice(0, 5).map((alert) => (
-                    <tr key={alert.productId}>
-                      <td style={{ fontWeight: 600 }}>{alert.productName}</td>
-                      <td>{alert.sku}</td>
-                      <td style={{ color: 'var(--danger)', fontWeight: 600 }}>
-                        {alert.currentStock}
-                      </td>
-                      <td>{alert.lowStockThreshold}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       )}
-
-      {/* Quick Actions */}
-      <div className="card">
-        <div className="card-header">
-          <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-            Quick Actions
-          </h3>
-        </div>
-        <div className="card-body">
-          <div className="grid-cols-4" style={{ display: 'grid', gap: 'var(--space-md)' }}>
-            <Link
-              href="/dashboard/pos"
-              className="card"
-              style={{ 
-                padding: 'var(--space-lg)', 
-                textAlign: 'center',
-                cursor: 'pointer',
-                textDecoration: 'none'
-              }}
-            >
-              <div 
-                className="flex-center" 
-                style={{ 
-                  width: '56px', 
-                  height: '56px', 
-                  borderRadius: 'var(--radius-lg)',
-                  background: 'var(--accent-light)',
-                  margin: '0 auto var(--space-md)'
-                }}
-              >
-                <ShoppingCart size={28} style={{ color: 'var(--accent-base)' }} />
-              </div>
-              <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                New Sale
-              </p>
-            </Link>
-
-            <Link
-              href="/dashboard/products"
-              className="card"
-              style={{ 
-                padding: 'var(--space-lg)', 
-                textAlign: 'center',
-                cursor: 'pointer',
-                textDecoration: 'none'
-              }}
-            >
-              <div 
-                className="flex-center" 
-                style={{ 
-                  width: '56px', 
-                  height: '56px', 
-                  borderRadius: 'var(--radius-lg)',
-                  background: 'var(--info-light)',
-                  margin: '0 auto var(--space-md)'
-                }}
-              >
-                <Package size={28} style={{ color: 'var(--info)' }} />
-              </div>
-              <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Add Product
-              </p>
-            </Link>
-
-            <Link
-              href="/dashboard/customers"
-              className="card"
-              style={{ 
-                padding: 'var(--space-lg)', 
-                textAlign: 'center',
-                cursor: 'pointer',
-                textDecoration: 'none'
-              }}
-            >
-              <div 
-                className="flex-center" 
-                style={{ 
-                  width: '56px', 
-                  height: '56px', 
-                  borderRadius: 'var(--radius-lg)',
-                  background: 'var(--warning-light)',
-                  margin: '0 auto var(--space-md)'
-                }}
-              >
-                <Users size={28} style={{ color: 'var(--warning)' }} />
-              </div>
-              <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Add Customer
-              </p>
-            </Link>
-
-            <Link
-              href="/dashboard/reports"
-              className="card"
-              style={{ 
-                padding: 'var(--space-lg)', 
-                textAlign: 'center',
-                cursor: 'pointer',
-                textDecoration: 'none'
-              }}
-            >
-              <div 
-                className="flex-center" 
-                style={{ 
-                  width: '56px', 
-                  height: '56px', 
-                  borderRadius: 'var(--radius-lg)',
-                  background: 'var(--success-light)',
-                  margin: '0 auto var(--space-md)'
-                }}
-              >
-                <TrendingUp size={28} style={{ color: 'var(--success)' }} />
-              </div>
-              <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                View Reports
-              </p>
-            </Link>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

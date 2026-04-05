@@ -1,6 +1,4 @@
-import axios from 'axios';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4404/api/v1';
+import apiClient from '@/lib/api-client';
 
 export enum PurchaseOrderStatus {
   DRAFT = 'draft',
@@ -76,18 +74,6 @@ export interface ReceivePurchaseOrderDto {
 }
 
 class PurchaseOrdersService {
-  private getAuthHeader() {
-    const token = localStorage.getItem('access_token');
-    return {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    };
-  }
-
-  /**
-   * Get all purchase orders
-   */
   async getAll(params?: {
     status?: PurchaseOrderStatus;
     supplierId?: string;
@@ -97,96 +83,55 @@ class PurchaseOrdersService {
     page?: number;
     limit?: number;
   }): Promise<{ data: PurchaseOrder[]; total: number; page: number; limit: number }> {
-    const queryParams = new URLSearchParams();
-    if (params?.status) queryParams.append('status', params.status);
-    if (params?.supplierId) queryParams.append('supplierId', params.supplierId);
-    if (params?.storeId) queryParams.append('storeId', params.storeId);
-    if (params?.startDate) queryParams.append('startDate', params.startDate);
-    if (params?.endDate) queryParams.append('endDate', params.endDate);
-    if (params?.page) queryParams.append('page', String(params.page));
-    if (params?.limit) queryParams.append('limit', String(params.limit));
-
-    const response = await axios.get(
-      `${API_URL}/purchase-orders?${queryParams.toString()}`,
-      this.getAuthHeader()
-    );
-    return response.data;
+    const q = new URLSearchParams();
+    if (params?.status) q.append('status', params.status);
+    // Backend uses snake_case query params
+    if (params?.supplierId) q.append('supplier_id', params.supplierId);
+    if (params?.storeId) q.append('store_id', params.storeId);
+    if (params?.startDate) q.append('from_date', params.startDate);
+    if (params?.endDate) q.append('to_date', params.endDate);
+    if (params?.page) q.append('page', String(params.page));
+    if (params?.limit) q.append('limit', String(params.limit));
+    const res = await apiClient.get(`/purchase-orders?${q.toString()}`);
+    const data = res.data;
+    if (Array.isArray(data)) return { data, total: data.length, page: 1, limit: data.length };
+    return data;
   }
 
-  /**
-   * Get purchase order by ID
-   */
   async getById(id: string): Promise<PurchaseOrder> {
-    const response = await axios.get(
-      `${API_URL}/purchase-orders/${id}`,
-      this.getAuthHeader()
-    );
-    return response.data;
+    const res = await apiClient.get(`/purchase-orders/${id}`);
+    return res.data;
   }
 
-  /**
-   * Create purchase order
-   */
   async create(data: CreatePurchaseOrderDto): Promise<PurchaseOrder> {
-    const response = await axios.post(
-      `${API_URL}/purchase-orders`,
-      data,
-      this.getAuthHeader()
-    );
-    return response.data;
+    const res = await apiClient.post('/purchase-orders', data);
+    return res.data;
   }
 
-  /**
-   * Update purchase order
-   */
   async update(id: string, data: UpdatePurchaseOrderDto): Promise<PurchaseOrder> {
-    const response = await axios.put(
-      `${API_URL}/purchase-orders/${id}`,
-      data,
-      this.getAuthHeader()
-    );
-    return response.data;
+    // Backend uses PATCH, not PUT
+    const res = await apiClient.patch(`/purchase-orders/${id}`, data);
+    return res.data;
   }
 
-  /**
-   * Delete purchase order
-   */
   async delete(id: string): Promise<void> {
-    await axios.delete(
-      `${API_URL}/purchase-orders/${id}`,
-      this.getAuthHeader()
-    );
+    await apiClient.delete(`/purchase-orders/${id}`);
   }
 
-  /**
-   * Update purchase order status
-   */
   async updateStatus(id: string, status: PurchaseOrderStatus): Promise<PurchaseOrder> {
-    const response = await axios.put(
-      `${API_URL}/purchase-orders/${id}/status`,
-      { status },
-      this.getAuthHeader()
-    );
-    return response.data;
+    // Backend uses PATCH, not PUT
+    const res = await apiClient.patch(`/purchase-orders/${id}/status`, { status });
+    return res.data;
   }
 
-  /**
-   * Receive purchase order (update inventory)
-   */
   async receive(id: string, data: ReceivePurchaseOrderDto): Promise<PurchaseOrder> {
-    const response = await axios.post(
-      `${API_URL}/purchase-orders/${id}/receive`,
-      data,
-      this.getAuthHeader()
-    );
-    return response.data;
+    const res = await apiClient.post(`/purchase-orders/${id}/receive`, data);
+    return res.data;
   }
 
-  /**
-   * Cancel purchase order
-   */
   async cancel(id: string): Promise<PurchaseOrder> {
-    return this.updateStatus(id, PurchaseOrderStatus.CANCELLED);
+    const res = await apiClient.post(`/purchase-orders/${id}/cancel`);
+    return res.data;
   }
 }
 

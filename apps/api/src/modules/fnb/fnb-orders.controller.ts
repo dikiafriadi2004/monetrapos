@@ -22,7 +22,7 @@ export class FnbOrdersController {
 
   @Post()
   create(@Body() createFnbOrderDto: CreateFnbOrderDto, @Request() req) {
-    return this.fnbOrdersService.create(createFnbOrderDto, req.user.company_id);
+    return this.fnbOrdersService.create(createFnbOrderDto, req.user.companyId);
   }
 
   @Get()
@@ -33,7 +33,7 @@ export class FnbOrdersController {
     @Query('order_type') orderType?: OrderType,
   ) {
     return this.fnbOrdersService.findAll(
-      req.user.company_id,
+      req.user.companyId,
       storeId,
       status,
       orderType,
@@ -42,12 +42,12 @@ export class FnbOrdersController {
 
   @Get('kitchen-display')
   getKitchenDisplay(@Request() req, @Query('store_id') storeId?: string) {
-    return this.fnbOrdersService.getKitchenDisplay(req.user.company_id, storeId);
+    return this.fnbOrdersService.getKitchenDisplay(req.user.companyId, storeId);
   }
 
   @Get(':id')
   findOne(@Param('id') id: string, @Request() req) {
-    return this.fnbOrdersService.findOne(id, req.user.company_id);
+    return this.fnbOrdersService.findOne(id, req.user.companyId);
   }
 
   @Patch(':id')
@@ -56,7 +56,7 @@ export class FnbOrdersController {
     @Body() updateFnbOrderDto: UpdateFnbOrderDto,
     @Request() req,
   ) {
-    return this.fnbOrdersService.update(id, updateFnbOrderDto, req.user.company_id);
+    return this.fnbOrdersService.update(id, updateFnbOrderDto, req.user.companyId);
   }
 
   @Patch(':id/status')
@@ -65,6 +65,6 @@ export class FnbOrdersController {
     @Body() updateStatusDto: UpdateOrderStatusDto,
     @Request() req,
   ) {
-    return this.fnbOrdersService.updateStatus(id, updateStatusDto, req.user.company_id);
+    return this.fnbOrdersService.updateStatus(id, updateStatusDto, req.user.companyId);
   }
 }

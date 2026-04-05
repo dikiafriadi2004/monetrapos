@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+﻿import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import {
   NotFoundException,
@@ -416,7 +416,7 @@ describe('CompaniesService', () => {
 
   /**
    * COMPANY ADMIN METHODS TESTS
-   * Testing member management functionality for MonetRAPOS administrators
+   * Testing member management functionality for MonetraPOS administrators
    */
 
   describe('findAllMembers', () => {

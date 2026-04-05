@@ -113,7 +113,7 @@ export class AdvancedReportsService {
       .leftJoinAndSelect('transaction.items', 'items')
       .leftJoinAndSelect('transaction.employee', 'employee')
       .where('transaction.company_id = :companyId', { companyId })
-      .andWhere('transaction.transaction_date BETWEEN :startDate AND :endDate', {
+      .andWhere('transaction.created_at BETWEEN :startDate AND :endDate', {
         startDate,
         endDate,
       })
@@ -131,14 +131,14 @@ export class AdvancedReportsService {
     const shiftQuery = this.shiftRepository
       .createQueryBuilder('shift')
       .leftJoinAndSelect('shift.employee', 'employee')
-      .where('shift.company_id = :companyId', { companyId })
-      .andWhere('shift.opened_at BETWEEN :startDate AND :endDate', {
+      .where('shift.companyId = :companyId', { companyId })
+      .andWhere('shift.openedAt BETWEEN :startDate AND :endDate', {
         startDate,
         endDate,
       });
 
     if (employeeId) {
-      shiftQuery.andWhere('shift.employee_id = :employeeId', { employeeId });
+      shiftQuery.andWhere('shift.employeeId = :employeeId', { employeeId });
     }
 
     const shifts = await shiftQuery.getMany();
@@ -241,7 +241,7 @@ export class AdvancedReportsService {
       .createQueryBuilder('transaction')
       .select('DISTINCT transaction.customer_id', 'customer_id')
       .where('transaction.company_id = :companyId', { companyId })
-      .andWhere('transaction.transaction_date BETWEEN :startDate AND :endDate', {
+      .andWhere('transaction.created_at BETWEEN :startDate AND :endDate', {
         startDate,
         endDate,
       })
@@ -316,7 +316,7 @@ export class AdvancedReportsService {
       .leftJoinAndSelect('product.category', 'category')
       .leftJoinAndSelect('transaction.store', 'store')
       .where('transaction.company_id = :companyId', { companyId })
-      .andWhere('transaction.transaction_date BETWEEN :startDate AND :endDate', {
+      .andWhere('transaction.created_at BETWEEN :startDate AND :endDate', {
         startDate,
         endDate,
       })

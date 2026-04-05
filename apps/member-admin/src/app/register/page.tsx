@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -15,6 +15,7 @@ export default function RegisterPage() {
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
   const [formData, setFormData] = useState({
     companyName: '',
+    businessType: 'retail' as 'retail' | 'fnb' | 'laundry',
     companyEmail: '',
     companyPhone: '',
     companyAddress: '',
@@ -49,10 +50,10 @@ export default function RegisterPage() {
     const newErrors: Record<string, string> = {};
 
     if (currentStep === 1) {
-      if (!formData.companyName) newErrors.companyName = 'Company name is required';
-      if (!formData.companyEmail) newErrors.companyEmail = 'Company email is required';
-      if (!formData.companyPhone) newErrors.companyPhone = 'Company phone is required';
-      if (!formData.companyAddress) newErrors.companyAddress = 'Company address is required';
+      if (!formData.companyName) newErrors.companyName = 'Nama usaha wajib diisi';
+      if (!formData.businessType) newErrors.businessType = 'Jenis usaha wajib dipilih';
+      if (!formData.companyEmail) newErrors.companyEmail = 'Email usaha wajib diisi';
+      if (!formData.companyPhone) newErrors.companyPhone = 'Nomor telepon wajib diisi';
     } else if (currentStep === 2) {
       if (!formData.planId) newErrors.planId = 'Please select a plan';
       if (!formData.durationMonths) newErrors.durationMonths = 'Please select duration';
@@ -88,6 +89,7 @@ export default function RegisterPage() {
     try {
       const response = await registrationService.register({
         companyName: formData.companyName,
+        businessType: formData.businessType,
         companyEmail: formData.companyEmail,
         companyPhone: formData.companyPhone,
         companyAddress: formData.companyAddress,
@@ -99,20 +101,32 @@ export default function RegisterPage() {
         password: formData.password,
       });
 
-      toast.success('Registration successful! Redirecting to payment...');
-      
-      // Redirect to payment URL
-      setTimeout(() => {
-        if (response.paymentUrl) {
-          window.location.href = response.paymentUrl;
+      if (response.paymentUrl) {
+        toast.success('Registrasi berhasil! Mengarahkan ke halaman pembayaran...');
+        setTimeout(() => {
+          // Redirect ke halaman checkout custom kita, bukan langsung ke Xendit
+          const checkoutUrl = `/checkout?invoice=${response.invoiceNumber}&amount=${response.amount}&paymentUrl=${encodeURIComponent(response.paymentUrl)}`;
+          router.push(checkoutUrl);
+        }, 1000);
+      } else if ((response as any).paymentError) {
+        const errMsg = (response as any).paymentError as string;
+        if (errMsg.includes('IP Allowlist') || errMsg.includes('IP server')) {
+          toast.error('Registrasi berhasil! Pembayaran otomatis tidak tersedia saat ini (IP restriction). Silakan bayar manual via halaman billing.', { duration: 6000 });
         } else {
-          // Payment gateway not configured - redirect to pending page
-          router.push(`/payment-callback?status=PENDING&external_id=${response.invoiceNumber}`);
+          toast.error(`Registrasi berhasil, namun pembayaran otomatis gagal. Silakan bayar via halaman billing.`, { duration: 5000 });
         }
-      }, 1000);
+        setTimeout(() => {
+          router.push(`/checkout?invoice=${response.invoiceNumber}&amount=${response.amount}`);
+        }, 2000);
+      } else {
+        toast.success('Registrasi berhasil! Silakan selesaikan pembayaran.');
+        setTimeout(() => {
+          router.push(`/checkout?invoice=${response.invoiceNumber}&amount=${response.amount}`);
+        }, 1000);
+      }
     } catch (error: any) {
       console.error('Registration failed:', error);
-      const errorMessage = error.response?.data?.message || 'Registration failed. Please try again.';
+      const errorMessage = error.response?.data?.message || 'Registrasi gagal. Silakan coba lagi.';
       toast.error(errorMessage);
     } finally {
       setLoading(false);
@@ -149,7 +163,7 @@ export default function RegisterPage() {
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '3rem' }}>
           <h1 style={{ fontSize: '2.5rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
-            Register MonetRAPOS
+            Register MonetraPOS
           </h1>
           <p style={{ fontSize: '1.125rem', color: 'var(--text-secondary)' }}>
             Complete POS System for Your Business
@@ -160,9 +174,9 @@ export default function RegisterPage() {
         <div style={{ marginBottom: '3rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
             {[
-              { num: 1, label: 'Company Info', icon: Building2 },
-              { num: 2, label: 'Select Plan', icon: CreditCard },
-              { num: 3, label: 'Owner Info', icon: User },
+              { num: 1, label: 'Info Usaha', icon: Building2 },
+              { num: 2, label: 'Pilih Paket', icon: CreditCard },
+              { num: 3, label: 'Info Pemilik', icon: User },
             ].map((s, idx) => {
               const Icon = s.icon;
               return (
@@ -213,39 +227,106 @@ export default function RegisterPage() {
 
         {/* Form Card */}
         <div className="card" style={{ padding: '2.5rem', marginBottom: '2rem' }}>
-          {/* Step 1: Company Info */}
+          {/* Step 1: Info Usaha */}
           {step === 1 && (
             <div className="animate-fade-in">
-              <h2 style={{ fontSize: '1.875rem', fontWeight: '700', marginBottom: '2rem', color: 'var(--text-primary)' }}>
-                Company Information
+              <h2 style={{ fontSize: '1.875rem', fontWeight: '700', marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
+                Informasi Usaha
               </h2>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem', fontSize: '0.9rem' }}>
+                Tidak perlu berbadan hukum. Cukup nama usaha Anda.
+              </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                 <div className="form-group">
-                  <label className="form-label">Company Name *</label>
+                  <label className="form-label">Nama Usaha *</label>
                   <input
                     type="text"
                     value={formData.companyName}
                     onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
                     className="form-input"
-                    placeholder="PT. Example Company"
+                    placeholder="Contoh: Warung Makan Bu Sari, Laundry Bersih, Toko Kelontong Jaya"
                   />
                   {errors.companyName && <p className="form-error">{errors.companyName}</p>}
                 </div>
 
+                {/* Jenis Usaha - menentukan fitur yang tersedia */}
                 <div className="form-group">
-                  <label className="form-label">Company Email *</label>
+                  <label className="form-label">Jenis Usaha *</label>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-tertiary)', marginBottom: '0.75rem' }}>
+                    Pilihan ini menentukan fitur yang akan tersedia di dashboard Anda
+                  </p>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+                    {[
+                      {
+                        value: 'retail',
+                        label: 'Retail / Jasa',
+                        emoji: '🛒',
+                        desc: 'Toko, warung, bengkel, salon, dll',
+                        features: ['POS Kasir', 'Inventori', 'Laporan', 'Pelanggan'],
+                      },
+                      {
+                        value: 'fnb',
+                        label: 'Makanan & Minuman',
+                        emoji: '🍽️',
+                        desc: 'Restoran, kafe, warung makan, dll',
+                        features: ['POS Kasir', 'Manajemen Meja', 'Kitchen Display', 'Split Bill'],
+                      },
+                      {
+                        value: 'laundry',
+                        label: 'Laundry',
+                        emoji: '👕',
+                        desc: 'Laundry kiloan, dry clean, dll',
+                        features: ['Order Laundry', 'Tracking Status', 'Jadwal Antar/Jemput', 'Checklist Item'],
+                      },
+                    ].map((type) => (
+                      <div
+                        key={type.value}
+                        onClick={() => setFormData({ ...formData, businessType: type.value as any })}
+                        style={{
+                          border: '2px solid',
+                          borderColor: formData.businessType === type.value ? 'var(--accent-base)' : 'var(--border-color)',
+                          borderRadius: 'var(--radius-lg)',
+                          padding: '1.25rem',
+                          cursor: 'pointer',
+                          background: formData.businessType === type.value ? 'rgba(99,102,241,0.05)' : 'var(--bg-secondary)',
+                          transition: 'all 0.2s',
+                          textAlign: 'center',
+                        }}
+                      >
+                        <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>{type.emoji}</div>
+                        <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: '0.25rem', color: 'var(--text-primary)' }}>
+                          {type.label}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginBottom: '0.75rem' }}>
+                          {type.desc}
+                        </div>
+                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, textAlign: 'left' }}>
+                          {type.features.map(f => (
+                            <li key={f} style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '2px' }}>
+                              ✓ {f}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                  {errors.businessType && <p className="form-error">{errors.businessType}</p>}
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Email Usaha *</label>
                   <input
                     type="email"
                     value={formData.companyEmail}
                     onChange={(e) => setFormData({ ...formData, companyEmail: e.target.value })}
                     className="form-input"
-                    placeholder="company@example.com"
+                    placeholder="usaha@example.com"
                   />
                   {errors.companyEmail && <p className="form-error">{errors.companyEmail}</p>}
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Company Phone *</label>
+                  <label className="form-label">Nomor Telepon *</label>
                   <input
                     type="tel"
                     value={formData.companyPhone}
@@ -257,15 +338,14 @@ export default function RegisterPage() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Company Address *</label>
+                  <label className="form-label">Alamat Usaha</label>
                   <textarea
                     value={formData.companyAddress}
                     onChange={(e) => setFormData({ ...formData, companyAddress: e.target.value })}
                     className="form-textarea"
-                    rows={3}
-                    placeholder="Jl. Example No. 123, Jakarta"
+                    rows={2}
+                    placeholder="Jl. Contoh No. 123, Jakarta (opsional)"
                   />
-                  {errors.companyAddress && <p className="form-error">{errors.companyAddress}</p>}
                 </div>
               </div>
             </div>
@@ -274,9 +354,12 @@ export default function RegisterPage() {
           {/* Step 2: Plan Selection */}
           {step === 2 && (
             <div className="animate-fade-in">
-              <h2 style={{ fontSize: '1.875rem', fontWeight: '700', marginBottom: '2rem', color: 'var(--text-primary)' }}>
-                Select Subscription Plan
+              <h2 style={{ fontSize: '1.875rem', fontWeight: '700', marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
+                Pilih Paket Langganan
               </h2>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem', fontSize: '0.9rem' }}>
+                Paket menentukan jumlah <strong>cabang</strong> yang bisa Anda kelola. Bisa upgrade kapan saja.
+              </p>
               
               {loadingPlans ? (
                 <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem' }}>
@@ -331,10 +414,24 @@ export default function RegisterPage() {
                           <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', fontWeight: '400' }}>/month</span>
                         </div>
                         <ul style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', fontSize: '0.875rem' }}>
-                          <li>✓ {plan.maxStores} Store{plan.maxStores > 1 ? 's' : ''}</li>
-                          <li>✓ {plan.maxUsers} User{plan.maxUsers > 1 ? 's' : ''}</li>
-                          <li>✓ {plan.maxEmployees} Employee{plan.maxEmployees > 1 ? 's' : ''}</li>
-                          <li>✓ {plan.maxProducts.toLocaleString()} Products</li>
+                          <li>✓ {plan.maxStores === -1 ? 'Unlimited' : plan.maxStores} Store{plan.maxStores !== 1 ? 's' : ''}</li>
+                          <li>✓ {plan.maxUsers === -1 ? 'Unlimited' : plan.maxUsers} User{plan.maxUsers !== 1 ? 's' : ''}</li>
+                          <li>✓ {plan.maxEmployees === -1 ? 'Unlimited' : plan.maxEmployees} Employee{plan.maxEmployees !== 1 ? 's' : ''}</li>
+                          <li>✓ {plan.maxProducts === -1 ? 'Unlimited' : plan.maxProducts.toLocaleString()} Products</li>
+                          {plan.features && typeof plan.features === 'object' && Object.entries(plan.features)
+                            .filter(([, v]) => v)
+                            .map(([k]) => {
+                              const featureLabels: Record<string, string> = {
+                                pos: 'Point of Sale', inventory: 'Inventori', reports: 'Laporan',
+                                employees: 'Manajemen Karyawan', customers: 'Manajemen Pelanggan',
+                                receipt_printing: 'Cetak Struk', multiStore: 'Multi-Outlet',
+                                loyaltyProgram: 'Program Loyalitas', api: 'Akses API',
+                                customReceipt: 'Custom Struk', prioritySupport: 'Priority Support',
+                                whiteLabel: 'White Label',
+                              };
+                              return <li key={k}>✓ {featureLabels[k] || k.replace(/_/g, ' ')}</li>;
+                            })
+                          }
                         </ul>
                       </div>
                     ))}
@@ -396,36 +493,39 @@ export default function RegisterPage() {
           {/* Step 3: Owner Info */}
           {step === 3 && (
             <div className="animate-fade-in">
-              <h2 style={{ fontSize: '1.875rem', fontWeight: '700', marginBottom: '2rem', color: 'var(--text-primary)' }}>
-                Owner Information
+              <h2 style={{ fontSize: '1.875rem', fontWeight: '700', marginBottom: '0.5rem', color: 'var(--text-primary)' }}>
+                Informasi Pemilik
               </h2>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem', fontSize: '0.9rem' }}>
+                Data ini digunakan untuk login dan notifikasi.
+              </p>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
                 <div className="form-group">
-                  <label className="form-label">Owner Name *</label>
+                  <label className="form-label">Nama Pemilik *</label>
                   <input
                     type="text"
                     value={formData.ownerName}
                     onChange={(e) => setFormData({ ...formData, ownerName: e.target.value })}
                     className="form-input"
-                    placeholder="John Doe"
+                    placeholder="Nama lengkap Anda"
                   />
                   {errors.ownerName && <p className="form-error">{errors.ownerName}</p>}
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Owner Email *</label>
+                  <label className="form-label">Email Pemilik *</label>
                   <input
                     type="email"
                     value={formData.ownerEmail}
                     onChange={(e) => setFormData({ ...formData, ownerEmail: e.target.value })}
                     className="form-input"
-                    placeholder="owner@example.com"
+                    placeholder="email@anda.com"
                   />
                   {errors.ownerEmail && <p className="form-error">{errors.ownerEmail}</p>}
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Owner Phone *</label>
+                  <label className="form-label">Nomor HP Pemilik *</label>
                   <input
                     type="tel"
                     value={formData.ownerPhone}
@@ -443,20 +543,19 @@ export default function RegisterPage() {
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     className="form-input"
-                    placeholder="Minimum 8 characters"
+                    placeholder="Minimal 8 karakter"
                   />
                   {errors.password && <p className="form-error">{errors.password}</p>}
-                  <p className="form-helper">Password must be at least 8 characters long</p>
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Confirm Password *</label>
+                  <label className="form-label">Konfirmasi Password *</label>
                   <input
                     type="password"
                     value={formData.confirmPassword}
                     onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                     className="form-input"
-                    placeholder="Re-enter password"
+                    placeholder="Ulangi password"
                   />
                   {errors.confirmPassword && <p className="form-error">{errors.confirmPassword}</p>}
                 </div>
@@ -471,23 +570,33 @@ export default function RegisterPage() {
                   borderRadius: 'var(--radius-lg)',
                   border: '1px solid var(--border-color)',
                 }}>
-                  <h3 style={{ fontWeight: '600', marginBottom: '1rem', fontSize: '1.125rem' }}>Order Summary</h3>
+                  <h3 style={{ fontWeight: '600', marginBottom: '1rem', fontSize: '1.125rem' }}>Ringkasan Pesanan</h3>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.875rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>Plan:</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>Nama Usaha:</span>
+                      <span style={{ fontWeight: '600' }}>{formData.companyName || '—'}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Jenis Usaha:</span>
+                      <span style={{ fontWeight: '600', textTransform: 'capitalize' }}>
+                        {formData.businessType === 'fnb' ? 'Makanan & Minuman' : formData.businessType === 'laundry' ? 'Laundry' : 'Retail / Jasa'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Paket:</span>
                       <span style={{ fontWeight: '600' }}>{selectedPlan.name}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>Duration:</span>
-                      <span style={{ fontWeight: '600' }}>{formData.durationMonths} month{formData.durationMonths > 1 ? 's' : ''}</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>Maks. Cabang:</span>
+                      <span style={{ fontWeight: '600' }}>{selectedPlan.maxStores === -1 ? 'Unlimited' : selectedPlan.maxStores}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: 'var(--text-secondary)' }}>Subtotal:</span>
-                      <span>{formatCurrency(selectedPlan.priceMonthly * formData.durationMonths)}</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>Durasi:</span>
+                      <span style={{ fontWeight: '600' }}>{formData.durationMonths} bulan</span>
                     </div>
                     {calculatePrice(selectedPlan, formData.durationMonths).discount > 0 && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--success)' }}>
-                        <span>Discount ({calculatePrice(selectedPlan, formData.durationMonths).discount}%):</span>
+                        <span>Diskon ({calculatePrice(selectedPlan, formData.durationMonths).discount}%):</span>
                         <span>-{formatCurrency(calculatePrice(selectedPlan, formData.durationMonths).subtotal - calculatePrice(selectedPlan, formData.durationMonths).final)}</span>
                       </div>
                     )}
@@ -517,7 +626,7 @@ export default function RegisterPage() {
               style={{ minWidth: '140px' }}
             >
               <ArrowLeft size={18} />
-              {step === 1 ? 'Back to Login' : 'Back'}
+              {step === 1 ? 'Kembali ke Login' : 'Kembali'}
             </button>
             
             {step < 3 ? (
@@ -526,7 +635,7 @@ export default function RegisterPage() {
                 className="btn btn-primary"
                 style={{ minWidth: '140px' }}
               >
-                Next
+                Lanjut
                 <ArrowRight size={18} />
               </button>
             ) : (
@@ -539,11 +648,11 @@ export default function RegisterPage() {
                 {loading ? (
                   <>
                     <Loader2 size={18} style={{ animation: 'spin 1s linear infinite' }} />
-                    Processing...
+                    Memproses...
                   </>
                 ) : (
                   <>
-                    Proceed to Payment
+                    Lanjut ke Pembayaran
                     <ArrowRight size={18} />
                   </>
                 )}
@@ -565,3 +674,4 @@ export default function RegisterPage() {
     </div>
   );
 }
+

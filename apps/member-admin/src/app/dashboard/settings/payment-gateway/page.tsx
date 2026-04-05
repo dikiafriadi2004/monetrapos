@@ -1,277 +1,62 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import toast from 'react-hot-toast';
-import { 
-  paymentGatewayService, 
-  PaymentGatewayPreference 
-} from '@/services/payment-gateway.service';
-import { CreditCard, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { CreditCard, CheckCircle, Zap, Loader2 } from 'lucide-react';
+import apiClient from '@/lib/api-client';
 
 export default function PaymentGatewaySettingsPage() {
+  const [status, setStatus] = useState<{ xendit: { enabled: boolean; isProduction: boolean } } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [preference, setPreference] = useState<PaymentGatewayPreference | null>(null);
-  const [selectedGateway, setSelectedGateway] = useState<'midtrans' | 'xendit'>('midtrans');
 
   useEffect(() => {
-    loadPreference();
+    apiClient.get('/admin/payment-gateway/status')
+      .then(r => setStatus(r.data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
-  const loadPreference = async () => {
-    try {
-      setLoading(true);
-      const data = await paymentGatewayService.getPreference();
-      setPreference(data);
-      setSelectedGateway(data.gateway);
-    } catch (error: any) {
-      console.error('Failed to load payment gateway preference:', error);
-      toast.error('Failed to load payment gateway settings');
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (loading) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 300 }}>
+      <Loader2 size={32} style={{ animation: 'spin 1s linear infinite', color: 'var(--primary)' }} />
+      <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { 100% { transform: rotate(360deg); } }` }} />
+    </div>
+  );
 
-  const handleSave = async () => {
-    try {
-      setSaving(true);
-      await paymentGatewayService.setPreference(selectedGateway);
-      toast.success('Payment gateway preference updated successfully');
-      await loadPreference();
-    } catch (error: any) {
-      console.error('Failed to save preference:', error);
-      toast.error(error.response?.data?.message || 'Failed to save preference');
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const getGatewayInfo = (gateway: 'midtrans' | 'xendit') => {
-    const info = {
-      midtrans: {
-        name: 'Midtrans',
-        description: 'Popular payment gateway in Indonesia with comprehensive payment methods',
-        logo: '💳',
-        features: [
-          'Credit/Debit Cards',
-          'Bank Transfer',
-          'E-Wallets (GoPay, OVO, Dana)',
-          'Convenience Store',
-          'Installment',
-        ],
-        pros: [
-          'Well-established in Indonesia',
-          'Advanced fraud detection',
-          'Polished Snap UI',
-          'Great for B2C',
-        ],
-      },
-      xendit: {
-        name: 'Xendit',
-        description: 'Modern payment gateway with flexible API and more payment options',
-        logo: '🚀',
-        features: [
-          'Credit/Debit Cards',
-          'Bank Transfer (More banks)',
-          'E-Wallets (OVO, Dana, LinkAja, ShopeePay)',
-          'QRIS',
-          'Retail Outlets (Alfamart, Indomaret)',
-        ],
-        pros: [
-          'More payment methods',
-          'Better API documentation',
-          'Flexible pricing',
-          'Great for B2B',
-        ],
-      },
-    };
-
-    return info[gateway];
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
-          <p className="text-gray-600">Loading payment gateway settings...</p>
-        </div>
-      </div>
-    );
-  }
+  const xenditEnabled = status?.xendit?.enabled;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">
-          Payment Gateway Settings
-        </h1>
-        <p className="text-gray-600">
-          Choose your preferred payment gateway for subscription payments and renewals
-        </p>
+    <div>
+      <div style={{ marginBottom: 'var(--space-xl)' }}>
+        <h1 style={{ fontSize: '1.75rem', marginBottom: 'var(--space-xs)' }}>Payment Gateway</h1>
+        <p style={{ color: 'var(--text-secondary)' }}>Status payment gateway yang digunakan untuk pembayaran subscription</p>
       </div>
 
-      {/* Current Selection Banner */}
-      {preference && (
-        <div className="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-lg">
-          <div className="flex items-center gap-2">
-            <CreditCard className="w-5 h-5 text-indigo-600" />
-            <div>
-              <p className="font-semibold text-indigo-900">
-                Current Payment Gateway
-              </p>
-              <p className="text-sm text-indigo-700">
-                {getGatewayInfo(preference.gateway).name} is currently active for your payments
-              </p>
-            </div>
+      <div className="glass-panel" style={{ padding: 'var(--space-xl)', maxWidth: 500 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>
+          <div style={{ width: 52, height: 52, borderRadius: '50%', background: xenditEnabled ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {xenditEnabled ? <CheckCircle size={26} color="var(--success)" /> : <Zap size={26} color="var(--danger)" />}
           </div>
-        </div>
-      )}
-
-      {/* Gateway Selection */}
-      <div className="grid md:grid-cols-2 gap-6 mb-6">
-        {preference?.available.map((gateway) => {
-          const info = getGatewayInfo(gateway.gateway);
-          const isSelected = selectedGateway === gateway.gateway;
-          const isCurrent = preference.gateway === gateway.gateway;
-
-          return (
-            <div
-              key={gateway.gateway}
-              className={`
-                relative border-2 rounded-lg p-6 cursor-pointer transition-all
-                ${isSelected 
-                  ? 'border-indigo-600 bg-indigo-50' 
-                  : 'border-gray-200 bg-white hover:border-gray-300'
-                }
-                ${!gateway.enabled ? 'opacity-50 cursor-not-allowed' : ''}
-              `}
-              onClick={() => gateway.enabled && setSelectedGateway(gateway.gateway)}
-            >
-              {/* Selection Indicator */}
-              {isSelected && (
-                <div className="absolute top-4 right-4">
-                  <div className="w-6 h-6 bg-indigo-600 rounded-full flex items-center justify-center">
-                    <Check className="w-4 h-4 text-white" />
-                  </div>
-                </div>
-              )}
-
-              {/* Current Badge */}
-              {isCurrent && (
-                <div className="absolute top-4 left-4">
-                  <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-semibold rounded">
-                    Current
-                  </span>
-                </div>
-              )}
-
-              {/* Gateway Info */}
-              <div className="mt-8">
-                <div className="text-4xl mb-3">{info.logo}</div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">
-                  {info.name}
-                </h3>
-                <p className="text-sm text-gray-600 mb-4">
-                  {info.description}
-                </p>
-
-                {/* Enabled Status */}
-                {!gateway.enabled && (
-                  <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
-                    <div className="flex items-start gap-2">
-                      <AlertCircle className="w-4 h-4 text-yellow-600 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-semibold text-yellow-900">
-                          Not Configured
-                        </p>
-                        <p className="text-xs text-yellow-700">
-                          This gateway is not configured. Contact support to enable it.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Features */}
-                <div className="mb-4">
-                  <p className="text-sm font-semibold text-gray-900 mb-2">
-                    Payment Methods:
-                  </p>
-                  <ul className="space-y-1">
-                    {info.features.map((feature, index) => (
-                      <li key={index} className="text-sm text-gray-600 flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* Advantages */}
-                <div>
-                  <p className="text-sm font-semibold text-gray-900 mb-2">
-                    Advantages:
-                  </p>
-                  <ul className="space-y-1">
-                    {info.pros.map((pro, index) => (
-                      <li key={index} className="text-sm text-gray-600 flex items-center gap-2">
-                        <Check className="w-3 h-3 text-green-600" />
-                        {pro}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Save Button */}
-      <div className="flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-lg">
-        <div>
-          <p className="text-sm font-semibold text-gray-900">
-            Save Changes
-          </p>
-          <p className="text-xs text-gray-600">
-            Your preference will be applied to all future payments
-          </p>
-        </div>
-        <button
-          onClick={handleSave}
-          disabled={saving || selectedGateway === preference?.gateway}
-          className="btn btn-primary"
-        >
-          {saving ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Saving...
-            </>
-          ) : (
-            'Save Preference'
-          )}
-        </button>
-      </div>
-
-      {/* Info Box */}
-      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <div className="flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5" />
           <div>
-            <p className="text-sm font-semibold text-blue-900 mb-1">
-              Important Information
-            </p>
-            <ul className="text-sm text-blue-700 space-y-1">
-              <li>• Changing payment gateway will affect future subscription payments and renewals</li>
-              <li>• Existing payment transactions will not be affected</li>
-              <li>• Both gateways are secure and PCI-DSS compliant</li>
-              <li>• You can change your preference at any time</li>
-            </ul>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: 2 }}>Xendit</h3>
+            <span style={{ fontSize: '0.85rem', padding: '2px 10px', borderRadius: 20, fontWeight: 600, background: xenditEnabled ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)', color: xenditEnabled ? 'var(--success)' : 'var(--danger)' }}>
+              {xenditEnabled ? (status?.xendit?.isProduction ? '🔴 Production' : '🟡 Test Mode') : 'Belum Dikonfigurasi'}
+            </span>
           </div>
         </div>
+
+        <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+          {xenditEnabled
+            ? 'Xendit aktif dan siap memproses pembayaran. Pembayaran subscription akan otomatis diarahkan ke halaman Xendit.'
+            : 'Xendit belum dikonfigurasi. Hubungi administrator platform untuk mengaktifkan payment gateway.'}
+        </div>
+
+        {!xenditEnabled && (
+          <div style={{ marginTop: 'var(--space-md)', padding: 'var(--space-md)', background: 'rgba(245,158,11,0.08)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(245,158,11,0.2)', fontSize: '0.85rem', color: '#92400e' }}>
+            ⚠️ Tanpa payment gateway aktif, pembayaran harus dilakukan secara manual. Hubungi support untuk informasi lebih lanjut.
+          </div>
+        )}
       </div>
+      <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { 100% { transform: rotate(360deg); } }` }} />
     </div>
   );
 }

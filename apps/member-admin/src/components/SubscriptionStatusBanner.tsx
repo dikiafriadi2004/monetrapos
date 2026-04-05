@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { AlertTriangle, XCircle, Clock } from 'lucide-react';
 import Link from 'next/link';
@@ -10,6 +10,7 @@ interface SubscriptionStatusBannerProps {
 
 export default function SubscriptionStatusBanner({ subscription }: SubscriptionStatusBannerProps) {
   if (!subscription) return null;
+  if (!subscription.endDate) return null; // pending subscription, no end date yet
 
   const now = new Date();
   const endDate = new Date(subscription.endDate);
@@ -43,7 +44,7 @@ export default function SubscriptionStatusBanner({ subscription }: SubscriptionS
                 })}</strong>.
               </p>
               <p className="mt-1">
-                Renew now to continue using MonetRAPOS without interruption.
+                Renew now to continue using MonetraPOS without interruption.
               </p>
             </div>
             <div className="mt-4">
@@ -134,3 +135,4 @@ export default function SubscriptionStatusBanner({ subscription }: SubscriptionS
 
   return null;
 }
+

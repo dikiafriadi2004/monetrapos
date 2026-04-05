@@ -131,6 +131,16 @@ export class CreateTransactionDto {
   @IsString()
   employeeName?: string;
 
+  @ApiPropertyOptional({ example: 'dine-in', description: 'FnB order type: dine-in, takeaway, delivery' })
+  @IsOptional()
+  @IsString()
+  orderType?: string;
+
+  @ApiPropertyOptional({ example: 'table-uuid', description: 'FnB table ID for dine-in orders' })
+  @IsOptional()
+  @IsString()
+  tableId?: string;
+
   @ApiPropertyOptional({
     description: 'Split payment methods',
     example: [

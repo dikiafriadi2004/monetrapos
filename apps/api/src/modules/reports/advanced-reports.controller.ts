@@ -2,16 +2,15 @@ import {
   Controller,
   Get,
   Query,
-  // UseGuards,
+  UseGuards,
   Request,
   BadRequestException,
 } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { AdvancedReportsService } from './advanced-reports.service';
-// TODO: Import actual guards when auth module is updated
-// import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 @Controller('reports/advanced')
-// @UseGuards(JwtAuthGuard)
+@UseGuards(AuthGuard('jwt'))
 export class AdvancedReportsController {
   constructor(
     private readonly advancedReportsService: AdvancedReportsService,
@@ -35,7 +34,7 @@ export class AdvancedReportsController {
     const end = new Date(endDate);
 
     const report = await this.advancedReportsService.getEmployeePerformance(
-      req.user.company_id,
+      req.user.companyId,
       start,
       end,
       employeeId,
@@ -76,7 +75,7 @@ export class AdvancedReportsController {
     const end = new Date(endDate);
 
     const report = await this.advancedReportsService.getCustomerReport(
-      req.user.company_id,
+      req.user.companyId,
       start,
       end,
     );
@@ -107,7 +106,7 @@ export class AdvancedReportsController {
     const end = new Date(endDate);
 
     return await this.advancedReportsService.getProfitLossReport(
-      req.user.company_id,
+      req.user.companyId,
       start,
       end,
     );

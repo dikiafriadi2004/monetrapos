@@ -37,9 +37,9 @@ export class TaxesController {
   @Get()
   @RequirePermissions('finance.view_reports')
   @ApiOperation({ summary: 'Get all taxes for a store' })
-  @ApiQuery({ name: 'storeId', required: true })
-  findAll(@Query('storeId') storeId: string) {
-    return this.taxesService.findAllByStore(storeId);
+  @ApiQuery({ name: 'storeId', required: false })
+  findAll(@Query('storeId') storeId?: string) {
+    return this.taxesService.findAllByStore(storeId || '');
   }
 
   @Get(':id')

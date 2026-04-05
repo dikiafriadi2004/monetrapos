@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+﻿import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -11,6 +11,7 @@ import {
   NotificationChannel,
 } from './notification.entity';
 import { Subscription } from '../subscriptions/subscription.entity';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class NotificationsService {
@@ -20,19 +21,17 @@ export class NotificationsService {
     @InjectQueue(QUEUE_NAMES.EMAIL) private emailQueue: Queue,
     @InjectRepository(Notification)
     private readonly notificationRepository: Repository<Notification>,
+    private readonly emailService: EmailService,
   ) {}
 
   async sendEmail(dto: SendEmailDto): Promise<any> {
-    // TODO: Integrate with SendGrid or AWS SES
     this.logger.log(`Sending email to ${dto.to}: ${dto.subject}`);
-
-    // Placeholder implementation
-    return {
-      success: true,
-      message: `Email sent to ${dto.to}`,
-      provider: 'sendgrid', // or 'aws-ses'
-      messageId: `msg_${Date.now()}`,
-    };
+    const result = await this.emailService.sendMail({
+      to: dto.to,
+      subject: dto.subject,
+      html: dto.body,
+    });
+    return result;
   }
 
   /**
@@ -58,13 +57,20 @@ export class NotificationsService {
     ownerName: string,
     companyName: string,
   ): Promise<void> {
-    const emailDto: SendEmailDto = {
-      to: email,
-      subject: `Welcome to MonetRAPOS - ${companyName}`,
-      body: this.generateWelcomeEmailBody(ownerName, companyName),
-    };
-
-    await this.queueEmail(emailDto, 10); // High priority
+    // Use EmailService's built-in welcome template directly
+    try {
+      await this.emailService.sendWelcomeEmail(email, ownerName, companyName);
+      this.logger.log(`Welcome email sent to ${email} for ${companyName}`);
+    } catch (err: any) {
+      this.logger.error(`Failed to send welcome email to ${email}: ${err.message}`);
+      // Fallback: queue via Bull
+      const emailDto: SendEmailDto = {
+        to: email,
+        subject: `Selamat Datang di MonetraPOS - ${companyName}`,
+        body: this.generateWelcomeEmailBody(ownerName, companyName),
+      };
+      await this.queueEmail(emailDto, 10);
+    }
   }
 
   /**
@@ -78,11 +84,11 @@ export class NotificationsService {
       <html>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
           <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-            <h1 style="color: #4CAF50;">Welcome to MonetRAPOS!</h1>
+            <h1 style="color: #4CAF50;">Welcome to MonetraPOS!</h1>
             
             <p>Hi ${ownerName},</p>
             
-            <p>Thank you for subscribing to MonetRAPOS! Your account for <strong>${companyName}</strong> has been successfully activated.</p>
+            <p>Thank you for subscribing to MonetraPOS! Your account for <strong>${companyName}</strong> has been successfully activated.</p>
             
             <h2 style="color: #2196F3;">Getting Started</h2>
             <ul>
@@ -114,7 +120,7 @@ export class NotificationsService {
               <p style="margin: 0;"><strong>Pro Tip:</strong> Complete your store setup within the first 24 hours to get the most out of your subscription!</p>
             </div>
             
-            <p style="margin-top: 30px;">Best regards,<br>The MonetRAPOS Team</p>
+            <p style="margin-top: 30px;">Best regards,<br>The MonetraPOS Team</p>
             
             <hr style="margin-top: 30px; border: none; border-top: 1px solid #ddd;">
             <p style="font-size: 12px; color: #999;">
@@ -223,7 +229,7 @@ export class NotificationsService {
               </ul>
             </div>
             
-            <p style="margin-top: 30px;">Best regards,<br>MonetRAPOS Inventory System</p>
+            <p style="margin-top: 30px;">Best regards,<br>MonetraPOS Inventory System</p>
             
             <hr style="margin-top: 30px; border: none; border-top: 1px solid #ddd;">
             <p style="font-size: 12px; color: #999;">
@@ -416,9 +422,21 @@ export class NotificationsService {
     subscription: Subscription,
     daysUntilExpiry: number,
   ): Promise<void> {
-    // Get company and owner info (would need to join with company/user)
+    // Use companyEmail from subscription relation if available
+    const toEmail =
+      (subscription as any).company?.email ||
+      (subscription as any).companyEmail ||
+      null;
+
+    if (!toEmail) {
+      this.logger.warn(
+        `No email found for subscription ${subscription.id} — skipping renewal email`,
+      );
+      return;
+    }
+
     const emailDto: SendEmailDto = {
-      to: 'owner@example.com', // TODO: Get from company owner
+      to: toEmail,
       subject: this.getRenewalEmailSubject(daysUntilExpiry),
       body: this.generateRenewalEmailBody(subscription, daysUntilExpiry),
     };
@@ -520,7 +538,7 @@ export class NotificationsService {
               </ul>
             </div>
             
-            <p style="margin-top: 30px;">Terima kasih,<br>Tim MonetRAPOS</p>
+            <p style="margin-top: 30px;">Terima kasih,<br>Tim MonetraPOS</p>
             
             <hr style="margin-top: 30px; border: none; border-top: 1px solid #ddd;">
             <p style="font-size: 12px; color: #999;">
@@ -532,3 +550,4 @@ export class NotificationsService {
     `;
   }
 }
+

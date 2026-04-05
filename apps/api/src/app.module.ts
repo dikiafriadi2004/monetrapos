@@ -1,4 +1,4 @@
-import {
+﻿import {
   Module,
   NestModule,
   MiddlewareConsumer,
@@ -7,6 +7,8 @@ import {
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { validate } from './config/env.validation';
 import { QueueModule } from './common/queue/queue.module';
 import { CacheModule } from './common/cache/cache.module';
@@ -40,6 +42,8 @@ import { PurchaseOrdersModule } from './modules/purchase-orders/purchase-orders.
 import { FnbModule } from './modules/fnb/fnb.module';
 import { LaundryModule } from './modules/laundry/laundry.module';
 import { HealthModule } from './health/health.module';
+import { LandingModule } from './modules/landing/landing.module';
+import { EmailModule } from './modules/email/email.module';
 import { PermissionSeeder } from './common/seeders/permission.seeder';
 import { AdminSeeder } from './common/seeders/admin.seeder';
 import {
@@ -85,12 +89,15 @@ import { Supplier } from './modules/suppliers/supplier.entity';
 import { PurchaseOrder, PurchaseOrderItem } from './modules/purchase-orders/purchase-order.entity';
 import { Table } from './modules/fnb/table.entity';
 import { FnbOrder } from './modules/fnb/fnb-order.entity';
+import { FnbModifierGroup, FnbModifierOption } from './modules/fnb/fnb-modifier.entity';
 import { LaundryServiceType } from './modules/laundry/laundry-service-type.entity';
 import { LaundryOrder } from './modules/laundry/laundry-order.entity';
 import { LaundryItem } from './modules/laundry/laundry-item.entity';
 import { DiscountUsage } from './modules/discounts/discount-usage.entity';
 import { PaymentGatewayConfig } from './modules/payment-gateway/payment-gateway-config.entity';
 import { SubscriptionHistory } from './modules/subscriptions/subscription-history.entity';
+import { LandingContent } from './modules/landing/landing-content.entity';
+import { EmailConfig } from './modules/email/email-config.entity';
 
 const entities = [
   Company,
@@ -132,12 +139,16 @@ const entities = [
   PurchaseOrderItem,
   Table,
   FnbOrder,
+  FnbModifierGroup,
+  FnbModifierOption,
   LaundryServiceType,
   LaundryOrder,
   LaundryItem,
   DiscountUsage,
   PaymentGatewayConfig,
   SubscriptionHistory,
+  LandingContent,
+  EmailConfig,
 ];
 
 @Module({
@@ -148,6 +159,11 @@ const entities = [
       validate,
     }),
     ScheduleModule.forRoot(),
+    ThrottlerModule.forRoot([
+      { name: 'short', ttl: 1000, limit: 20 },
+      { name: 'medium', ttl: 60000, limit: 100 },
+      { name: 'long', ttl: 3600000, limit: 1000 },
+    ]),
     QueueModule,
     CacheModule,
     TypeOrmModule.forRootAsync({
@@ -161,7 +177,7 @@ const entities = [
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
         entities,
-        synchronize: true, // Auto-create tables in development
+        synchronize: false, // Disabled - use migrations instead
         logging: configService.get<string>('NODE_ENV') === 'development',
       }),
     }),
@@ -196,8 +212,11 @@ const entities = [
     FnbModule,
     LaundryModule,
     HealthModule,
+    LandingModule,
+    EmailModule,
   ],
   providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     // PermissionSeeder, AdminSeeder, // Disabled - run manually with npm run seed
   ],
 })
@@ -213,7 +232,10 @@ export class AppModule implements NestModule {
         { path: 'auth/verify-email', method: RequestMethod.POST },
         { path: 'auth/forgot-password', method: RequestMethod.POST },
         { path: 'auth/reset-password', method: RequestMethod.POST },
+        { path: 'auth/refresh', method: RequestMethod.POST },
         { path: 'payment-gateway/webhook/(.*)', method: RequestMethod.ALL },
+        { path: 'landing', method: RequestMethod.GET },
+        { path: 'landing/(.*)', method: RequestMethod.GET },
       )
       .forRoutes('*');
 
@@ -230,3 +252,4 @@ export class AppModule implements NestModule {
       .forRoutes('*');
   }
 }
+

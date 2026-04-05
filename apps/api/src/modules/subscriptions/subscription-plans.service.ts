@@ -27,11 +27,23 @@ export class SubscriptionPlansService {
    * Get all active plans with duration options
    */
   async findAllActiveWithDurations(): Promise<SubscriptionPlan[]> {
-    return this.planRepository.find({
+    const plans = await this.planRepository.find({
       where: { isActive: true },
       relations: ['durations'],
       order: { sortOrder: 'ASC' },
     });
+
+    // Add subscriber count for each plan
+    for (const plan of plans) {
+      const count = await this.planRepository.manager.query(
+        `SELECT COUNT(*) as cnt FROM subscriptions WHERE plan_id = ? AND status = 'active'`,
+        [plan.id]
+      );
+      (plan as any).subscriberCount = Number(count[0]?.cnt || 0);
+      (plan as any).subscriptions = Array(Number(count[0]?.cnt || 0)).fill({});
+    }
+
+    return plans;
   }
 
   /**

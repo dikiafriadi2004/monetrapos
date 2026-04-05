@@ -1,4 +1,4 @@
-#!/usr/bin/env ts-node
+﻿#!/usr/bin/env ts-node
 import 'reflect-metadata';
 import { DataSource } from 'typeorm';
 import { config } from 'dotenv';
@@ -168,3 +168,4 @@ async function seed() {
 }
 
 seed();
+

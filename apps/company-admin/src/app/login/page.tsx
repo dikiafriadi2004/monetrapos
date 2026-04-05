@@ -1,288 +1,82 @@
-"use client";
+﻿"use client";
 
-import { useState, FormEvent, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Building, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { api } from '../../lib/api';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('admin@monetrapos.com');
-  const [password, setPassword] = useState('admin123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [rememberMe, setRememberMe] = useState(false);
 
-  // Check if already logged in
-  useEffect(() => {
-    const token = localStorage.getItem('company_token');
-    if (token) {
-      router.push('/dashboard');
-    }
-  }, [router]);
-
-  const handleLogin = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
-
+    setLoading(true); setError('');
     try {
-      // Use API client instead of fetch
-      const data: any = await api.post('/auth/login', { email, password });
-
-      // Store token and user data
-      localStorage.setItem('company_token', data.accessToken);
-      localStorage.setItem('company_user', JSON.stringify(data.user));
-
-      // Store remember me preference
-      if (rememberMe) {
-        localStorage.setItem('company_remember_email', email);
+      const res: any = await api.post('/auth/login', { email, password });
+      const token = res.accessToken || res.access_token || res.token;
+      if (token) {
+        localStorage.setItem('company_token', token);
+        // Store user info for display
+        if (res.user) localStorage.setItem('company_user', JSON.stringify(res.user));
+        router.push('/dashboard');
       } else {
-        localStorage.removeItem('company_remember_email');
+        setError('Invalid response from server');
       }
-
-      // Redirect to dashboard
-      router.push('/dashboard');
     } catch (err: any) {
-      console.error('Login error:', err);
-      setError(err.message || 'Login failed. Please check your credentials.');
-    } finally {
-      setLoading(false);
-    }
+      setError(err?.message || 'Invalid email or password');
+    } finally { setLoading(false); }
   };
 
-  // Load remembered email on mount
-  useEffect(() => {
-    const rememberedEmail = localStorage.getItem('company_remember_email');
-    if (rememberedEmail) {
-      setEmail(rememberedEmail);
-      setRememberMe(true);
-    }
-  }, []);
-
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      padding: '20px'
-    }}>
-      <div style={{
-        background: 'white',
-        borderRadius: '12px',
-        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
-        padding: '40px',
-        width: '100%',
-        maxWidth: '420px'
-      }}>
-        {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <div style={{
-            width: '64px',
-            height: '64px',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            borderRadius: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 16px',
-            fontSize: '32px',
-            color: 'white'
-          }}>
-            🏢
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-sm">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center mx-auto mb-4 shadow-lg">
+            <Building size={28} className="text-white"/>
           </div>
-          <h1 style={{ 
-            fontSize: '28px', 
-            fontWeight: 'bold', 
-            color: '#1a202c',
-            margin: '0 0 8px 0'
-          }}>
-            MonetRAPOS
-          </h1>
-          <p style={{ 
-            color: '#718096', 
-            fontSize: '14px',
-            margin: 0
-          }}>
-            Company Admin Portal
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900">MonetraPOS</h1>
+          <p className="text-sm text-gray-500 mt-1">Company Admin Portal</p>
         </div>
 
-        {/* Error Message */}
-        {error && (
-          <div style={{
-            background: '#fed7d7',
-            border: '1px solid #fc8181',
-            color: '#c53030',
-            padding: '12px',
-            borderRadius: '8px',
-            marginBottom: '20px',
-            fontSize: '14px'
-          }}>
-            {error}
-          </div>
-        )}
+        {/* Card */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">Sign in</h2>
+          <p className="text-sm text-gray-500 mb-6">Enter your admin credentials to continue</p>
 
-        {/* Login Form */}
-        <form onSubmit={handleLogin}>
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{
-              display: 'block',
-              fontSize: '14px',
-              fontWeight: '500',
-              color: '#2d3748',
-              marginBottom: '8px'
-            }}>
-              Email
-            </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              style={{
-                width: '100%',
-                padding: '12px',
-                border: '1px solid #e2e8f0',
-                borderRadius: '8px',
-                fontSize: '14px',
-                outline: 'none',
-                transition: 'border-color 0.2s',
-                boxSizing: 'border-box'
-              }}
-              onFocus={(e) => e.target.style.borderColor = '#667eea'}
-              onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
-            />
-          </div>
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-sm text-red-700">{error}</div>
+          )}
 
-          <div style={{ marginBottom: '24px' }}>
-            <label style={{
-              display: 'block',
-              fontSize: '14px',
-              fontWeight: '500',
-              color: '#2d3748',
-              marginBottom: '8px'
-            }}>
-              Password
-            </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              style={{
-                width: '100%',
-                padding: '12px',
-                border: '1px solid #e2e8f0',
-                borderRadius: '8px',
-                fontSize: '14px',
-                outline: 'none',
-                transition: 'border-color 0.2s',
-                boxSizing: 'border-box'
-              }}
-              onFocus={(e) => e.target.style.borderColor = '#667eea'}
-              onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
-            />
-          </div>
-
-          {/* Remember Me */}
-          <div style={{ 
-            marginBottom: '24px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <input
-              type="checkbox"
-              id="rememberMe"
-              checked={rememberMe}
-              onChange={(e) => setRememberMe(e.target.checked)}
-              style={{
-                width: '16px',
-                height: '16px',
-                cursor: 'pointer'
-              }}
-            />
-            <label 
-              htmlFor="rememberMe"
-              style={{
-                fontSize: '14px',
-                color: '#4a5568',
-                cursor: 'pointer',
-                userSelect: 'none'
-              }}
-            >
-              Remember me
-            </label>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              width: '100%',
-              padding: '14px',
-              background: loading ? '#a0aec0' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              color: 'white',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '16px',
-              fontWeight: '600',
-              cursor: loading ? 'not-allowed' : 'pointer',
-              transition: 'transform 0.2s',
-              boxSizing: 'border-box'
-            }}
-            onMouseEnter={(e) => {
-              if (!loading) e.currentTarget.style.transform = 'translateY(-2px)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-            }}
-          >
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
-        </form>
-
-        {/* Demo Credentials */}
-        <div style={{
-          marginTop: '24px',
-          padding: '16px',
-          background: '#f7fafc',
-          borderRadius: '8px',
-          textAlign: 'center'
-        }}>
-          <p style={{
-            fontSize: '12px',
-            color: '#718096',
-            margin: '0 0 8px 0',
-            fontWeight: '600'
-          }}>
-            Demo Credentials
-          </p>
-          <p style={{
-            fontSize: '11px',
-            color: '#a0aec0',
-            margin: 0,
-            lineHeight: '1.6'
-          }}>
-            Email: admin@monetrapos.com<br />
-            Password: admin123
-          </p>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="form-group">
+              <label className="form-label">Email Address</label>
+              <input type="email" className="form-input" value={email} onChange={e => setEmail(e.target.value)} placeholder="admin@monetrapos.com" required autoFocus/>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Password</label>
+              <div className="relative">
+                <input type={showPassword ? 'text' : 'password'} className="form-input pr-10" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required/>
+                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  {showPassword ? <EyeOff size={16}/> : <Eye size={16}/>}
+                </button>
+              </div>
+            </div>
+            <button type="submit" className="btn btn-primary w-full justify-center" disabled={loading}>
+              {loading ? <Loader2 size={16} className="animate-spin"/> : null}
+              {loading ? 'Signing in...' : 'Sign In'}
+            </button>
+          </form>
         </div>
 
-        {/* Footer */}
-        <div style={{
-          marginTop: '24px',
-          textAlign: 'center',
-          fontSize: '12px',
-          color: '#a0aec0'
-        }}>
-          <p style={{ margin: 0 }}>
-            MonetRAPOS © 2026
-          </p>
-        </div>
+        <p className="text-center text-xs text-gray-400 mt-6">© 2026 MonetraPOS. All rights reserved.</p>
       </div>
     </div>
   );
 }
+

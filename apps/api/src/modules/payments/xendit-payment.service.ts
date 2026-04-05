@@ -26,7 +26,8 @@ export interface XenditInvoiceResponse {
   amount: number;
   payer_email: string;
   description: string;
-  invoice_url: string;
+  invoice_url: string;   // legacy field
+  invoiceUrl: string;    // SDK v6+ camelCase
   expiry_date: string;
   currency: string;
 }

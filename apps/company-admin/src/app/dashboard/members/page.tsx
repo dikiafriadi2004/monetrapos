@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Users, Plus, Search, Filter, Edit, Trash2, ShieldCheck, ShieldOff, Mail, Building2, X } from 'lucide-react';
+import { Users, Plus, Search, Edit, Trash2, ShieldCheck, ShieldOff, Mail, Building2, X } from 'lucide-react';
 import { api } from '../../../lib/api';
+import toast from 'react-hot-toast';
+import ConfirmModal from '../../../components/ConfirmModal';
 
 interface Member {
   id: string;
@@ -10,8 +12,10 @@ interface Member {
   email: string;
   phone?: string;
   businessName?: string;
+  businessType?: string;
   status: 'active' | 'suspended' | 'pending';
   subscription?: { plan?: { name: string } };
+  subscriptionEndsAt?: string;
   createdAt: string;
 }
 
@@ -21,16 +25,32 @@ export default function MembersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
 
-  // Modal state
+  // Form modal
   const [isModalOpen, setModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [formData, setFormData] = useState({ name: '', email: '', phone: '', businessName: '' });
   const [submitting, setSubmitting] = useState(false);
 
+  // Confirm modals
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; member: Member | null }>({ open: false, member: null });
+  const [statusConfirm, setStatusConfirm] = useState<{ open: boolean; member: Member | null }>({ open: false, member: null });
+  const [actionLoading, setActionLoading] = useState(false);
+
   const fetchMembers = async () => {
     try {
-      const data: any = await api.get('/admin/companies');
-      setMembers(Array.isArray(data) ? data : []);
+      const data: any = await api.get('/companies/members?limit=100');
+      setMembers(Array.isArray(data?.data) ? data.data.map((m: any) => ({
+        id: m.id,
+        name: m.name,
+        email: m.email,
+        phone: m.phone,
+        businessName: m.name,
+        businessType: m.businessType || 'retail',
+        status: m.status,
+        subscription: m.currentPlan ? { plan: { name: m.currentPlan.name } } : undefined,
+        subscriptionEndsAt: m.subscriptionEndsAt,
+        createdAt: m.createdAt,
+      })) : []);
     } catch (err) {
       console.error('Failed to fetch members', err);
     } finally {
@@ -42,32 +62,41 @@ export default function MembersPage() {
     fetchMembers();
   }, []);
 
-  const handleToggleStatus = async (member: Member) => {
+  const handleToggleStatus = async () => {
+    if (!statusConfirm.member) return;
+    const member = statusConfirm.member;
     const newStatus = member.status === 'active' ? 'suspended' : 'active';
-    const action = newStatus === 'suspended' ? 'suspend' : 'activate';
-    if (!confirm(`Are you sure you want to ${action} "${member.name}"?`)) return;
+    setActionLoading(true);
     try {
-      await api.patch(`/admin/companies/${member.id}/status`, { status: newStatus });
+      await api.patch(`/companies/members/${member.id}/status`, { status: newStatus });
       setMembers(prev => prev.map(m => m.id === member.id ? { ...m, status: newStatus } : m));
-    } catch (err) {
-      alert(`Failed to ${action} member`);
+      toast.success(`Member ${newStatus === 'suspended' ? 'disuspend' : 'diaktifkan'}`);
+      setStatusConfirm({ open: false, member: null });
+    } catch (err: any) {
+      toast.error(err?.message || 'Gagal mengubah status');
+    } finally {
+      setActionLoading(false);
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this member? This action cannot be undone.')) return;
+  const handleDelete = async () => {
+    if (!deleteConfirm.member) return;
+    setActionLoading(true);
     try {
-      await api.delete(`/admin/companies/${id}`);
-      setMembers(prev => prev.filter(m => m.id !== id));
-    } catch (err) {
-      alert('Failed to delete member');
+      await api.delete(`/companies/members/${deleteConfirm.member.id}`);
+      setMembers(prev => prev.filter(m => m.id !== deleteConfirm.member!.id));
+      toast.success('Member dihapus');
+      setDeleteConfirm({ open: false, member: null });
+    } catch (err: any) {
+      toast.error(err?.message || 'Gagal menghapus member');
+    } finally {
+      setActionLoading(false);
     }
   };
 
   const openNewModal = () => {
-    setEditingMember(null);
-    setFormData({ name: '', email: '', phone: '', businessName: '' });
-    setModalOpen(true);
+    // Disabled - members must register themselves
+    return;
   };
 
   const openEditModal = (member: Member) => {
@@ -86,14 +115,14 @@ export default function MembersPage() {
     setSubmitting(true);
     try {
       if (editingMember) {
-        await api.patch(`/admin/companies/${editingMember.id}`, formData);
+        await api.patch(`/companies/members/${editingMember.id}`, formData);
       } else {
-        await api.post('/admin/companies', { ...formData, password: 'Monetra@123' });
+        await api.post('/companies/members', { ...formData, password: 'Monetra@123' });
       }
       await fetchMembers();
       setModalOpen(false);
     } catch (err: any) {
-      alert(err?.message || 'Failed to save member');
+      toast.error(err?.message || 'Failed to save member');
     } finally {
       setSubmitting(false);
     }
@@ -129,11 +158,9 @@ export default function MembersPage() {
       <div className="flex-between" style={{ marginBottom: 'var(--space-xl)' }}>
         <div>
           <h1 style={{ fontSize: '1.75rem', marginBottom: 'var(--space-xs)' }}>Member Management</h1>
-          <p style={{ color: 'var(--text-secondary)' }}>Manage platform members, approve registrations, and control access.</p>
+          <p style={{ color: 'var(--text-secondary)' }}>Kelola member platform, lihat status subscription, dan kontrol akses.</p>
         </div>
-        <button onClick={openNewModal} className="btn btn-primary">
-          <Plus size={18} /> Add Member
-        </button>
+        {/* Add Member removed - members must register themselves via /register */}
       </div>
 
       {/* Stats Cards */}
@@ -243,11 +270,21 @@ export default function MembersPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
                     <Building2 size={14} /> {member.businessName || '—'}
                   </div>
+                  {member.businessType && (
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: 2 }}>
+                      {member.businessType === 'fnb' ? '🍽️ F&B' : member.businessType === 'laundry' ? '👕 Laundry' : '🛒 Retail/Jasa'}
+                    </div>
+                  )}
                 </div>
                 <div style={{ flex: 1 }}>
                   <span className="badge badge-primary" style={{ fontSize: '0.75rem' }}>
                     {member.subscription?.plan?.name || 'Free'}
                   </span>
+                  {member.subscriptionEndsAt && (
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-tertiary)', marginTop: 2 }}>
+                      s/d {new Date(member.subscriptionEndsAt).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', day: '2-digit', month: 'short', year: 'numeric' })}
+                    </div>
+                  )}
                 </div>
                 <div style={{ flex: 0.8 }}>
                   {statusBadge(member.status || 'active')}
@@ -256,10 +293,10 @@ export default function MembersPage() {
                   <button onClick={() => openEditModal(member)} className="btn btn-outline" style={{ padding: '6px' }} title="Edit">
                     <Edit size={14} />
                   </button>
-                  <button onClick={() => handleToggleStatus(member)} className="btn btn-outline" style={{ padding: '6px', color: member.status === 'active' ? 'var(--warning)' : 'var(--success)' }} title={member.status === 'active' ? 'Suspend' : 'Activate'}>
+                  <button onClick={() => setStatusConfirm({ open: true, member })} className="btn btn-outline" style={{ padding: '6px', color: member.status === 'active' ? 'var(--warning)' : 'var(--success)' }} title={member.status === 'active' ? 'Suspend' : 'Activate'}>
                     {member.status === 'active' ? <ShieldOff size={14} /> : <ShieldCheck size={14} />}
                   </button>
-                  <button onClick={() => handleDelete(member.id)} className="btn btn-outline" style={{ padding: '6px', color: 'var(--danger)' }} title="Delete">
+                  <button onClick={() => setDeleteConfirm({ open: true, member })} className="btn btn-outline" style={{ padding: '6px', color: 'var(--danger)' }} title="Delete">
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -271,9 +308,9 @@ export default function MembersPage() {
 
       {/* Modal */}
       {isModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div onClick={() => setModalOpen(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
-          <div className="glass-panel animate-fade-in" style={{ position: 'relative', width: '500px', maxWidth: '90vw', padding: 'var(--space-xl)', zIndex: 101 }}>
+          <div className="glass-panel animate-fade-in" style={{ position: 'relative', width: '500px', maxWidth: '90vw', padding: 'var(--space-xl)', zIndex: 9001 }}>
             <div className="flex-between" style={{ marginBottom: 'var(--space-xl)' }}>
               <h3 style={{ fontSize: '1.25rem' }}>{editingMember ? 'Edit Member' : 'Add New Member'}</h3>
               <button onClick={() => setModalOpen(false)} style={{ background: 'none', border: 'none', color: 'var(--text-tertiary)', cursor: 'pointer' }}>
@@ -307,6 +344,31 @@ export default function MembersPage() {
           </div>
         </div>
       )}
+
+      {/* Delete Confirm */}
+      <ConfirmModal
+        open={deleteConfirm.open}
+        title="Hapus Member"
+        description={`Apakah Anda yakin ingin menghapus member "${deleteConfirm.member?.name}"? Tindakan ini tidak dapat dibatalkan.`}
+        confirmLabel="Hapus Member"
+        loading={actionLoading}
+        onConfirm={handleDelete}
+        onClose={() => setDeleteConfirm({ open: false, member: null })}
+      />
+
+      {/* Status Confirm */}
+      <ConfirmModal
+        open={statusConfirm.open}
+        title={statusConfirm.member?.status === 'active' ? 'Suspend Member' : 'Aktifkan Member'}
+        description={statusConfirm.member?.status === 'active'
+          ? `Apakah Anda yakin ingin mensuspend "${statusConfirm.member?.name}"? Member tidak bisa login selama disuspend.`
+          : `Aktifkan kembali akses untuk "${statusConfirm.member?.name}"?`}
+        confirmLabel={statusConfirm.member?.status === 'active' ? 'Suspend' : 'Aktifkan'}
+        variant={statusConfirm.member?.status === 'active' ? 'warning' : 'danger'}
+        loading={actionLoading}
+        onConfirm={handleToggleStatus}
+        onClose={() => setStatusConfirm({ open: false, member: null })}
+      />
     </div>
   );
 }

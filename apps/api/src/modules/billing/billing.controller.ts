@@ -8,164 +8,135 @@ import {
   Request,
   Res,
   NotFoundException,
+  UnauthorizedException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { AuthGuard } from '@nestjs/passport';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { BillingService } from './billing.service';
-import { PaymentGateway } from './payment-transaction.entity';
+import { PaymentGatewayService } from '../payment-gateway/payment-gateway.service';
 import * as path from 'path';
 import * as fs from 'fs';
 
+@ApiTags('Billing')
+@ApiBearerAuth()
+@UseGuards(AuthGuard('jwt'))
 @Controller('billing')
-// @UseGuards(JwtAuthGuard)
 export class BillingController {
-  constructor(private readonly billingService: BillingService) {}
+  constructor(
+    private readonly billingService: BillingService,
+    @Inject(forwardRef(() => PaymentGatewayService))
+    private readonly paymentGatewayService: PaymentGatewayService,
+  ) {}
 
+  /** GET /billing/admin/invoices — All invoices (company_admin only) */
   @Get('admin/invoices')
-  @UseGuards(AuthGuard('jwt'))
+  @ApiOperation({ summary: 'Get all invoices (admin only)' })
   async getAllInvoices(@Request() req: any) {
-    // Company admin can see all invoices
     if (req.user?.type !== 'company_admin') {
       return this.billingService.findInvoicesByCompany(req.user?.companyId);
     }
     return this.billingService.findAllInvoices();
   }
 
+  /** GET /billing/invoices */
   @Get('invoices')
+  @ApiOperation({ summary: 'Get invoices for current company' })
   async getInvoices(@Request() req: any) {
-    // TODO: Get companyId from authenticated user
-    const companyId = req.user?.companyId || 'temp-company-id';
-
+    const companyId = req.user?.companyId;
+    if (!companyId) throw new UnauthorizedException('Company not found');
     return this.billingService.findInvoicesByCompany(companyId);
   }
 
+  /** GET /billing/invoices/:id */
   @Get('invoices/:id')
+  @ApiOperation({ summary: 'Get single invoice' })
   async getInvoice(@Param('id') id: string, @Request() req: any) {
-    // TODO: Get companyId from authenticated user
-    const companyId = req.user?.companyId || 'temp-company-id';
-
+    const companyId = req.user?.companyId;
     return this.billingService.findInvoice(id, companyId);
   }
 
+  /** GET /billing/invoices/:id/download */
   @Get('invoices/:id/download')
+  @ApiOperation({ summary: 'Download invoice PDF' })
   async downloadInvoice(
     @Param('id') id: string,
     @Request() req: any,
     @Res() res: Response,
   ) {
-    // TODO: Get companyId from authenticated user
-    const companyId = req.user?.companyId || null;
-
+    const companyId = req.user?.companyId;
     const invoice = await this.billingService.findInvoice(id, companyId);
 
     if (!invoice.invoicePdfUrl) {
-      // Generate PDF if not exists
       await this.billingService.generateAndSaveInvoicePdf(invoice);
-      // Reload invoice to get updated PDF URL
-      const updatedInvoice = await this.billingService.findInvoice(
-        id,
-        companyId,
-      );
-      invoice.invoicePdfUrl = updatedInvoice.invoicePdfUrl;
+      const updated = await this.billingService.findInvoice(id, companyId);
+      invoice.invoicePdfUrl = updated.invoicePdfUrl;
     }
 
     const filePath = path.join(process.cwd(), invoice.invoicePdfUrl);
-
     if (!fs.existsSync(filePath)) {
       throw new NotFoundException('Invoice PDF not found');
     }
 
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${invoice.invoiceNumber}.pdf"`,
-    );
-
-    const fileStream = fs.createReadStream(filePath);
-    fileStream.pipe(res);
+    res.setHeader('Content-Disposition', `attachment; filename="${invoice.invoiceNumber}.pdf"`);
+    fs.createReadStream(filePath).pipe(res);
   }
 
+  /** POST /billing/invoices/:id/regenerate-pdf */
   @Post('invoices/:id/regenerate-pdf')
+  @ApiOperation({ summary: 'Regenerate invoice PDF' })
   async regenerateInvoicePdf(@Param('id') id: string, @Request() req: any) {
-    // TODO: Get companyId from authenticated user
-    const companyId = req.user?.companyId || null;
-
+    const companyId = req.user?.companyId;
     const invoice = await this.billingService.findInvoice(id, companyId);
-    const pdfPath =
-      await this.billingService.generateAndSaveInvoicePdf(invoice);
-
-    return {
-      message: 'Invoice PDF regenerated successfully',
-      pdfUrl: pdfPath,
-    };
+    const pdfPath = await this.billingService.generateAndSaveInvoicePdf(invoice);
+    return { message: 'Invoice PDF regenerated successfully', pdfUrl: pdfPath };
   }
 
+  /** POST /billing/invoices/:id/pay — Initiate payment via gateway */
   @Post('invoices/:id/pay')
+  @ApiOperation({ summary: 'Initiate payment for invoice' })
   async createPayment(
     @Param('id') invoiceId: string,
-    @Body() body: { gateway: PaymentGateway },
+    @Body() body: { gateway?: string },
     @Request() req: any,
   ) {
-    // TODO: Get companyId from authenticated user
-    const companyId = req.user?.companyId || 'temp-company-id';
+    const companyId = req.user?.companyId;
+    if (!companyId) throw new UnauthorizedException('Company not found');
 
-    // Get invoice
     const invoice = await this.billingService.findInvoice(invoiceId, companyId);
 
-    // Create payment transaction
-    const transaction = await this.billingService.createPaymentTransaction({
-      invoiceId: invoice.id,
-      companyId,
-      gateway: body.gateway,
-      amount: invoice.total,
-    });
+    // Try to generate real payment URL via configured gateway
+    try {
+      const frontendUrl = process.env.MEMBER_ADMIN_URL || 'http://localhost:4403';
+      const paymentResponse = await this.paymentGatewayService.createPaymentUrl({
+        orderId: invoice.invoiceNumber,
+        amount: invoice.total,
+        customerName: req.user?.name || 'Customer',
+        customerEmail: req.user?.email || '',
+        successRedirectUrl: `${frontendUrl}/payment-callback?status=PAID`,
+        failureRedirectUrl: `${frontendUrl}/payment-callback?status=FAILED`,
+        itemDetails: [{
+          id: invoice.id,
+          name: `Invoice ${invoice.invoiceNumber}`,
+          price: invoice.total,
+          quantity: 1,
+        }],
+      });
 
-    // TODO: Generate payment URL from payment gateway
-    // For now, return transaction
-    return {
-      transaction,
-      paymentUrl: `https://payment-gateway.com/pay/${transaction.id}`,
-    };
-  }
+      // Update invoice with payment URL
+      await this.billingService.updateInvoicePaymentUrl(invoice.id, paymentResponse.redirectUrl);
 
-  @Post('webhooks/:gateway')
-  async handleWebhook(@Param('gateway') gateway: string, @Body() body: any) {
-    // TODO: Verify webhook signature
-
-    // Parse webhook data based on gateway
-    // This is a simplified example
-    const webhookData = {
-      gateway: gateway as PaymentGateway,
-      gatewayTransactionId: body.transaction_id || body.order_id,
-      status: this.mapGatewayStatus(body.transaction_status || body.status),
-      paymentMethod: body.payment_type,
-      paymentChannel: body.payment_channel,
-      gatewayResponse: body,
-    };
-
-    await this.billingService.handlePaymentWebhook(webhookData);
-
-    return { success: true };
-  }
-
-  private mapGatewayStatus(gatewayStatus: string): any {
-    // Map gateway-specific status to our status
-    const statusMap: Record<string, string> = {
-      // Midtrans
-      capture: 'success',
-      settlement: 'success',
-      pending: 'pending',
-      deny: 'failed',
-      cancel: 'failed',
-      expire: 'expired',
-      refund: 'refunded',
-      // Xendit
-      PAID: 'success',
-      PENDING: 'pending',
-      EXPIRED: 'expired',
-      FAILED: 'failed',
-    };
-
-    return statusMap[gatewayStatus] || 'pending';
+      return { paymentUrl: paymentResponse.redirectUrl, invoiceNumber: invoice.invoiceNumber };
+    } catch (err) {
+      // Gateway not configured — return pending status
+      return {
+        paymentUrl: null,
+        invoiceNumber: invoice.invoiceNumber,
+        message: 'Payment gateway not configured. Please contact support.',
+      };
+    }
   }
 }

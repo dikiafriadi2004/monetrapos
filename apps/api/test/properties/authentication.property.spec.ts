@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+﻿import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
@@ -12,7 +12,7 @@ import { AuthService } from '../../src/modules/auth/auth.service';
 /**
  * Property-Based Tests for Authentication
  * 
- * Feature: monetrapos-complete-system
+ * Feature: MonetraPOS-complete-system
  */
 describe('Authentication Property Tests', () => {
   let module: TestingModule;
@@ -59,7 +59,7 @@ describe('Authentication Property Tests', () => {
    * 
    * **Validates: Requirements 6.2**
    * 
-   * Feature: monetrapos-complete-system, Property 25: Invalid JWT Tokens Rejected
+   * Feature: MonetraPOS-complete-system, Property 25: Invalid JWT Tokens Rejected
    * 
    * For any API request with an invalid, expired, or malformed JWT token, 
    * the request should be rejected with a 401 Unauthorized error.
@@ -230,7 +230,7 @@ describe('Authentication Property Tests', () => {
    * 
    * **Validates: Requirements 4.3.6**
    * 
-   * Feature: monetrapos-complete-system, Property 9: Suspended Accounts Block Login
+   * Feature: MonetraPOS-complete-system, Property 9: Suspended Accounts Block Login
    * 
    * For any company with subscription status suspended, login attempts by any user 
    * of that company should be rejected with a suspension message and renewal link.
@@ -542,3 +542,4 @@ describe('Authentication Property Tests', () => {
     }, 120000);
   });
 });
+

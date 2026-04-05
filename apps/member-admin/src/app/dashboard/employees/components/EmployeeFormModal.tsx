@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 interface EmployeeFormModalProps {
   isOpen: boolean;
@@ -47,9 +48,9 @@ export function EmployeeFormModal({ isOpen, onClose, onSubmit, initialData, role
       
       await onSubmit(finalData);
       onClose();
-    } catch (err) {
-      console.error(err);
-      alert('Failed to save employee data');
+    } catch (err: any) {
+      console.error('Failed to save employee:', err);
+      toast.error(err?.response?.data?.message || 'Failed to save employee data');
     } finally {
       setLoading(false);
     }
