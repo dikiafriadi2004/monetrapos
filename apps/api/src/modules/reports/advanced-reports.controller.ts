@@ -6,11 +6,11 @@ import {
   Request,
   BadRequestException,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { AdvancedReportsService } from './advanced-reports.service';
 
 @Controller('reports/advanced')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(MemberJwtGuard)
 export class AdvancedReportsController {
   constructor(
     private readonly advancedReportsService: AdvancedReportsService,

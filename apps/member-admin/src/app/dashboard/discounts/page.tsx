@@ -9,7 +9,9 @@ import { Modal, DeleteModal, PageHeader, SearchInput, StatusBadge, EmptyState, L
 const TYPE_CONFIG: Record<string, { icon: React.ElementType; label: string; color: string }> = {
   [DiscountType.PERCENTAGE]:  { icon: Percent,    label: 'Percentage',  color: 'text-indigo-600 bg-indigo-50' },
   [DiscountType.FIXED_AMOUNT]:{ icon: DollarSign, label: 'Fixed Amount',color: 'text-emerald-600 bg-emerald-50' },
+  'fixed':                    { icon: DollarSign, label: 'Fixed Amount',color: 'text-emerald-600 bg-emerald-50' },
   [DiscountType.BUY_X_GET_Y]: { icon: Gift,       label: 'Buy X Get Y', color: 'text-amber-600 bg-amber-50' },
+  'voucher':                  { icon: Gift,       label: 'Voucher',     color: 'text-purple-600 bg-purple-50' },
 };
 
 export default function DiscountsPage() {
@@ -124,7 +126,7 @@ export default function DiscountsPage() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(d => {
-            const cfg = TYPE_CONFIG[d.discountType] || TYPE_CONFIG[DiscountType.PERCENTAGE];
+            const cfg = TYPE_CONFIG[(d as any).type || d.discountType] || TYPE_CONFIG[DiscountType.PERCENTAGE];
             const Icon = cfg.icon;
             return (
               <div key={d.id} className="card hover:shadow-md transition-shadow animate-fade-in">
@@ -144,10 +146,10 @@ export default function DiscountsPage() {
 
                   <div className="space-y-1.5 text-sm mb-4">
                     {[
-                      ['Type', d.discountType.replace('_', ' ')],
-                      ['Value', d.discountType === DiscountType.PERCENTAGE ? `${d.value}%` : fmt(d.value)],
+                      ['Type', ((d as any).type || d.discountType || '').replace('_', ' ')],
+                      ['Value', ((d as any).type || d.discountType) === DiscountType.PERCENTAGE ? `${d.value}%` : fmt(d.value)],
                       ['Usage', `${d.usageCount} / ${d.usageLimit || '∞'}`],
-                      ['Valid Until', new Date(d.endDate).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' })],
+                      ...(d.endDate ? [['Valid Until', new Date(d.endDate).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' })]] : []),
                     ].map(([label, value]) => (
                       <div key={label} className="flex justify-between">
                         <span className="text-gray-500">{label}</span>
@@ -223,11 +225,11 @@ function DiscountFormModal({ mode, discount, onClose, onSuccess }: {
   const [form, setForm] = useState({
     name: discount?.name || '',
     description: discount?.description || '',
-    discountType: discount?.discountType || DiscountType.PERCENTAGE,
+    discountType: (discount as any)?.type || discount?.discountType || DiscountType.PERCENTAGE,
     value: discount?.value || 0,
     promoCode: discount?.promoCode || '',
-    minPurchaseAmount: discount?.minPurchaseAmount || 0,
-    maxDiscountAmount: discount?.maxDiscountAmount || 0,
+    minPurchaseAmount: (discount as any)?.minTransaction || discount?.minPurchaseAmount || 0,
+    maxDiscountAmount: (discount as any)?.maxDiscount || discount?.maxDiscountAmount || 0,
     startDate: discount?.startDate?.split('T')[0] || new Date().toISOString().split('T')[0],
     endDate: discount?.endDate?.split('T')[0] || '',
     usageLimit: discount?.usageLimit || 0,
@@ -248,16 +250,30 @@ function DiscountFormModal({ mode, discount, onClose, onSuccess }: {
     if (!form.name || !form.value) { toast.error('Name and value are required'); return; }
     setLoading(true);
     try {
+      // Map frontend field names → backend field names
+      const payload: any = {
+        name: form.name,
+        description: form.description || undefined,
+        type: form.discountType,          // backend expects 'type'
+        value: form.value,
+        promoCode: form.promoCode || undefined,
+        minTransaction: form.minPurchaseAmount > 0 ? form.minPurchaseAmount : undefined,
+        maxDiscount: form.maxDiscountAmount > 0 ? form.maxDiscountAmount : undefined,
+        startDate: form.startDate || undefined,
+        endDate: form.endDate || undefined,
+        usageLimit: form.usageLimit > 0 ? form.usageLimit : undefined,
+      };
       if (mode === 'create') {
-        await discountsService.create(form as CreateDiscountDto);
+        await discountsService.create(payload);
         toast.success('Discount created');
       } else if (discount) {
-        await discountsService.update(discount.id, form);
+        await discountsService.update(discount.id, payload);
         toast.success('Discount updated');
       }
       onSuccess();
-    } catch { toast.error('Failed to save discount'); }
-    finally { setLoading(false); }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to save discount');
+    } finally { setLoading(false); }
   };
 
   return (
@@ -271,7 +287,7 @@ function DiscountFormModal({ mode, discount, onClose, onSuccess }: {
           </button>
         </>
       }>
-      <form id="discount-form" onSubmit={handleSubmit} className="space-y-4">0 
+      <form id="discount-form" onSubmit={handleSubmit} className="space-y-4">
         <div className="form-group">
           <label className="form-label">Discount Name *</label>
           <input className="form-input" value={form.name} onChange={e => f('name', e.target.value)} required />

@@ -52,8 +52,7 @@ import { StockMovement } from '../modules/inventory/stock-movement.entity';
 import { StockOpname, StockOpnameItem } from '../modules/inventory/stock-opname.entity';
 import { AddOn, AddOnCategory, AddOnPricingType, AddOnStatus } from '../modules/add-ons/add-on.entity';
 import { CompanyAddOn } from '../modules/add-ons/company-add-on.entity';
-import { Supplier } from '../modules/suppliers/supplier.entity';
-import { PurchaseOrder, PurchaseOrderItem } from '../modules/purchase-orders/purchase-order.entity';
+import { Supplier } from '../modules/suppliers/supplier.entity';import { PurchaseOrder, PurchaseOrderItem } from '../modules/purchase-orders/purchase-order.entity';
 import { Table } from '../modules/fnb/table.entity';
 import { FnbOrder } from '../modules/fnb/fnb-order.entity';
 import { FnbModifierGroup, FnbModifierOption } from '../modules/fnb/fnb-modifier.entity';
@@ -62,6 +61,7 @@ import { LaundryOrder } from '../modules/laundry/laundry-order.entity';
 import { LaundryItem } from '../modules/laundry/laundry-item.entity';
 import { LandingContent } from '../modules/landing/landing-content.entity';
 import { EmailConfig } from '../modules/email/email-config.entity';
+import { AdminUser, AdminRole } from '../modules/admin-auth/admin-user.entity';
 
 const AppDataSource = new DataSource({
   type: 'mysql',
@@ -84,7 +84,7 @@ const AppDataSource = new DataSource({
     AddOn, CompanyAddOn, Supplier, PurchaseOrder, PurchaseOrderItem,
     Table, FnbOrder, FnbModifierGroup, FnbModifierOption,
     LaundryServiceType, LaundryOrder, LaundryItem,
-    LandingContent, EmailConfig,
+    LandingContent, EmailConfig, AdminUser,
   ],
   migrations: ['src/migrations/*.ts'],
   synchronize: false,
@@ -94,38 +94,23 @@ const AppDataSource = new DataSource({
 // ─── Seed data ────────────────────────────────────────────────────────────────
 
 async function seedAdmin(ds: DataSource) {
-  const companyRepo = ds.getRepository(Company);
-  const userRepo = ds.getRepository(User);
+  const adminUserRepo = ds.getRepository(AdminUser);
 
-  const existing = await companyRepo.findOne({ where: { slug: 'super-admin' } });
+  const existing = await adminUserRepo.findOne({ where: { email: 'admin@monetrapos.com' } });
   if (existing) {
-    console.log('  ⏭  Admin already exists, skipping');
+    console.log('  ⏭  Admin user already exists, skipping');
     return;
   }
 
-  const company = companyRepo.create({
-    name: 'Super Admin Company',
-    slug: 'super-admin',
-    email: 'admin@monetrapos.com',
-    phone: '081234567890',
-    status: 'active',
-    subscriptionStatus: 'active',
-  });
-  await companyRepo.save(company);
-
   const hashedPassword = await bcrypt.hash('admin123', 10);
-  const admin = userRepo.create({
-    companyId: company.id,
+  const admin = adminUserRepo.create({
     name: 'Super Admin',
     email: 'admin@monetrapos.com',
     passwordHash: hashedPassword,
-    role: UserRole.OWNER,
+    role: AdminRole.SUPER_ADMIN,
     isActive: true,
-    emailVerified: true,
-    emailVerifiedAt: new Date(),
-    type: 'company_admin',
-  } as any);
-  await userRepo.save(admin);
+  });
+  await adminUserRepo.save(admin);
 
   console.log('  ✅ Admin seeded → email: admin@monetrapos.com | password: admin123');
 }

@@ -15,7 +15,7 @@ interface CartProps {
 }
 
 export default function Cart({ items, onUpdateQuantity, onRemoveItem, onItemDiscount, subtotal, tax, discount, total }: CartProps) {
-  const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
+  const fmt = (n: number) => `Rp ${Number(n || 0).toLocaleString('id-ID')}`;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -38,7 +38,10 @@ export default function Cart({ items, onUpdateQuantity, onRemoveItem, onItemDisc
             <div key={index} style={{ background: 'var(--bg-tertiary)', padding: 12, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>{item.product.name}</div>
+                  <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>
+                    {item.product?.name || (item as any).productName || 'Product'}
+                    {item.variantName && <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginLeft: 4 }}>({item.variantName})</span>}
+                  </div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{fmt(item.price)}</div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -61,8 +64,8 @@ export default function Cart({ items, onUpdateQuantity, onRemoveItem, onItemDisc
                     <Minus size={14} />
                   </button>
                   <span style={{ width: 32, textAlign: 'center', fontWeight: 600, fontSize: '0.9rem' }}>{item.quantity}</span>
-                  <button onClick={() => onUpdateQuantity(index, item.quantity + 1)} disabled={item.quantity >= item.product.stock}
-                    style={{ padding: 4, borderRadius: 'var(--radius-sm)', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', cursor: 'pointer', opacity: item.quantity >= item.product.stock ? 0.5 : 1 }}>
+                  <button onClick={() => onUpdateQuantity(index, item.quantity + 1)} disabled={item.quantity >= (item.product?.stock ?? 999)}
+                    style={{ padding: 4, borderRadius: 'var(--radius-sm)', background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', cursor: 'pointer', opacity: item.quantity >= (item.product?.stock ?? 999) ? 0.5 : 1 }}>
                     <Plus size={14} />
                   </button>
                 </div>

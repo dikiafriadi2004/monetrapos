@@ -15,13 +15,13 @@ import {
   ApiOperation,
   ApiQuery,
 } from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { ShiftsService } from './shifts.service';
 import { OpenShiftDto, CloseShiftDto } from './dto';
 
 @ApiTags('Shifts')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(MemberJwtGuard)
 @Controller('shifts')
 export class ShiftsController {
   constructor(private readonly shiftsService: ShiftsService) {}

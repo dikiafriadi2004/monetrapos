@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
   Param,
   UseGuards,
@@ -13,8 +14,9 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { AdminJwtGuard } from '../admin-auth/guards/admin-jwt.guard';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { BillingService } from './billing.service';
 import { PaymentGatewayService } from '../payment-gateway/payment-gateway.service';
 import * as path from 'path';
@@ -22,7 +24,6 @@ import * as fs from 'fs';
 
 @ApiTags('Billing')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
 @Controller('billing')
 export class BillingController {
   constructor(
@@ -31,18 +32,28 @@ export class BillingController {
     private readonly paymentGatewayService: PaymentGatewayService,
   ) {}
 
-  /** GET /billing/admin/invoices — All invoices (company_admin only) */
+  /** GET /billing/admin/invoices — All invoices (admin only) */
   @Get('admin/invoices')
+  @UseGuards(AdminJwtGuard)
   @ApiOperation({ summary: 'Get all invoices (admin only)' })
-  async getAllInvoices(@Request() req: any) {
-    if (req.user?.type !== 'company_admin') {
-      return this.billingService.findInvoicesByCompany(req.user?.companyId);
-    }
+  async getAllInvoices() {
     return this.billingService.findAllInvoices();
+  }
+
+  /** PATCH /billing/admin/invoices/:id/cancel — Cancel invoice (admin only) */
+  @Patch('admin/invoices/:id/cancel')
+  @UseGuards(AdminJwtGuard)
+  @ApiOperation({ summary: 'Cancel/refund an invoice (admin only)' })
+  async cancelInvoice(
+    @Param('id') id: string,
+    @Body() body: { reason?: string },
+  ) {
+    return this.billingService.cancelInvoice(id, body.reason);
   }
 
   /** GET /billing/invoices */
   @Get('invoices')
+  @UseGuards(MemberJwtGuard)
   @ApiOperation({ summary: 'Get invoices for current company' })
   async getInvoices(@Request() req: any) {
     const companyId = req.user?.companyId;
@@ -52,6 +63,7 @@ export class BillingController {
 
   /** GET /billing/invoices/:id */
   @Get('invoices/:id')
+  @UseGuards(MemberJwtGuard)
   @ApiOperation({ summary: 'Get single invoice' })
   async getInvoice(@Param('id') id: string, @Request() req: any) {
     const companyId = req.user?.companyId;
@@ -60,6 +72,7 @@ export class BillingController {
 
   /** GET /billing/invoices/:id/download */
   @Get('invoices/:id/download')
+  @UseGuards(MemberJwtGuard)
   @ApiOperation({ summary: 'Download invoice PDF' })
   async downloadInvoice(
     @Param('id') id: string,
@@ -87,6 +100,7 @@ export class BillingController {
 
   /** POST /billing/invoices/:id/regenerate-pdf */
   @Post('invoices/:id/regenerate-pdf')
+  @UseGuards(MemberJwtGuard)
   @ApiOperation({ summary: 'Regenerate invoice PDF' })
   async regenerateInvoicePdf(@Param('id') id: string, @Request() req: any) {
     const companyId = req.user?.companyId;
@@ -97,6 +111,7 @@ export class BillingController {
 
   /** POST /billing/invoices/:id/pay — Initiate payment via gateway */
   @Post('invoices/:id/pay')
+  @UseGuards(MemberJwtGuard)
   @ApiOperation({ summary: 'Initiate payment for invoice' })
   async createPayment(
     @Param('id') invoiceId: string,

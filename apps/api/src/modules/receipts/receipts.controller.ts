@@ -1,12 +1,12 @@
 import { Controller, Post, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { ReceiptsService } from './receipts.service';
 import { GenerateReceiptDto, EmailReceiptDto, PrintReceiptDto } from './dto';
 
 @ApiTags('Receipts')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(MemberJwtGuard)
 @Controller('receipts')
 export class ReceiptsController {
   constructor(private readonly receiptsService: ReceiptsService) {}

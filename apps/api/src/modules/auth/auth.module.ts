@@ -5,7 +5,7 @@ import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
-import { JwtStrategy } from './strategies/jwt.strategy';
+import { JwtMemberStrategy } from './strategies/jwt-member.strategy';
 import { Company } from '../companies/company.entity';
 import { User } from '../users/user.entity';
 import { Employee } from '../employees/employee.entity';
@@ -26,7 +26,7 @@ import { EmailModule } from '../email/email.module';
       EmailVerificationToken,
       PasswordResetToken,
     ]),
-    PassportModule.register({ defaultStrategy: 'jwt' }),
+    PassportModule.register({ defaultStrategy: 'jwt-member' }),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -44,7 +44,7 @@ import { EmailModule } from '../email/email.module';
     EmailModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtMemberStrategy],
   exports: [AuthService, JwtModule],
 })
 export class AuthModule {}

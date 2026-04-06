@@ -10,13 +10,13 @@ import {
   Request,
   Query,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { SuppliersService } from './suppliers.service';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
 
 @Controller('suppliers')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(MemberJwtGuard)
 export class SuppliersController {
   constructor(private readonly suppliersService: SuppliersService) {}
 

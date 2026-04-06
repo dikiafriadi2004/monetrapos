@@ -5,7 +5,8 @@ import { TaxesController } from './taxes.controller';
 import { Tax } from './tax.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Tax])],
+  imports: [
+    TypeOrmModule.forFeature([Tax])],
   controllers: [TaxesController],
   providers: [TaxesService],
   exports: [TaxesService],

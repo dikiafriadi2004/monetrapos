@@ -7,8 +7,8 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
 } from './dto';
-import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { MemberJwtGuard } from './guards/member-jwt.guard';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -44,7 +44,7 @@ export class AuthController {
   }
 
   @Get('me')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(MemberJwtGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get current user profile' })

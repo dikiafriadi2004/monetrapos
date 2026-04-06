@@ -9,6 +9,7 @@ import { Repository, IsNull, MoreThanOrEqual } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { Company } from './company.entity';
 import { User, UserRole } from '../users/user.entity';
+import { Invoice } from '../billing/invoice.entity';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 
 @Injectable()
@@ -18,6 +19,8 @@ export class CompaniesService {
     private companyRepo: Repository<Company>,
     @InjectRepository(User)
     private userRepo: Repository<User>,
+    @InjectRepository(Invoice)
+    private invoiceRepo: Repository<Invoice>,
   ) {}
 
   /**
@@ -476,13 +479,40 @@ export class CompaniesService {
         acc[item.businessType || 'other'] = parseInt(item.count);
         return acc;
       }, {}),
-      // TODO: Add revenue metrics when payment transactions are available
-      revenue: {
-        totalRevenue: 0,
-        monthlyRecurringRevenue: 0,
-        averageRevenuePerMember: 0,
-      },
+      revenue: await this.getRevenueMetrics(totalMembers),
     };
+  }
+
+  private async getRevenueMetrics(totalMembers: number): Promise<any> {
+    try {
+      // Total revenue from paid invoices
+      const revenueResult = await this.invoiceRepo
+        .createQueryBuilder('invoice')
+        .select('SUM(invoice.total)', 'total')
+        .where('invoice.status = :status', { status: 'paid' })
+        .getRawOne();
+
+      const totalRevenue = Number(revenueResult?.total || 0);
+
+      // Monthly recurring revenue (paid invoices this month)
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const mrrResult = await this.invoiceRepo
+        .createQueryBuilder('invoice')
+        .select('SUM(invoice.total)', 'total')
+        .where('invoice.status = :status', { status: 'paid' })
+        .andWhere('invoice.paidAt >= :startOfMonth', { startOfMonth })
+        .getRawOne();
+
+      const monthlyRecurringRevenue = Number(mrrResult?.total || 0);
+      const averageRevenuePerMember = totalMembers > 0 ? totalRevenue / totalMembers : 0;
+
+      return { totalRevenue, monthlyRecurringRevenue, averageRevenuePerMember };
+    } catch {
+      return { totalRevenue: 0, monthlyRecurringRevenue: 0, averageRevenuePerMember: 0 };
+    }
   }
 
   /**

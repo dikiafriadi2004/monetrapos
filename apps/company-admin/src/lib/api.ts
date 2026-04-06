@@ -50,7 +50,7 @@ api.interceptors.response.use(
         const currentToken = typeof window !== 'undefined' ? localStorage.getItem('company_token') : null;
         if (currentToken) {
           const refreshRes = await axios.post(
-            `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4404/api/v1'}/auth/refresh`,
+            `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4404/api/v1'}/admin/auth/refresh`,
             { refreshToken: currentToken },
             { timeout: 10000 }
           );

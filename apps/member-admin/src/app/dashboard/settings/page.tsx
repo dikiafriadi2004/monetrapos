@@ -22,7 +22,7 @@ export default function SettingsPage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [profile, setProfile] = useState<CompanyProfile>({ name: '', businessType: 'retail', taxId: '', address: '', city: '', province: '', postalCode: '', phone: '', email: '', logoUrl: '' });
-  const [settings, setSettings] = useState<CompanySettings>({ taxSettings: { defaultTaxRate: 11, taxInclusive: true, taxLabel: 'PPN', taxNumber: '' }, receiptSettings: { showLogo: true, showTaxNumber: true, footerText: '', headerText: '' }, notificationPreferences: { emailNotifications: true, smsNotifications: false, whatsappNotifications: false, lowStockAlerts: true, expiryReminders: true } });
+  const [settings, setSettings] = useState<CompanySettings>({ taxSettings: { defaultTaxRate: 0, taxInclusive: true, taxLabel: 'PPN', taxNumber: '' }, receiptSettings: { showLogo: true, showTaxNumber: true, footerText: '', headerText: '' }, notificationPreferences: { emailNotifications: true, smsNotifications: false, whatsappNotifications: false, lowStockAlerts: true, expiryReminders: true } });
 
   useEffect(() => { fetchData(); }, []);
 

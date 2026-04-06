@@ -4,8 +4,8 @@ import { useAuth } from '@/contexts/AuthContext';
  * Hook untuk mengecek permission user.
  *
  * Logika:
- * - company_admin (owner perusahaan) → semua permission granted
- * - member (user biasa dengan role owner/admin) → semua permission granted
+ * - member dengan role owner → semua permission granted
+ * - member (non-owner, e.g. admin/manager/accountant) → semua permission granted
  * - employee → hanya permission yang ada di user.permissions[]
  */
 export function usePermission() {
@@ -17,14 +17,13 @@ export function usePermission() {
   const hasPermission = (permission: string): boolean => {
     if (!user) return false;
 
-    // company_admin (platform admin) punya semua akses
-    if (user.type === 'company_admin') return true;
-
     // Owner role punya semua akses ke semua fitur member-admin
     if (user.role === 'owner') return true;
 
-    // Non-owner members (admin, manager, accountant) dan employee
-    // harus punya permission spesifik
+    // Non-owner members (admin, manager, accountant) punya akses penuh ke member-admin
+    if (user.type === 'member') return true;
+
+    // Employee harus punya permission spesifik
     return user.permissions?.includes(permission) ?? false;
   };
 
@@ -43,11 +42,6 @@ export function usePermission() {
   };
 
   /**
-   * Apakah user adalah company admin (pemilik platform)
-   */
-  const isCompanyAdmin = user?.type === 'company_admin';
-
-  /**
    * Apakah user adalah member (pemilik bisnis)
    */
   const isMember = user?.type === 'member';
@@ -63,14 +57,12 @@ export function usePermission() {
    * Admin: hampir semua permission kecuali subscription management
    */
   const isOwnerOrAdmin =
-    user?.role === 'owner' ||
-    user?.type === 'company_admin';
+    user?.role === 'owner' || user?.role === 'admin';
 
   return {
     hasPermission,
     hasAnyPermission,
     hasAllPermissions,
-    isCompanyAdmin,
     isMember,
     isEmployee,
     isOwnerOrAdmin,

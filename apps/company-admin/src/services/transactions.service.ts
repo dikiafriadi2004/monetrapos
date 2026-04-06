@@ -108,8 +108,20 @@ class TransactionsService {
   }
 
   async refund(id: string, reason?: string): Promise<PaymentTransaction> {
-    // Not implemented in backend yet
-    throw new Error('Refund not available');
+    // Mark invoice as cancelled via admin endpoint
+    const data = await api.patch(`/billing/admin/invoices/${id}/cancel`, { reason }) as any;
+    return {
+      id: data.id || id,
+      companyId: data.companyId || '',
+      amount: Number(data.total || 0),
+      currency: 'IDR',
+      status: 'failed',
+      paymentMethod: 'xendit',
+      paymentGateway: 'xendit' as const,
+      externalId: data.invoiceNumber,
+      createdAt: data.createdAt || new Date().toISOString(),
+      updatedAt: data.updatedAt || new Date().toISOString(),
+    };
   }
 }
 

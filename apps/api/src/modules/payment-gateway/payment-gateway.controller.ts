@@ -7,8 +7,9 @@ import {
   UseGuards,
   Request,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { AdminJwtGuard } from '../admin-auth/guards/admin-jwt.guard';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { PaymentGatewayService } from './payment-gateway.service';
 import { UnifiedPaymentService } from './unified-payment.service';
 import { BillingService } from '../billing/billing.service';
@@ -51,7 +52,7 @@ export class PaymentGatewayController {
   }
 
   @Get('preference')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(MemberJwtGuard)
   @ApiBearerAuth()
   async getGatewayPreference() {
     return { gateway: 'xendit', available: await this.unifiedPaymentService.getAvailableGateways() };
@@ -63,14 +64,10 @@ export class PaymentGatewayController {
    * Body: { invoiceNumber: string } OR { xenditInvoiceId: string }
    */
   @Post('admin/verify-payment')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AdminJwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: '[Admin] Manually verify Xendit payment and activate subscription' })
   async adminVerifyPayment(@Body() body: { invoiceNumber?: string; xenditInvoiceId?: string }, @Request() req: any) {
-    if (req.user?.type !== 'company_admin') {
-      return { success: false, message: 'Only platform admins can manually verify payments' };
-    }
-
     try {
       let invoiceNumber = body.invoiceNumber;
 
@@ -119,13 +116,10 @@ export class PaymentGatewayController {
    * Admin: List all pending invoices
    */
   @Get('admin/pending-invoices')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AdminJwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: '[Admin] List pending invoices' })
-  async getPendingInvoices(@Request() req: any) {
-    if (req.user?.type !== 'company_admin') {
-      return { success: false, message: 'Only platform admins can access this' };
-    }
+  async getPendingInvoices() {
     return this.billingService.findAllInvoices();
   }
 
@@ -136,7 +130,7 @@ export class PaymentGatewayController {
    * Useful when webhook didn't arrive (local dev / firewall)
    */
   @Post('check-payment')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(MemberJwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Check payment status from Xendit and activate if paid' })
   async checkPaymentStatus(@Body() body: { invoiceNumber: string }, @Request() req: any) {

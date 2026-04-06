@@ -9,7 +9,7 @@ import PermissionGate from '@/components/PermissionGate';
 import { PERMISSIONS } from '@/hooks/usePermission';
 import apiClient from '@/lib/api-client';
 import toast from 'react-hot-toast';
-import { Modal, DeleteModal, PageHeader, StatusBadge, EmptyState, LoadingSpinner } from '@/components/ui';
+import { Modal, DeleteModal, PageHeader, StatusBadge, EmptyState, LoadingSpinner, ConfirmModal } from '@/components/ui';
 
 interface Store { id: string; name: string; }
 interface Role { id: string; name: string; description?: string; permissions?: Array<{ name: string } | string>; }
@@ -32,6 +32,9 @@ export default function EmployeesRolesPage() {
   const [clockInForm, setClockInForm] = useState({ storeId: '', notes: '' });
   const [clockOutForm, setClockOutForm] = useState({ breakDurationMinutes: 0, notes: '' });
   const [clockInStatuses, setClockInStatuses] = useState<Record<string, ClockInStatus>>({});
+  const [deleteRoleConfirm, setDeleteRoleConfirm] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
+  const [deleteEmpConfirm, setDeleteEmpConfirm] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -65,9 +68,15 @@ export default function EmployeesRolesPage() {
   };
 
   const handleDeleteRole = async (id: string) => {
-    if (!confirm('Delete this role?')) return;
-    try { await rolesService.delete(id); toast.success('Role deleted'); setRoles(prev => prev.filter(r => r.id !== id)); }
-    catch (err: any) { toast.error(err?.response?.data?.message || 'Failed to delete role'); }
+    setDeleteRoleConfirm({ open: true, id });
+  };
+
+  const confirmDeleteRole = async () => {
+    if (!deleteRoleConfirm.id) return;
+    setDeleteLoading(true);
+    try { await rolesService.delete(deleteRoleConfirm.id); toast.success('Role dihapus'); setRoles(prev => prev.filter(r => r.id !== deleteRoleConfirm.id)); setDeleteRoleConfirm({ open: false, id: null }); }
+    catch (err: any) { toast.error(err?.response?.data?.message || 'Gagal menghapus role'); }
+    finally { setDeleteLoading(false); }
   };
 
   const handleSaveEmployee = async (data: any) => {
@@ -78,9 +87,15 @@ export default function EmployeesRolesPage() {
   };
 
   const handleDeleteEmployee = async (id: string) => {
-    if (!confirm('Remove this employee?')) return;
-    try { await employeesService.delete(id); toast.success('Employee removed'); setEmployees(prev => prev.filter(e => e.id !== id)); }
-    catch (err: any) { toast.error(err?.response?.data?.message || 'Failed to remove employee'); }
+    setDeleteEmpConfirm({ open: true, id });
+  };
+
+  const confirmDeleteEmployee = async () => {
+    if (!deleteEmpConfirm.id) return;
+    setDeleteLoading(true);
+    try { await employeesService.delete(deleteEmpConfirm.id); toast.success('Karyawan dihapus'); setEmployees(prev => prev.filter(e => e.id !== deleteEmpConfirm.id)); setDeleteEmpConfirm({ open: false, id: null }); }
+    catch (err: any) { toast.error(err?.response?.data?.message || 'Gagal menghapus karyawan'); }
+    finally { setDeleteLoading(false); }
   };
 
   const openClockModal = async (employee: Employee, action: 'clock-in' | 'clock-out') => {
@@ -262,6 +277,11 @@ export default function EmployeesRolesPage() {
           </div>
         )}
       </Modal>
+
+      <ConfirmModal open={deleteRoleConfirm.open} onClose={() => setDeleteRoleConfirm({ open: false, id: null })} onConfirm={confirmDeleteRole}
+        title="Hapus Role" description="Hapus role ini? Karyawan yang menggunakan role ini akan kehilangan akses." confirmLabel="Ya, Hapus" loading={deleteLoading} />
+      <ConfirmModal open={deleteEmpConfirm.open} onClose={() => setDeleteEmpConfirm({ open: false, id: null })} onConfirm={confirmDeleteEmployee}
+        title="Hapus Karyawan" description="Hapus karyawan ini dari sistem? Tindakan ini tidak bisa dibatalkan." confirmLabel="Ya, Hapus" loading={deleteLoading} />
     </div>
   );
 }

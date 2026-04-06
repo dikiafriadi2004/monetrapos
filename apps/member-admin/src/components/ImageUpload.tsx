@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react';
 import { Upload, X, Image as ImageIcon, Loader2 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
+import { getImageUrl } from '@/lib/date';
 import toast from 'react-hot-toast';
 
 interface ImageUploadProps {
@@ -25,7 +26,8 @@ export default function ImageUpload({
   className = '',
 }: ImageUploadProps) {
   const [uploading, setUploading] = useState(false);
-  const [preview, setPreview] = useState<string>(value || '');
+  // Resolve initial value to full URL so broken image doesn't appear
+  const [preview, setPreview] = useState<string>(getImageUrl(value) || '');
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = async (file: File) => {
@@ -57,7 +59,7 @@ export default function ImageUpload({
       toast.success('Gambar berhasil diupload');
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Gagal upload gambar');
-      setPreview(value || '');
+      setPreview(getImageUrl(value) || '');
     } finally {
       setUploading(false);
     }

@@ -14,6 +14,7 @@ import { Company } from '../companies/company.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { BillingModule } from '../billing/billing.module';
 import { PaymentGatewayModule } from '../payment-gateway/payment-gateway.module';
+import { AdminAuthModule } from '../admin-auth/admin-auth.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { PaymentGatewayModule } from '../payment-gateway/payment-gateway.module'
     NotificationsModule,
     BillingModule,
     forwardRef(() => PaymentGatewayModule),
+    AdminAuthModule,
   ],
   controllers: [SubscriptionsController, SubscriptionPlansController],
   providers: [

@@ -9,12 +9,12 @@ import {
   UseGuards,
   Request,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { LaundryServiceTypesService } from './laundry-service-types.service';
 import { CreateLaundryServiceTypeDto } from './dto/create-laundry-service-type.dto';
 
 @Controller('laundry/service-types')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(MemberJwtGuard)
 export class LaundryServiceTypesController {
   constructor(private readonly serviceTypesService: LaundryServiceTypesService) {}
 

@@ -10,7 +10,7 @@ import {
   Request,
   Query,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { PurchaseOrdersService } from './purchase-orders.service';
 import { CreatePurchaseOrderDto } from './dto/create-purchase-order.dto';
 import { UpdatePurchaseOrderDto } from './dto/update-purchase-order.dto';
@@ -18,7 +18,7 @@ import { ReceivePurchaseOrderDto } from './dto/receive-purchase-order.dto';
 import { PurchaseOrderStatus } from './purchase-order.entity';
 
 @Controller('purchase-orders')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(MemberJwtGuard)
 export class PurchaseOrdersController {
   constructor(
     private readonly purchaseOrdersService: PurchaseOrdersService,

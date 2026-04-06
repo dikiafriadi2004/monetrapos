@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import apiClient from '@/lib/api-client';
 import { toast } from 'react-hot-toast';
 import CategoryFormModal from './components/CategoryFormModal';
+import { ConfirmModal } from '@/components/ui';
 
 interface Category {
   id: string;
@@ -27,6 +28,8 @@ export default function CategoriesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; category: Category | null }>({ open: false, category: null });
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => { if (user?.companyId) fetchCategories(); }, [user]);
 
@@ -41,14 +44,20 @@ export default function CategoriesPage() {
   };
 
   const handleDelete = async (category: Category) => {
-    if (!confirm(`Delete "${category.name}"?${category.children?.length ? '\n\nThis will also delete all subcategories.' : ''}`)) return;
+    setDeleteConfirm({ open: true, category });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm.category) return;
+    setDeleting(true);
     try {
-      await apiClient.delete(`/categories/${category.id}`, { params: { companyId: user?.companyId } });
-      toast.success('Category deleted');
+      await apiClient.delete(`/categories/${deleteConfirm.category.id}`, { params: { companyId: user?.companyId } });
+      toast.success('Kategori dihapus');
+      setDeleteConfirm({ open: false, category: null });
       fetchCategories();
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Failed to delete');
-    }
+      toast.error(err?.response?.data?.message || 'Gagal menghapus');
+    } finally { setDeleting(false); }
   };
 
   const handleSubmit = async (data: any): Promise<any> => {
@@ -165,6 +174,15 @@ export default function CategoriesPage() {
         onSubmit={handleSubmit}
         initialData={editingCategory}
         categories={categories}
+      />
+      <ConfirmModal
+        open={deleteConfirm.open}
+        onClose={() => setDeleteConfirm({ open: false, category: null })}
+        onConfirm={confirmDelete}
+        title="Hapus Kategori"
+        description={`Hapus "${deleteConfirm.category?.name}"?${deleteConfirm.category?.children?.length ? ' Semua subkategori juga akan dihapus.' : ''} Tindakan ini tidak bisa dibatalkan.`}
+        confirmLabel="Ya, Hapus"
+        loading={deleting}
       />
       <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { 100% { transform: rotate(360deg); } }` }} />
     </div>

@@ -42,7 +42,7 @@ export default function PermissionsPage() {
   const fetchPermissions = async () => {
     setLoading(true);
     try {
-      const data: any = await api.get('/roles/permissions');
+      const data: any = await api.get('/admin/roles/permissions');
       setPermissions(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to fetch permissions:', err);

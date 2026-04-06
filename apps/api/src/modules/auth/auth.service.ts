@@ -282,35 +282,31 @@ export class AuthService {
       throw new UnauthorizedException('Account is deactivated');
     }
 
-    const isCompanyAdmin = (user.company as any)?.slug === 'super-admin';
+    // All users in users table are members — no super-admin slug check needed
+    // Block login if email not verified
+    if (!user.emailVerified) {
+      throw new UnauthorizedException(
+        'Email belum diverifikasi. Silakan cek email Anda dan klik link verifikasi sebelum login.',
+      );
+    }
 
-    // Company admin: no email verification or subscription check needed
-    if (!isCompanyAdmin) {
-      // Block login if email not verified
-      if (!user.emailVerified) {
-        throw new UnauthorizedException(
-          'Email belum diverifikasi. Silakan cek email Anda dan klik link verifikasi sebelum login.',
-        );
-      }
+    // Block login if company status is not active or pending
+    if (user.company.status !== 'active' && user.company.status !== 'pending') {
+      throw new UnauthorizedException('Company account is not active');
+    }
 
-      // Block login if company status is not active or pending
-      if (user.company.status !== 'active' && user.company.status !== 'pending') {
-        throw new UnauthorizedException('Company account is not active');
-      }
+    // Block login if subscription is still pending (belum bayar)
+    if (user.company.subscriptionStatus === 'pending') {
+      throw new UnauthorizedException(
+        'Subscription belum aktif. Silakan selesaikan pembayaran terlebih dahulu untuk mengaktifkan akun Anda.',
+      );
+    }
 
-      // Block login if subscription is still pending (belum bayar)
-      if (user.company.subscriptionStatus === 'pending') {
-        throw new UnauthorizedException(
-          'Subscription belum aktif. Silakan selesaikan pembayaran terlebih dahulu untuk mengaktifkan akun Anda.',
-        );
-      }
-
-      // Block login if subscription is suspended
-      if (user.company.subscriptionStatus === 'suspended') {
-        throw new UnauthorizedException(
-          'Subscription Anda telah disuspend. Silakan perpanjang subscription untuk melanjutkan.',
-        );
-      }
+    // Block login if subscription is suspended
+    if (user.company.subscriptionStatus === 'suspended') {
+      throw new UnauthorizedException(
+        'Subscription Anda telah disuspend. Silakan perpanjang subscription untuk melanjutkan.',
+      );
     }
 
     // Update last login
@@ -472,7 +468,7 @@ export class AuthService {
         lastName,
         email: user.email,
         role: user.role,
-        type: (user.company as any)?.slug === 'super-admin' ? 'company_admin' : 'member',
+        type: 'member',
         companyId: user.companyId,
         isActive: user.isActive,
         emailVerified: user.emailVerified,
@@ -511,30 +507,20 @@ export class AuthService {
   }
 
   private generateTokens(user: User) {
-    const isCompanyAdmin = (user.company as any)?.slug === 'super-admin';
-    const userType = isCompanyAdmin ? 'company_admin' : 'member';
     const isOwner = user.role === UserRole.OWNER;
-
-    // Owner gets all permissions implicitly (handled by PermissionGuard via role check)
-    // Non-owner members include their explicit permissions in JWT for guard checks
-    const permissions = isOwner || isCompanyAdmin ? [] : (user.permissions || []);
+    const permissions = isOwner ? [] : (user.permissions || []);
 
     const payload = {
       sub: user.id,
       email: user.email,
-      type: userType,
+      type: 'member',
       companyId: user.companyId,
       role: user.role,
       permissions,
     };
 
-    const accessToken = this.jwtService.sign(payload, {
-      expiresIn: isCompanyAdmin ? '8h' : '1d',
-    });
-
-    const refreshToken = this.jwtService.sign(payload, {
-      expiresIn: '7d',
-    });
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '1d' });
+    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
 
     // Split name into firstName/lastName for frontend compatibility
     const nameParts = (user.name || '').split(' ');
@@ -551,7 +537,7 @@ export class AuthService {
         lastName,
         email: user.email,
         role: user.role,
-        type: userType,
+        type: 'member',
         companyId: user.companyId,
         isActive: user.isActive,
         emailVerified: user.emailVerified,

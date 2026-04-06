@@ -45,7 +45,7 @@ final dashboardProvider = FutureProvider<DashboardData>((ref) async {
           .get('/products', queryParameters: {
             'page': 1,
             'limit': 1,
-            if (storeId != null) 'storeId': storeId,
+            'storeId': ?storeId,
           })
           .then((r) => r)
           .catchError((_) => null as dynamic),

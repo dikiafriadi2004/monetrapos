@@ -12,6 +12,7 @@ import API_ENDPOINTS from '@/lib/api-endpoints';
 import toast from 'react-hot-toast';
 import PermissionGate from '@/components/PermissionGate';
 import { PERMISSIONS } from '@/hooks/usePermission';
+import { ConfirmModal } from '@/components/ui';
 
 interface Product {
   id: string;
@@ -54,6 +55,8 @@ export default function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkModal, setBulkModal] = useState<'price' | 'stock' | 'activate' | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
+  const [deleteLoading, setDeleteLoading] = useState(false);
   
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -152,14 +155,20 @@ export default function ProductsPage() {
   };
 
   const handleDeleteProduct = async (id: string) => {
-    if (!confirm('Hapus produk ini? Tindakan tidak bisa dibatalkan.')) return;
+    setDeleteConfirm({ open: true, id });
+  };
+
+  const confirmDeleteProduct = async () => {
+    if (!deleteConfirm.id) return;
+    setDeleteLoading(true);
     try {
-      await apiClient.delete(API_ENDPOINTS.PRODUCTS.BY_ID(id));
+      await apiClient.delete(API_ENDPOINTS.PRODUCTS.BY_ID(deleteConfirm.id));
       toast.success('Produk berhasil dihapus');
+      setDeleteConfirm({ open: false, id: null });
       fetchProducts();
     } catch (error: any) {
       toast.error(error?.response?.data?.message || 'Gagal menghapus produk');
-    }
+    } finally { setDeleteLoading(false); }
   };
 
   const handleEdit = (product: Product) => {
@@ -562,6 +571,16 @@ export default function ProductsPage() {
         isOpen={isBulkImportOpen}
         onClose={() => setIsBulkImportOpen(false)}
         onImport={handleBulkImport}
+      />
+
+      <ConfirmModal
+        open={deleteConfirm.open}
+        onClose={() => setDeleteConfirm({ open: false, id: null })}
+        onConfirm={confirmDeleteProduct}
+        title="Hapus Produk"
+        description="Hapus produk ini? Tindakan ini tidak bisa dibatalkan."
+        confirmLabel="Ya, Hapus"
+        loading={deleteLoading}
       />
 
       <style dangerouslySetInnerHTML={{__html: `

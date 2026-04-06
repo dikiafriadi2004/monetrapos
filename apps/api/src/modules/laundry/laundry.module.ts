@@ -9,7 +9,8 @@ import { LaundryOrdersService } from './laundry-orders.service';
 import { LaundryOrdersController } from './laundry-orders.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([LaundryServiceType, LaundryOrder, LaundryItem])],
+  imports: [
+    TypeOrmModule.forFeature([LaundryServiceType, LaundryOrder, LaundryItem])],
   controllers: [LaundryServiceTypesController, LaundryOrdersController],
   providers: [LaundryServiceTypesService, LaundryOrdersService],
   exports: [LaundryServiceTypesService, LaundryOrdersService],

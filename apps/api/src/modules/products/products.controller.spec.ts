@@ -580,7 +580,7 @@ describe('ProductsController - Products & Variants', () => {
 
   describe('Authentication & Authorization', () => {
     it('should require authentication for all endpoints', () => {
-      // This is enforced by @UseGuards(AuthGuard('jwt')) at controller level
+      // This is enforced by @UseGuards(MemberJwtGuard) at controller level
       expect(true).toBe(true);
     });
 

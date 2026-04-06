@@ -4,7 +4,7 @@ import { Request, Response, NextFunction } from 'express';
 @Injectable()
 export class TenantMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction) {
-    // Extract company_id from JWT token (already decoded by JwtAuthGuard)
+    // Extract company_id from JWT token (already decoded by MemberJwtGuard or AdminJwtGuard)
     const user = (req as any).user;
 
     if (user && user.companyId) {

@@ -7,11 +7,11 @@ import {
   UseGuards,
   Request,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { CustomerLoyaltyService } from './customer-loyalty.service';
 
 @Controller('customers/loyalty')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(MemberJwtGuard)
 export class CustomerLoyaltyController {
   constructor(
     private readonly customerLoyaltyService: CustomerLoyaltyService,

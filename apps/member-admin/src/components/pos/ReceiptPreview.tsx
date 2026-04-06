@@ -11,6 +11,8 @@ interface ReceiptPreviewProps {
     items: CartItem[];
     subtotal: number;
     tax: number;
+    taxRate?: number;
+    taxLabel?: string;
     discount: number;
     total: number;
     paidAmount: number;
@@ -21,6 +23,11 @@ interface ReceiptPreviewProps {
     storeName?: string;
     storeAddress?: string;
     storePhone?: string;
+    storeLogo?: string;
+    headerText?: string;
+    footerText?: string;
+    showTaxNumber?: boolean;
+    taxNumber?: string;
   };
   onPrint?: () => void;
   onEmail?: () => void;
@@ -69,9 +76,28 @@ export default function ReceiptPreview({
           <div className="bg-white border-2 border-gray-200 rounded-lg p-6 font-mono text-sm">
             {/* Store Info */}
             <div className="text-center mb-4">
-              <div className="font-bold text-lg">{transaction.storeName || 'Store Name'}</div>
-              <div className="text-xs text-gray-600">{transaction.storeAddress || 'Store Address'}</div>
-              <div className="text-xs text-gray-600">{transaction.storePhone || 'Store Phone'}</div>
+              {transaction.storeLogo && (
+                <img
+                  src={transaction.storeLogo}
+                  alt="Logo"
+                  className="mx-auto mb-2"
+                  crossOrigin="anonymous"
+                  style={{ maxHeight: 60, maxWidth: 160, objectFit: 'contain' }}
+                  onError={e => {
+                    const img = e.target as HTMLImageElement;
+                    img.style.display = 'none';
+                  }}
+                />
+              )}
+              {transaction.headerText && (
+                <div className="text-xs text-gray-500 mb-2 whitespace-pre-line">{transaction.headerText}</div>
+              )}
+              <div className="font-bold text-lg">{transaction.storeName || ''}</div>
+              {transaction.storeAddress && <div className="text-xs text-gray-600">{transaction.storeAddress}</div>}
+              {transaction.storePhone && <div className="text-xs text-gray-600">{transaction.storePhone}</div>}
+              {transaction.showTaxNumber && transaction.taxNumber && (
+                <div className="text-xs text-gray-500">NPWP: {transaction.taxNumber}</div>
+              )}
             </div>
 
             <div className="border-t border-dashed border-gray-300 my-3"></div>
@@ -106,17 +132,22 @@ export default function ReceiptPreview({
 
             {/* Items */}
             <div className="space-y-2 mb-3">
-              {transaction.items.map((item, index) => (
-                <div key={index} className="text-xs">
-                  <div className="font-medium">{item.product.name}</div>
-                  <div className="flex justify-between text-gray-600">
-                    <span>
-                      {item.quantity} x {formatCurrency(item.price)}
-                    </span>
-                    <span>{formatCurrency(item.subtotal)}</span>
+              {(transaction.items || []).map((item, index) => {
+                const name = item.product?.name || (item as any).productName || 'Item';
+                const price = item.price ?? (item as any).unitPrice ?? 0;
+                const subtotal = item.subtotal ?? 0;
+                const qty = item.quantity ?? 1;
+                const variant = item.variantName || (item as any).variant;
+                return (
+                  <div key={index} className="text-xs">
+                    <div className="font-medium">{name}{variant ? ` (${variant})` : ''}</div>
+                    <div className="flex justify-between text-gray-600">
+                      <span>{qty} x {formatCurrency(price)}</span>
+                      <span>{formatCurrency(subtotal)}</span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="border-t border-dashed border-gray-300 my-3"></div>
@@ -135,7 +166,7 @@ export default function ReceiptPreview({
               )}
               {transaction.tax > 0 && (
                 <div className="flex justify-between">
-                  <span>Tax (11%):</span>
+                  <span>{transaction.taxLabel || 'Tax'}{transaction.taxRate != null ? ` (${transaction.taxRate}%)` : ''}:</span>
                   <span>{formatCurrency(transaction.tax)}</span>
                 </div>
               )}
@@ -158,14 +189,20 @@ export default function ReceiptPreview({
 
             {/* Footer */}
             <div className="text-center text-xs space-y-1">
-              <div className="font-semibold">Thank You!</div>
-              <div className="text-gray-600">Please Come Again</div>
+              {transaction.footerText ? (
+                <div className="text-gray-600 whitespace-pre-line">{transaction.footerText}</div>
+              ) : (
+                <>
+                  <div className="font-semibold">Thank You!</div>
+                  <div className="text-gray-600">Please Come Again</div>
+                </>
+              )}
             </div>
           </div>
         </div>
 
         {/* Actions */}
-        <div className="p-4 border-t border-gray-200 space-y-2">
+        <div className="p-4 border-t border-gray-200 bg-gray-50 rounded-b-lg space-y-2 flex-shrink-0">
           <div className="grid grid-cols-2 gap-2">
             {onPrint && (
               <button

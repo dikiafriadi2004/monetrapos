@@ -15,7 +15,8 @@ import { Transaction } from '../transactions/transaction.entity';
 import { TransactionItem } from '../transactions/transaction-item.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Table, FnbOrder, FnbModifierGroup, FnbModifierOption, Transaction, TransactionItem])],
+  imports: [
+    TypeOrmModule.forFeature([Table, FnbOrder, FnbModifierGroup, FnbModifierOption, Transaction, TransactionItem])],
   controllers: [TablesController, FnbOrdersController, FnbModifiersController, SplitBillController],
   providers: [TablesService, FnbOrdersService, FnbModifiersService, SplitBillService],
   exports: [TablesService, FnbOrdersService, FnbModifiersService, SplitBillService],

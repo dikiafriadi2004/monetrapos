@@ -10,12 +10,14 @@ import { Company } from '../companies/company.entity';
 import { Subscription } from '../subscriptions/subscription.entity';
 import { InvoicePdfService } from './invoice-pdf.service';
 import { PaymentGatewayModule } from '../payment-gateway/payment-gateway.module';
+import { AdminAuthModule } from '../admin-auth/admin-auth.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Invoice, PaymentTransaction, PaymentWebhook, Company, Subscription]),
     BullModule.registerQueue({ name: 'notifications' }),
     forwardRef(() => PaymentGatewayModule),
+    AdminAuthModule,
   ],
   controllers: [BillingController],
   providers: [BillingService, InvoicePdfService],

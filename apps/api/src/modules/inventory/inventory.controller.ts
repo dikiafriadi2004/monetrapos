@@ -14,7 +14,7 @@ import {
   ApiOperation,
   ApiQuery,
 } from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { InventoryService } from './inventory.service';
 import {
   CreateStockMovementDto,
@@ -26,7 +26,7 @@ import { UserType } from '../../common/enums';
 
 @ApiTags('Inventory')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'), RolesGuard)
+@UseGuards(MemberJwtGuard, RolesGuard)
 @Controller('inventory')
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}

@@ -3,10 +3,10 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 
-export interface JwtPayload {
+export interface MemberJwtPayload {
   sub: string;
   email: string;
-  type: 'company_admin' | 'member' | 'employee' | 'user';
+  type: string;
   companyId?: string;
   storeId?: string;
   role?: string;
@@ -14,7 +14,7 @@ export interface JwtPayload {
 }
 
 @Injectable()
-export class JwtStrategy extends PassportStrategy(Strategy) {
+export class JwtMemberStrategy extends PassportStrategy(Strategy, 'jwt-member') {
   constructor(private configService: ConfigService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -23,7 +23,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: JwtPayload) {
+  async validate(payload: MemberJwtPayload) {
+    if (payload.type !== 'member' && payload.type !== 'employee') {
+      throw new UnauthorizedException('Invalid token type');
+    }
     if (!payload.sub) {
       throw new UnauthorizedException();
     }
@@ -32,7 +35,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       email: payload.email,
       type: payload.type,
       companyId: payload.companyId,
-      company_id: payload.companyId, // alias for backward compatibility
+      company_id: payload.companyId,
       storeId: payload.storeId,
       role: payload.role,
       permissions: payload.permissions ?? [],

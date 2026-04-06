@@ -6,7 +6,8 @@ import { ShiftsService } from './shifts.service';
 import { ShiftsController } from './shifts.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Shift, Transaction])],
+  imports: [
+    TypeOrmModule.forFeature([Shift, Transaction])],
   controllers: [ShiftsController],
   providers: [ShiftsService],
   exports: [ShiftsService],

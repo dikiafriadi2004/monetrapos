@@ -8,7 +8,8 @@ import { User } from '../users/user.entity';
 import { Store } from '../stores/store.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Employee, EmployeeAttendance, User, Store])],
+  imports: [
+    TypeOrmModule.forFeature([Employee, EmployeeAttendance, User, Store])],
   controllers: [EmployeesController],
   providers: [EmployeesService],
   exports: [EmployeesService],

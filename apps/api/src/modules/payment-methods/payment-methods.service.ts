@@ -121,6 +121,19 @@ export class PaymentMethodsService {
   }
 
   /**
+   * Find all QRIS payment methods that have an image uploaded
+   */
+  async findAllQrisWithImage(): Promise<PaymentMethod[]> {
+    return this.paymentMethodRepo
+      .createQueryBuilder('pm')
+      .where('pm.type = :type', { type: 'qris' })
+      .andWhere('pm.iconUrl IS NOT NULL')
+      .andWhere("pm.iconUrl != ''")
+      .andWhere('pm.isActive = true')
+      .getMany();
+  }
+
+  /**
    * Seed default payment methods for a company
    * Called when company is activated
    */

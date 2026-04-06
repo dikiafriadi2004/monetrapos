@@ -15,14 +15,15 @@ import {
   ApiOperation,
   ApiQuery,
 } from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
+import { AdminJwtGuard } from '../admin-auth/guards/admin-jwt.guard';
 import { PermissionGuard, RequirePermissions } from '../auth/guards';
 import { RolesService } from './roles.service';
 import { CreateRoleDto, UpdateRoleDto } from './dto';
 
 @ApiTags('Roles')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'), PermissionGuard)
+@UseGuards(MemberJwtGuard, PermissionGuard)
 @Controller('roles')
 export class RolesController {
   constructor(private readonly rolesService: RolesService) {}
@@ -68,5 +69,23 @@ export class RolesController {
   @ApiOperation({ summary: 'Delete a custom role' })
   remove(@Param('id') id: string) {
     return this.rolesService.remove(id);
+  }
+}
+
+/**
+ * Admin endpoint — get all permissions (no member token required)
+ * GET /api/admin/roles/permissions
+ */
+@ApiTags('Admin - Roles')
+@ApiBearerAuth()
+@UseGuards(AdminJwtGuard)
+@Controller('admin/roles')
+export class AdminRolesController {
+  constructor(private readonly rolesService: RolesService) {}
+
+  @Get('permissions')
+  @ApiOperation({ summary: 'Get all available permissions (admin)' })
+  getPermissions() {
+    return this.rolesService.findAllPermissions();
   }
 }

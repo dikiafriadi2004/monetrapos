@@ -1,26 +1,19 @@
-import { Controller, Get, Put, Post, Body, UseGuards, Request, UnauthorizedException } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { Controller, Get, Put, Post, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { AdminJwtGuard } from '../admin-auth/guards/admin-jwt.guard';
 import { EmailService } from './email.service';
 import { EmailProvider } from './email-config.entity';
 
 @ApiTags('Email Config')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AdminJwtGuard)
 @Controller('admin/email')
 export class EmailController {
   constructor(private readonly emailService: EmailService) {}
 
-  private ensureAdmin(req: any) {
-    if (req.user?.type !== 'company_admin') {
-      throw new UnauthorizedException('Only platform admins can manage email config');
-    }
-  }
-
   @Get('config')
   @ApiOperation({ summary: 'Get all email configs' })
-  async getConfigs(@Request() req: any) {
-    this.ensureAdmin(req);
+  async getConfigs() {
     const configs = await this.emailService.getAllConfigs();
     // Mask passwords
     return configs.map(c => ({
@@ -33,7 +26,7 @@ export class EmailController {
 
   @Put('config/mailtrap')
   @ApiOperation({ summary: 'Save Mailtrap config (for testing)' })
-  async saveMailtrap(@Request() req: any, @Body() body: {
+  async saveMailtrap(@Body() body: {
     isEnabled?: boolean;
     host?: string;
     port?: number;
@@ -42,7 +35,6 @@ export class EmailController {
     fromName?: string;
     fromEmail?: string;
   }) {
-    this.ensureAdmin(req);
     const config = await this.emailService.upsertConfig(EmailProvider.MAILTRAP, {
       ...body,
       host: body.host || 'sandbox.smtp.mailtrap.io',
@@ -54,14 +46,13 @@ export class EmailController {
 
   @Put('config/gmail')
   @ApiOperation({ summary: 'Save Gmail config (for production)' })
-  async saveGmail(@Request() req: any, @Body() body: {
+  async saveGmail(@Body() body: {
     isEnabled?: boolean;
     username?: string;
     password?: string; // App password
     fromName?: string;
     fromEmail?: string;
   }) {
-    this.ensureAdmin(req);
     const config = await this.emailService.upsertConfig(EmailProvider.GMAIL, {
       ...body,
       host: 'smtp.gmail.com',
@@ -73,7 +64,7 @@ export class EmailController {
 
   @Put('config/smtp')
   @ApiOperation({ summary: 'Save custom SMTP config' })
-  async saveSmtp(@Request() req: any, @Body() body: {
+  async saveSmtp(@Body() body: {
     isEnabled?: boolean;
     host?: string;
     port?: number;
@@ -83,14 +74,13 @@ export class EmailController {
     fromName?: string;
     fromEmail?: string;
   }) {
-    this.ensureAdmin(req);
     const config = await this.emailService.upsertConfig(EmailProvider.SMTP, body);
     return { ...config, password: config.password ? '••••••••' : null };
   }
 
   @Post('test')
   @ApiOperation({ summary: 'Test email connection and send test email' })
-  async testEmail(@Request() req: any, @Body() body: {
+  async testEmail(@Body() body: {
     provider: EmailProvider;
     host?: string;
     port?: number;
@@ -101,7 +91,6 @@ export class EmailController {
     fromEmail?: string;
     testTo: string;
   }) {
-    this.ensureAdmin(req);
     const { testTo, ...configData } = body;
 
     // If no password provided, load from saved config

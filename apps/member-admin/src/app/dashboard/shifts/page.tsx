@@ -60,7 +60,10 @@ export default function ShiftsPage() {
     if (isNaN(amount) || amount < 0) { toast.error('Masukkan jumlah kas penutup yang valid'); return; }
     setSaving(true);
     try {
-      await shiftService.closeShift(activeShift!.id, { shiftId: activeShift!.id, closingCash: amount });
+      await shiftService.closeShift(activeShift!.id, {
+        shiftId: activeShift!.id,
+        closingCash: amount,
+      });
       setCloseModal(false); setClosingCash('');
       loadShifts(); toast.success('Shift ditutup');
     } catch (err: any) { toast.error(err?.response?.data?.message || 'Gagal menutup shift'); }
@@ -147,33 +150,45 @@ export default function ShiftsPage() {
       </Modal>
 
       {/* Close Shift Modal */}
-      <Modal open={closeModal} onClose={() => setCloseModal(false)} title="Close Shift"
-        footer={<><button onClick={() => setCloseModal(false)} className="btn btn-outline">Cancel</button><button onClick={handleCloseShift} className="btn btn-primary" disabled={saving}>{saving ? <Loader2 size={14} className="animate-spin"/> : null}Close Shift</button></>}>
+      <Modal open={closeModal} onClose={() => setCloseModal(false)} title="Tutup Shift"
+        footer={<><button onClick={() => setCloseModal(false)} className="btn btn-outline">Batal</button><button onClick={handleCloseShift} className="btn btn-primary" disabled={saving}>{saving ? <Loader2 size={14} className="animate-spin"/> : null}Tutup Shift</button></>}>
         <div className="space-y-4">
           <div className="bg-gray-50 rounded-lg p-3">
-            <p className="text-xs text-gray-500">Opening Cash</p>
+            <p className="text-xs text-gray-500">Kas Pembuka</p>
             <p className="text-lg font-bold">{fmt(activeShift?.startingCash || 0)}</p>
           </div>
           <div className="form-group">
-            <label className="form-label">Closing Cash Amount (IDR)</label>
-            <input type="number" className="form-input" value={closingCash} onChange={e => setClosingCash(e.target.value)} placeholder="Enter closing cash..." autoFocus />
+            <label className="form-label">Jumlah Kas Penutup (IDR) *</label>
+            <input type="number" className="form-input" value={closingCash} onChange={e => setClosingCash(e.target.value)} placeholder="Hitung semua uang di kasir..." autoFocus />
           </div>
-          <p className="text-sm text-gray-500">Count all cash in the register. The system will calculate variance.</p>
+          {closingCash && !isNaN(parseFloat(closingCash)) && (
+            <div className={`rounded-lg p-3 ${parseFloat(closingCash) >= (activeShift?.startingCash || 0) ? 'bg-emerald-50 border border-emerald-200' : 'bg-amber-50 border border-amber-200'}`}>
+              <p className="text-xs text-gray-500">Selisih dari Kas Pembuka</p>
+              <p className={`text-base font-bold ${parseFloat(closingCash) >= (activeShift?.startingCash || 0) ? 'text-emerald-600' : 'text-amber-600'}`}>
+                {parseFloat(closingCash) - (activeShift?.startingCash || 0) >= 0 ? '+' : ''}
+                {fmt(parseFloat(closingCash) - (activeShift?.startingCash || 0))}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">Selisih positif = ada penjualan tunai atau kelebihan kas</p>
+            </div>
+          )}
+          <p className="text-sm text-gray-500">Hitung semua uang di kasir. Sistem akan menghitung selisih otomatis.</p>
         </div>
       </Modal>
 
       {/* Shift Report Modal */}
-      <Modal open={!!shiftReport} onClose={() => setShiftReport(null)} title="Shift Report" size="sm">
+      <Modal open={!!shiftReport} onClose={() => setShiftReport(null)} title="Laporan Shift" size="sm">
         {shiftReport && (
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               {[
-                ['Opening Cash', fmt(shiftReport.openingCash || shiftReport.startingCash)],
-                ['Closing Cash', fmt(shiftReport.closingCash || shiftReport.endingCash)],
-                ['Total Sales', fmt(shiftReport.totalSales)],
-                ['Transactions', String(shiftReport.totalTransactions || 0)],
-                ['Cash Sales', fmt(shiftReport.cashSales)],
-                ['Non-Cash', fmt(shiftReport.nonCashSales)],
+                ['Kas Pembuka', fmt(shiftReport.openingCash ?? 0)],
+                ['Kas Penutup', shiftReport.closingCash != null ? fmt(shiftReport.closingCash) : '—'],
+                ['Kas Ekspektasi', fmt(shiftReport.expectedCash ?? 0)],
+                ['Total Transaksi', String(shiftReport.totalTransactions ?? 0)],
+                ['Total Penjualan', fmt(shiftReport.totalSales ?? 0)],
+                ['Penjualan Tunai', fmt(shiftReport.cashSales ?? 0)],
+                ['Non-Tunai', fmt(shiftReport.nonCashSales ?? 0)],
+                ['Total Pajak', fmt(shiftReport.totalTax ?? 0)],
               ].map(([l, v]) => (
                 <div key={l} className="bg-gray-50 rounded-lg p-3">
                   <p className="text-xs text-gray-500">{l}</p>
@@ -181,12 +196,29 @@ export default function ShiftsPage() {
                 </div>
               ))}
             </div>
-            {shiftReport.variance !== undefined && (
-              <div className={`rounded-lg p-3 ${shiftReport.variance >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
-                <p className="text-xs text-gray-500">Cash Variance</p>
+            {shiftReport.variance != null && (
+              <div className={`rounded-lg p-3 ${shiftReport.variance >= 0 ? 'bg-emerald-50 border border-emerald-200' : 'bg-red-50 border border-red-200'}`}>
+                <p className="text-xs text-gray-500">Selisih Kas (Aktual - Ekspektasi)</p>
                 <p className={`text-xl font-bold ${shiftReport.variance >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                   {shiftReport.variance >= 0 ? '+' : ''}{fmt(shiftReport.variance)}
                 </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {shiftReport.variance === 0 ? 'Kas sesuai' : shiftReport.variance > 0 ? 'Kelebihan kas' : 'Kekurangan kas'}
+                </p>
+              </div>
+            )}
+            {/* Payment breakdown */}
+            {shiftReport.paymentMethods && Object.keys(shiftReport.paymentMethods).length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Rincian Metode Pembayaran</p>
+                <div className="space-y-1">
+                  {Object.entries(shiftReport.paymentMethods).map(([method, data]: [string, any]) => (
+                    <div key={method} className="flex justify-between text-sm">
+                      <span className="text-gray-600 capitalize">{method.replace(/_/g, ' ')}</span>
+                      <span className="font-medium">{fmt(Number(data.total))} ({data.count}x)</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>

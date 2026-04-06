@@ -50,7 +50,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch {
           // Token might be for employee — try to decode it
           try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
+            const parts = token.split('.');
+            if (parts.length < 3) throw new Error('Invalid token format');
+            const payload = JSON.parse(atob(parts[1]));
             if (payload.type === 'employee') {
               // Employee token — set minimal user data
               setUser({

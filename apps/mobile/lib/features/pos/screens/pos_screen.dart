@@ -150,7 +150,7 @@ class _PosScreenState extends ConsumerState<PosScreen> {
           // Store selector
           storesAsync.when(
             loading: () => const LinearProgressIndicator(),
-            error: (_, _e) => const SizedBox.shrink(),
+            error: (_, e) => const SizedBox.shrink(),
             data: (stores) => stores.isEmpty
                 ? const Padding(
                     padding: EdgeInsets.all(16),

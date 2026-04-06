@@ -77,9 +77,39 @@ export class PaymentsService {
   }
 
   async findActiveQrisConfig(storeId: string): Promise<QrisConfig | null> {
-    return this.qrisConfigRepo.findOne({
+    // Cari by storeId dulu, fallback ke companyId
+    const byStore = await this.qrisConfigRepo.findOne({
       where: { storeId, isActive: true },
     });
+    if (byStore) return byStore;
+    return null;
+  }
+
+  async findActiveQrisConfigByCompany(companyId: string): Promise<QrisConfig | null> {
+    return this.qrisConfigRepo.findOne({
+      where: { companyId, isActive: true },
+    });
+  }
+
+  async upsertQrisConfigByCompany(companyId: string, data: {
+    parsedData: string;
+    originalImage?: string;
+    merchantName?: string;
+  }): Promise<QrisConfig> {
+    const existing = await this.findActiveQrisConfigByCompany(companyId);
+    if (existing) {
+      Object.assign(existing, data);
+      return this.qrisConfigRepo.save(existing);
+    }
+    const qris = this.qrisConfigRepo.create({
+      companyId,
+      storeId: null as any,
+      originalImage: data.originalImage || data.parsedData,
+      parsedData: data.parsedData,
+      merchantName: data.merchantName,
+      isActive: true,
+    });
+    return this.qrisConfigRepo.save(qris);
   }
 
   async updateQrisConfig(

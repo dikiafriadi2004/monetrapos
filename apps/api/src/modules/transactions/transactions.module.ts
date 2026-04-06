@@ -6,6 +6,7 @@ import { Transaction } from './transaction.entity';
 import { TransactionItem } from './transaction-item.entity';
 import { Product } from '../products/product.entity';
 import { Customer } from '../customers/customer.entity';
+import { Employee } from '../employees/employee.entity';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { Customer } from '../customers/customer.entity';
       TransactionItem,
       Product,
       Customer,
+      Employee,
     ]),
   ],
   controllers: [TransactionsController],

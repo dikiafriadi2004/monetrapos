@@ -15,14 +15,14 @@ import {
   ApiOperation,
   ApiQuery,
 } from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { PermissionGuard, RequirePermissions } from '../auth/guards';
 import { TaxesService } from './taxes.service';
 import { CreateTaxDto, UpdateTaxDto } from './dto';
 
 @ApiTags('Taxes')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'), PermissionGuard)
+@UseGuards(MemberJwtGuard, PermissionGuard)
 @Controller('taxes')
 export class TaxesController {
   constructor(private readonly taxesService: TaxesService) {}

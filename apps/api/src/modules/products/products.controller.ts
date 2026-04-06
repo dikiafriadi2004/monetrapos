@@ -27,6 +27,7 @@ import { diskStorage } from 'multer';
 import * as path from 'path';
 import * as fs from 'fs';
 import { PermissionGuard, RequirePermissions } from '../auth/guards';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { ProductsService } from './products.service';
 import { deleteOldFile } from '../../common/utils/file.utils';
 import {
@@ -40,7 +41,7 @@ import {
 
 @ApiTags('Products')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'), PermissionGuard)
+@UseGuards(MemberJwtGuard, PermissionGuard)
 @Controller()
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}

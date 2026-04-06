@@ -9,6 +9,7 @@ import { Transaction } from './transaction.entity';
 import { TransactionItem } from './transaction-item.entity';
 import { Product } from '../products/product.entity';
 import { Customer } from '../customers/customer.entity';
+import { Employee } from '../employees/employee.entity';
 import { TransactionStatus } from '../../common/enums';
 import { CreateTransactionDto, VoidTransactionDto } from './dto';
 
@@ -21,6 +22,7 @@ export class TransactionsService {
     private transactionItemRepo: Repository<TransactionItem>,
     @InjectRepository(Product) private productRepo: Repository<Product>,
     @InjectRepository(Customer) private customerRepo: Repository<Customer>,
+    @InjectRepository(Employee) private employeeRepo: Repository<Employee>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -97,8 +99,8 @@ export class TransactionsService {
         if (shiftExists?.length > 0) validShiftId = dto.shiftId;
       }
 
-      // Get companyId from store using DataSource directly
-      const storeRows = await this.dataSource.query(
+      // Get companyId from store using queryRunner to stay within transaction
+      const storeRows = await queryRunner.manager.query(
         `SELECT company_id FROM stores WHERE id = ? LIMIT 1`,
         [dto.storeId]
       );
@@ -110,7 +112,8 @@ export class TransactionsService {
       // Generate invoice number
       const invoiceNumber = await this.generateInvoiceNumber(dto.storeId);
 
-      // Normalize payment method — map frontend values to entity enum
+      // Normalize payment method — map frontend values ke enum yang valid di DB
+      // DB enum: cash, qris, edc, bank_transfer, e_wallet (sesuai PaymentMethodType di transaction.entity.ts)
       const paymentMethodMap: Record<string, string> = {
         cash: 'cash',
         qris: 'qris',
@@ -120,62 +123,89 @@ export class TransactionsService {
         transfer: 'bank_transfer',
         ewallet: 'e_wallet',
         e_wallet: 'e_wallet',
+        other: 'cash',   // fallback 'other' ke 'cash' agar tidak gagal enum
       };
-      const normalizedPaymentMethod = paymentMethodMap[dto.paymentMethod?.toLowerCase()] || 'cash';
+      const rawMethod = (dto.paymentMethod as string)?.toLowerCase() || 'cash';
+      // Try exact match first, then check if it contains known keywords, else default to 'cash'
+      let normalizedPaymentMethod = paymentMethodMap[rawMethod];
+      if (!normalizedPaymentMethod) {
+        if (rawMethod.includes('qris')) normalizedPaymentMethod = 'qris';
+        else if (rawMethod.includes('transfer') || rawMethod.includes('bank')) normalizedPaymentMethod = 'bank_transfer';
+        else if (rawMethod.includes('wallet') || rawMethod.includes('pay') || rawMethod.includes('ovo') || rawMethod.includes('dana') || rawMethod.includes('gopay')) normalizedPaymentMethod = 'e_wallet';
+        else if (rawMethod.includes('card') || rawMethod.includes('edc') || rawMethod.includes('debit') || rawMethod.includes('credit')) normalizedPaymentMethod = 'edc';
+        else normalizedPaymentMethod = 'cash'; // safe fallback
+      }
 
-      // Create transaction using raw SQL to avoid TypeORM mapping issues
-      const txId = (require('crypto') as any).randomUUID();
-      await queryRunner.query(
-        `INSERT INTO transactions (id, company_id, store_id, shift_id, transaction_number, invoice_number, subtotal, tax_amount, discount_amount, service_charge, total, payment_method, paid_amount, change_amount, customer_id, customer_name, customer_phone, status, notes, metadata, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, 'completed', ?, ?, NOW(), NOW())`,
-        [
-          txId,
-          companyId,
-          dto.storeId,
-          validShiftId,
-          transactionNumber,
-          invoiceNumber,
-          calculatedTotals.subtotal,
-          calculatedTotals.taxAmount,
-          calculatedTotals.discountAmount,
-          calculatedTotals.total,
-          normalizedPaymentMethod,
-          dto.paidAmount,
-          dto.changeAmount || 0,
-          dto.customerId || null,
-          dto.customerName || null,
-          dto.customerPhone || null,
-          dto.notes || null,
-          JSON.stringify({
-            loyaltyPointsEarned,
-            orderType: (dto as any).orderType,
-            tableId: (dto as any).tableId,
-            employeeId: dto.employeeId,
-            employeeName: (dto as any).employeeName,
-            paymentMethods: dto.paymentMethods || [{ method: dto.paymentMethod, amount: dto.paidAmount }],
-          }),
-        ]
-      );
+      // Resolve employeeId — frontend sends user.id, but transactions.employee_id FK points to employees table
+      // Look up employee by userId first, then try direct employee ID match
+      let resolvedEmployeeId: string | null = null;
+      if (dto.employeeId) {
+        // Try: is it a direct employee ID?
+        const empById = await queryRunner.manager.findOne(Employee, {
+          where: { id: dto.employeeId },
+        });
+        if (empById) {
+          resolvedEmployeeId = empById.id;
+        } else {
+          // Try: is it a user ID linked to an employee?
+          const empByUserId = await queryRunner.manager.findOne(Employee, {
+            where: { userId: dto.employeeId, companyId },
+          });
+          if (empByUserId) {
+            resolvedEmployeeId = empByUserId.id;
+          }
+          // If neither found, leave null — don't fail the transaction
+        }
+      }
+
+      // Create transaction using TypeORM entity manager to avoid raw SQL column name issues
+      const crypto = require('crypto') as any;
+      const txId = crypto.randomUUID();
+
+      const txEntity = queryRunner.manager.create(Transaction);
+      txEntity.id = txId;
+      txEntity.companyId = companyId;
+      txEntity.storeId = dto.storeId;
+      txEntity.shiftId = validShiftId as any;
+      txEntity.employeeId = resolvedEmployeeId as any;
+      txEntity.transactionNumber = transactionNumber;
+      txEntity.invoiceNumber = invoiceNumber;
+      txEntity.subtotal = calculatedTotals.subtotal;
+      txEntity.taxAmount = calculatedTotals.taxAmount;
+      txEntity.discountAmount = calculatedTotals.discountAmount;
+      txEntity.serviceCharge = 0;
+      txEntity.total = calculatedTotals.total;
+      txEntity.paymentMethod = normalizedPaymentMethod as any;
+      txEntity.paidAmount = dto.paidAmount;
+      txEntity.changeAmount = dto.changeAmount || 0;
+      txEntity.customerId = dto.customerId || null as any;
+      txEntity.customerName = dto.customerName || null as any;
+      txEntity.customerPhone = dto.customerPhone || null as any;
+      txEntity.status = TransactionStatus.COMPLETED;
+      txEntity.notes = dto.notes || null as any;
+      txEntity.metadata = {
+        loyaltyPointsEarned,
+        orderType: (dto as any).orderType,
+        tableId: (dto as any).tableId,
+        employeeId: dto.employeeId,
+        employeeName: (dto as any).employeeName,
+        paymentMethods: dto.paymentMethods || [{ method: dto.paymentMethod, amount: dto.paidAmount }],
+      };
+      await queryRunner.manager.save(Transaction, txEntity);
 
       // Create transaction items
       for (const item of dto.items) {
-        const itemId = (require('crypto') as any).randomUUID();
-        await queryRunner.query(
-          `INSERT INTO transaction_items (id, transaction_id, productId, productName, variantName, quantity, unitPrice, discountAmount, subtotal, notes, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
-          [
-            itemId,
-            txId,
-            item.productId || null,
-            item.productName,
-            item.variantName || null,
-            item.quantity,
-            item.unitPrice,
-            item.discountAmount || 0,
-            item.subtotal,
-            item.notes || null,
-          ]
-        );
+        const itemEntity = queryRunner.manager.create(TransactionItem);
+        itemEntity.transactionId = txId;
+        itemEntity.productId = item.productId || null as any;
+        itemEntity.productName = item.productName;
+        itemEntity.variantName = item.variantName || null as any;
+        itemEntity.quantity = item.quantity;
+        itemEntity.unitPrice = item.unitPrice;
+        itemEntity.discountAmount = item.discountAmount || 0;
+        itemEntity.subtotal = item.subtotal;
+        itemEntity.notes = item.notes || null as any;
+        await queryRunner.manager.save(TransactionItem, itemEntity);
       }
 
       await queryRunner.commitTransaction();

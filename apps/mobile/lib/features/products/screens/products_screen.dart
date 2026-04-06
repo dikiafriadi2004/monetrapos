@@ -51,7 +51,7 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
           // Store selector
           storesAsync.when(
             loading: () => const LinearProgressIndicator(),
-            error: (_, _e) => const SizedBox.shrink(),
+            error: (_, e) => const SizedBox.shrink(),
             data: (stores) => Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
               child: DropdownButtonFormField<String>(

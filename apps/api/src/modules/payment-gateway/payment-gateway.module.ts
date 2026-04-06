@@ -14,6 +14,7 @@ import { StoresModule } from '../stores/stores.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PaymentMethodsModule } from '../payment-methods/payment-methods.module';
 import { EmailModule } from '../email/email.module';
+import { AdminAuthModule } from '../admin-auth/admin-auth.module';
 import { Company } from '../companies/company.entity';
 import { User } from '../users/user.entity';
 import { PaymentWebhook } from '../billing/payment-webhook.entity';
@@ -28,6 +29,7 @@ import { PaymentWebhook } from '../billing/payment-webhook.entity';
     NotificationsModule,
     PaymentMethodsModule,
     EmailModule,
+    AdminAuthModule,
   ],
   controllers: [PaymentGatewayController, PaymentGatewayConfigController],
   providers: [

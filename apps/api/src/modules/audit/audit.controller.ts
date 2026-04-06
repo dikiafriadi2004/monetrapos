@@ -6,7 +6,9 @@ import {
   UseGuards,
   Request,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
+import { AdminJwtGuard } from '../admin-auth/guards/admin-jwt.guard';
 import { AuditService, AuditLogFilters } from './audit.service';
 import { AuditLog } from './audit-log.entity';
 
@@ -18,8 +20,9 @@ interface AuthenticatedRequest extends Request {
   };
 }
 
+@ApiTags('Audit')
 @Controller('audit')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(MemberJwtGuard)
 export class AuditController {
   constructor(private readonly auditService: AuditService) {}
 
@@ -134,5 +137,43 @@ export class AuditController {
     const companyId = req.user.companyId;
     const limitNum = limit ? parseInt(limit, 10) : 100;
     return this.auditService.findByEntityType(companyId, entityType, limitNum);
+  }
+}
+
+/**
+ * Admin audit controller — platform-wide logs (no companyId filter)
+ * GET /api/admin/audit/logs
+ */
+@ApiTags('Admin - Audit')
+@ApiBearerAuth()
+@UseGuards(AdminJwtGuard)
+@Controller('admin/audit')
+export class AdminAuditController {
+  constructor(private readonly auditService: AuditService) {}
+
+  @Get('logs')
+  @ApiOperation({ summary: 'Get all platform audit logs (admin only)' })
+  async getAllLogs(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('action') action?: string,
+    @Query('entityType') entityType?: string,
+    @Query('userId') userId?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 50;
+    const skip = (pageNum - 1) * limitNum;
+
+    // Use findRecent for platform-wide logs (no companyId filter)
+    const all = await this.auditService.findRecent(limitNum + skip);
+    const sliced = all.slice(skip, skip + limitNum);
+    return {
+      data: sliced,
+      total: all.length,
+      page: pageNum,
+      limit: limitNum,
+    };
   }
 }

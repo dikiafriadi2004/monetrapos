@@ -138,5 +138,8 @@ export interface CartItem {
   quantity: number;
   price: number;
   subtotal: number;
+  variantName?: string;
+  variantId?: string;
+  itemKey?: string;
   notes?: string;
 }

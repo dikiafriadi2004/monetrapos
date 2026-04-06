@@ -61,15 +61,13 @@ describe('PermissionGuard', () => {
       );
     });
 
-    it('should allow company_admin to access any endpoint', () => {
-      jest
-        .spyOn(reflector, 'getAllAndOverride')
-        .mockReturnValue(['product.create', 'product.delete']);
+    it('should allow member (non-owner) to access endpoint', () => {
+      jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(['product.create']);
       const context = createMockExecutionContext({
-        type: 'company_admin',
-        permissions: [],
+        type: 'member',
+        role: 'admin',
+        permissions: ['product.create'],
       });
-
       expect(guard.canActivate(context)).toBe(true);
     });
 

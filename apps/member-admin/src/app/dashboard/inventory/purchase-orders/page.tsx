@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { purchaseOrdersService, PurchaseOrder, PurchaseOrderStatus } from '@/services/purchase-orders.service';
 import { ShoppingCart, Plus, Search, Eye, Edit2, Trash2, CheckCircle, XCircle, Clock, Package, Loader2, Building2, Store, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { ConfirmModal } from '@/components/ui';
 
 const STATUS_CONFIG: Record<string, { color: string; icon: any }> = {
   [PurchaseOrderStatus.DRAFT]: { color: '#6b7280', icon: FileText },
@@ -22,6 +23,8 @@ export default function PurchaseOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<PurchaseOrderStatus | 'all'>('all');
+  const [actionConfirm, setActionConfirm] = useState<{ open: boolean; type: 'delete' | 'cancel'; order: PurchaseOrder | null }>({ open: false, type: 'delete', order: null });
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => { load(); }, [statusFilter]);
 
@@ -35,15 +38,28 @@ export default function PurchaseOrdersPage() {
   };
 
   const handleDelete = async (o: PurchaseOrder) => {
-    if (!confirm(`Delete PO ${o.poNumber}?`)) return;
-    try { await purchaseOrdersService.delete(o.id); toast.success('Deleted'); load(); }
-    catch { toast.error('Failed to delete'); }
+    setActionConfirm({ open: true, type: 'delete', order: o });
   };
 
   const handleCancel = async (o: PurchaseOrder) => {
-    if (!confirm(`Cancel PO ${o.poNumber}?`)) return;
-    try { await purchaseOrdersService.cancel(o.id); toast.success('Cancelled'); load(); }
-    catch { toast.error('Failed to cancel'); }
+    setActionConfirm({ open: true, type: 'cancel', order: o });
+  };
+
+  const confirmAction = async () => {
+    if (!actionConfirm.order) return;
+    setActionLoading(true);
+    try {
+      if (actionConfirm.type === 'delete') {
+        await purchaseOrdersService.delete(actionConfirm.order.id);
+        toast.success('Deleted');
+      } else {
+        await purchaseOrdersService.cancel(actionConfirm.order.id);
+        toast.success('Cancelled');
+      }
+      setActionConfirm({ open: false, type: 'delete', order: null });
+      load();
+    } catch { toast.error(actionConfirm.type === 'delete' ? 'Failed to delete' : 'Failed to cancel'); }
+    finally { setActionLoading(false); }
   };
 
   const filtered = orders.filter(o =>
@@ -172,6 +188,19 @@ export default function PurchaseOrdersPage() {
         </div>
       )}
       <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { 100% { transform: rotate(360deg); } }` }} />
+      <ConfirmModal
+        open={actionConfirm.open}
+        title={actionConfirm.type === 'delete' ? 'Hapus Purchase Order' : 'Batalkan Purchase Order'}
+        description={actionConfirm.type === 'delete'
+          ? `Hapus PO "${actionConfirm.order?.poNumber}"? Tindakan ini tidak dapat dibatalkan.`
+          : `Batalkan PO "${actionConfirm.order?.poNumber}"? Tindakan ini tidak dapat dibatalkan.`
+        }
+        confirmLabel={actionConfirm.type === 'delete' ? 'Ya, Hapus' : 'Ya, Batalkan'}
+        variant="danger"
+        loading={actionLoading}
+        onConfirm={confirmAction}
+        onClose={() => setActionConfirm({ open: false, type: 'delete', order: null })}
+      />
     </div>
   );
 }

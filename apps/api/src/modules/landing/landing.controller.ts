@@ -9,8 +9,8 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { AdminJwtGuard } from '../admin-auth/guards/admin-jwt.guard';
 import { LandingService } from './landing.service';
 import { LandingContent } from './landing-content.entity';
 
@@ -44,7 +44,7 @@ export class LandingController {
    * GET /api/v1/landing/admin/all
    */
   @Get('admin/all')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AdminJwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all sections for admin' })
   async getAllSections(): Promise<LandingContent[]> {
@@ -56,7 +56,7 @@ export class LandingController {
    * PATCH /api/v1/landing/admin/:section
    */
   @Patch('admin/:section')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AdminJwtGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update section content' })
   async updateSection(
@@ -77,7 +77,7 @@ export class LandingController {
    * POST /api/v1/landing/admin/seed
    */
   @Post('admin/seed')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AdminJwtGuard)
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Seed default landing page content' })

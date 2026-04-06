@@ -133,29 +133,105 @@ export class NotificationsService {
   }
 
   async sendSMS(dto: SendSMSDto): Promise<any> {
-    // TODO: Integrate with Twilio or Vonage
     this.logger.log(`Sending SMS to ${dto.phone}`);
 
-    // Placeholder implementation
-    return {
-      success: true,
-      message: `SMS sent to ${dto.phone}`,
-      provider: 'twilio', // or 'vonage'
-      messageId: `sms_${Date.now()}`,
-    };
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const fromPhone = process.env.TWILIO_PHONE_NUMBER;
+
+    if (!accountSid || !authToken || !fromPhone) {
+      this.logger.warn('Twilio not configured — SMS not sent');
+      return {
+        success: false,
+        message: 'SMS service not configured',
+        provider: 'twilio',
+      };
+    }
+
+    try {
+      const credentials = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
+      const body = new URLSearchParams({
+        To: dto.phone,
+        From: fromPhone,
+        Body: dto.message,
+      });
+
+      const response = await fetch(
+        `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Basic ${credentials}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: body.toString(),
+        },
+      );
+
+      const data: any = await response.json();
+
+      if (!response.ok) {
+        this.logger.error(`Twilio SMS error: ${data.message}`);
+        return { success: false, message: data.message, provider: 'twilio' };
+      }
+
+      this.logger.log(`SMS sent to ${dto.phone}, SID: ${data.sid}`);
+      return { success: true, message: `SMS sent to ${dto.phone}`, provider: 'twilio', messageId: data.sid };
+    } catch (err: any) {
+      this.logger.error(`Failed to send SMS: ${err.message}`);
+      return { success: false, message: err.message, provider: 'twilio' };
+    }
   }
 
   async sendWhatsApp(dto: SendWhatsAppDto): Promise<any> {
-    // TODO: Integrate with WhatsApp Business API
     this.logger.log(`Sending WhatsApp to ${dto.phone}`);
 
-    // Placeholder implementation
-    return {
-      success: true,
-      message: `WhatsApp sent to ${dto.phone}`,
-      provider: 'whatsapp-business-api',
-      messageId: `wa_${Date.now()}`,
-    };
+    const accountSid = process.env.TWILIO_ACCOUNT_SID;
+    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    const fromPhone = process.env.TWILIO_PHONE_NUMBER;
+
+    if (!accountSid || !authToken || !fromPhone) {
+      this.logger.warn('WhatsApp (Twilio) not configured — message not sent');
+      return {
+        success: false,
+        message: 'WhatsApp service not configured',
+        provider: 'twilio-whatsapp',
+      };
+    }
+
+    try {
+      const credentials = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
+      const body = new URLSearchParams({
+        To: `whatsapp:${dto.phone}`,
+        From: `whatsapp:${fromPhone}`,
+        Body: dto.message,
+      });
+
+      const response = await fetch(
+        `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Basic ${credentials}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: body.toString(),
+        },
+      );
+
+      const data: any = await response.json();
+
+      if (!response.ok) {
+        this.logger.error(`Twilio WhatsApp error: ${data.message}`);
+        return { success: false, message: data.message, provider: 'twilio-whatsapp' };
+      }
+
+      this.logger.log(`WhatsApp sent to ${dto.phone}, SID: ${data.sid}`);
+      return { success: true, message: `WhatsApp sent to ${dto.phone}`, provider: 'twilio-whatsapp', messageId: data.sid };
+    } catch (err: any) {
+      this.logger.error(`Failed to send WhatsApp: ${err.message}`);
+      return { success: false, message: err.message, provider: 'twilio-whatsapp' };
+    }
   }
 
   // Helper methods for common notifications
@@ -317,16 +393,24 @@ export class NotificationsService {
             await this.sendRenewalEmail(subscription, daysUntilExpiry);
             break;
           case NotificationChannel.SMS:
-            // Placeholder for SMS integration
-            this.logger.log(
-              `SMS renewal reminder for subscription ${subscription.id} (not implemented)`,
-            );
+            if ((subscription as any).company?.phone) {
+              await this.sendSMS({
+                phone: (subscription as any).company.phone,
+                message: `[MonetraPOS] ${title}. ${message}`,
+              });
+            } else {
+              this.logger.warn(`No phone found for subscription ${subscription.id} — skipping SMS`);
+            }
             break;
           case NotificationChannel.WHATSAPP:
-            // Placeholder for WhatsApp integration
-            this.logger.log(
-              `WhatsApp renewal reminder for subscription ${subscription.id} (not implemented)`,
-            );
+            if ((subscription as any).company?.phone) {
+              await this.sendWhatsApp({
+                phone: (subscription as any).company.phone,
+                message: `[MonetraPOS] ${title}\n\n${message}`,
+              });
+            } else {
+              this.logger.warn(`No phone found for subscription ${subscription.id} — skipping WhatsApp`);
+            }
             break;
           case NotificationChannel.IN_APP:
             // In-app notification already created above

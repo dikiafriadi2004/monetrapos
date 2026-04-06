@@ -441,8 +441,7 @@ describe('ProductsService - Categories', () => {
       ).rejects.toThrow('Circular reference detected');
     });
 
-    it.skip('should throw ConflictException if slug already exists', async () => {
-      // TODO: Fix this test - mock setup issue
+    it('should throw ConflictException if slug already exists', async () => {
       const existingCategory = {
         id: categoryId,
         name: 'Food',
@@ -461,6 +460,8 @@ describe('ProductsService - Categories', () => {
         slug: 'drinks', // Already exists
       };
 
+      // First call: find category by id → returns existingCategory
+      // Second call: find by slug → returns anotherCategory (slug conflict)
       mockCategoryRepo.findOne
         .mockResolvedValueOnce(existingCategory)
         .mockResolvedValueOnce(anotherCategory);

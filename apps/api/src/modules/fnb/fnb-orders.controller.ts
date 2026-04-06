@@ -12,11 +12,11 @@ import {
 import { FnbOrdersService } from './fnb-orders.service';
 import { CreateFnbOrderDto } from './dto/create-fnb-order.dto';
 import { UpdateFnbOrderDto, UpdateOrderStatusDto } from './dto/update-fnb-order.dto';
-import { AuthGuard } from '@nestjs/passport';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { OrderStatus, OrderType } from './fnb-order.entity';
 
 @Controller('fnb/orders')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(MemberJwtGuard)
 export class FnbOrdersController {
   constructor(private readonly fnbOrdersService: FnbOrdersService) {}
 

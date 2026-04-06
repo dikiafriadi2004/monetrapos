@@ -63,7 +63,7 @@ export default function AddOnsManagementPage() {
 
   const fetchAddOns = async () => {
     try {
-      const data: any = await api.get('/add-ons/admin/all');
+      const data: any = await api.get('/admin/add-ons');
       setAddOns(Array.isArray(data) ? data : []);
     } catch {
       // fallback - try public endpoint
@@ -109,9 +109,9 @@ export default function AddOnsManagementPage() {
     };
     try {
       if (editing) {
-        await api.patch(`/add-ons/admin/${editing.id}`, payload);
+        await api.patch(`/admin/add-ons/${editing.id}`, payload);
       } else {
-        await api.post('/add-ons/admin', payload);
+        await api.post('/admin/add-ons', payload);
       }
       await fetchAddOns();
       setModalOpen(false);
@@ -126,7 +126,7 @@ export default function AddOnsManagementPage() {
     if (!deleteConfirm.addOn) return;
     setDeleting(true);
     try {
-      await api.delete(`/add-ons/admin/${deleteConfirm.addOn.id}`);
+      await api.delete(`/admin/add-ons/${deleteConfirm.addOn.id}`);
       setAddOns(prev => prev.filter(a => a.id !== deleteConfirm.addOn!.id));
       toast.success('Add-on deleted');
       setDeleteConfirm({ open: false, addOn: null });
@@ -140,7 +140,7 @@ export default function AddOnsManagementPage() {
   const handleToggleStatus = async (addOn: AddOn) => {
     const newStatus = addOn.status === 'active' ? 'inactive' : 'active';
     try {
-      await api.patch(`/add-ons/admin/${addOn.id}`, { status: newStatus });
+      await api.patch(`/admin/add-ons/${addOn.id}`, { status: newStatus });
       setAddOns(prev => prev.map(a => a.id === addOn.id ? { ...a, status: newStatus } : a));
     } catch (err: any) { toast.error(err?.message || 'Failed to update status'); }
   };

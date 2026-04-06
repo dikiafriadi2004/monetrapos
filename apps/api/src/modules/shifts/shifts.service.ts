@@ -77,12 +77,54 @@ export class ShiftsService {
     });
     if (!shift) throw new NotFoundException('Active shift not found');
 
+    // Calculate expected cash from transactions during this shift
     const expectedCash = await this.calculateExpectedCash(shift);
+
+    // Use actual closing cash from user input, fallback to expected
+    const actualClosingCash = dto.closingCash !== undefined ? dto.closingCash : expectedCash;
+
+    // Calculate cash difference (actual - expected)
+    const cashDifference = actualClosingCash - expectedCash;
+
+    // Get all transactions during this shift for summary
+    const allTransactions = await this.transactionRepo.find({
+      where: { storeId: shift.storeId, status: TransactionStatus.COMPLETED },
+    });
+    const shiftTransactions = allTransactions.filter((tx) => {
+      const txTime = new Date(tx.createdAt);
+      const openTime = new Date(shift.openedAt);
+      return txTime >= openTime;
+    });
+
+    const totalSales = shiftTransactions.reduce((sum, tx) => sum + Number(tx.total), 0);
+    const cashSales = shiftTransactions
+      .filter(tx => (tx.paymentMethod as string) === 'cash')
+      .reduce((sum, tx) => sum + Number(tx.total), 0);
+    const cardSales = shiftTransactions
+      .filter(tx => ['edc', 'card'].includes(tx.paymentMethod as string))
+      .reduce((sum, tx) => sum + Number(tx.total), 0);
+    const qrisSales = shiftTransactions
+      .filter(tx => (tx.paymentMethod as string) === 'qris')
+      .reduce((sum, tx) => sum + Number(tx.total), 0);
+    const ewalletSales = shiftTransactions
+      .filter(tx => ['ewallet', 'e_wallet'].includes(tx.paymentMethod as string))
+      .reduce((sum, tx) => sum + Number(tx.total), 0);
+    const bankTransferSales = shiftTransactions
+      .filter(tx => (tx.paymentMethod as string) === 'bank_transfer')
+      .reduce((sum, tx) => sum + Number(tx.total), 0);
+
     shift.expectedCash = expectedCash;
-    shift.closingCash = expectedCash;
-    shift.cashDifference = 0;
+    shift.closingCash = actualClosingCash;
+    shift.cashDifference = cashDifference;
     shift.closedAt = new Date();
     shift.status = ShiftStatus.CLOSED;
+    shift.totalSales = totalSales;
+    shift.totalTransactions = shiftTransactions.length;
+    shift.cashSales = cashSales;
+    shift.cardSales = cardSales;
+    shift.qrisSales = qrisSales;
+    shift.ewalletSales = ewalletSales;
+    shift.bankTransferSales = bankTransferSales;
     if (dto.notes) shift.closingNotes = dto.notes;
 
     return this.shiftRepo.save(shift);
@@ -189,34 +231,52 @@ export class ShiftsService {
     }
 
     // Get all transactions during this shift
-    const transactions = await this.transactionRepo.find({
+    const allTransactions = await this.transactionRepo.find({
       where: { storeId: shift.storeId, status: TransactionStatus.COMPLETED },
       relations: ['items'],
     });
 
-    // Filter transactions by shift time
-    const shiftTransactions = transactions.filter((tx) => {
+    const shiftTransactions = allTransactions.filter((tx) => {
       const txTime = new Date(tx.createdAt);
       const openTime = new Date(shift.openedAt);
       const closeTime = shift.closedAt ? new Date(shift.closedAt) : new Date();
       return txTime >= openTime && txTime <= closeTime;
     });
 
-    const summary = {
+    const totalSales = shiftTransactions.reduce((sum, tx) => sum + Number(tx.total), 0);
+    const cashSales = shiftTransactions
+      .filter(tx => (tx.paymentMethod as string) === 'cash')
+      .reduce((sum, tx) => sum + Number(tx.total), 0);
+    const nonCashSales = shiftTransactions
+      .filter(tx => (tx.paymentMethod as string) !== 'cash')
+      .reduce((sum, tx) => sum + Number(tx.total), 0);
+
+    // Expected cash = opening + all cash transactions
+    const expectedCash = Number(shift.openingCash) + cashSales;
+
+    return {
+      // Shift info
+      shiftId: shift.id,
+      openedAt: shift.openedAt,
+      closedAt: shift.closedAt,
+      status: shift.status,
+      // Cash
+      openingCash: Number(shift.openingCash),
+      closingCash: shift.closingCash !== null ? Number(shift.closingCash) : null,
+      expectedCash,
+      variance: shift.closingCash !== null ? Number(shift.closingCash) - expectedCash : null,
+      cashDifference: shift.cashDifference !== null ? Number(shift.cashDifference) : null,
+      // Sales summary
       totalTransactions: shiftTransactions.length,
-      totalRevenue: shiftTransactions.reduce((sum, tx) => sum + tx.total, 0),
-      totalTax: shiftTransactions.reduce((sum, tx) => sum + tx.taxAmount, 0),
-      totalDiscount: shiftTransactions.reduce((sum, tx) => sum + tx.discountAmount, 0),
-      totalSales: shiftTransactions.reduce((sum, tx) => sum + tx.total, 0),
-      cashSales: shiftTransactions.filter(tx => tx.paymentMethod === 'cash').reduce((sum, tx) => sum + tx.total, 0),
-      nonCashSales: shiftTransactions.filter(tx => tx.paymentMethod !== 'cash').reduce((sum, tx) => sum + tx.total, 0),
-      openingCash: shift.openingCash,
-      closingCash: shift.closingCash,
-      variance: shift.cashDifference,
+      totalSales,
+      totalRevenue: totalSales,
+      cashSales,
+      nonCashSales,
+      totalTax: shiftTransactions.reduce((sum, tx) => sum + Number(tx.taxAmount), 0),
+      totalDiscount: shiftTransactions.reduce((sum, tx) => sum + Number(tx.discountAmount), 0),
+      // Payment breakdown
       paymentMethods: this.groupByPaymentMethod(shiftTransactions),
     };
-
-    return { shift, summary };
   }
 
   async addCashToShift(shiftId: string, amount: number): Promise<void> {
@@ -299,23 +359,16 @@ export class ShiftsService {
     return amounts;
   }
 
-  private groupByPaymentMethod(
-    transactions: Transaction[],
-  ): Record<string, any> {
+  private groupByPaymentMethod(transactions: Transaction[]): Record<string, any> {
     const grouped: Record<string, any> = {};
-
     transactions.forEach((tx) => {
-      const method = tx.paymentMethod;
+      const method = tx.paymentMethod as string;
       if (!grouped[method]) {
-        grouped[method] = {
-          count: 0,
-          total: 0,
-        };
+        grouped[method] = { count: 0, total: 0 };
       }
       grouped[method].count++;
-      grouped[method].total += tx.total;
+      grouped[method].total += Number(tx.total);
     });
-
     return grouped;
   }
 }

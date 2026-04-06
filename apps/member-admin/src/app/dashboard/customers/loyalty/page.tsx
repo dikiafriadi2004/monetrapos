@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Star, TrendingUp, Users, Gift, Crown, Award, Loader2, RefreshCcw, Calendar } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import toast from 'react-hot-toast';
+import { ConfirmModal } from '@/components/ui';
 
 interface TierBenefits {
   tier: string;
@@ -45,6 +46,7 @@ export default function LoyaltyTiersPage() {
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'birthdays' | 'anniversaries'>('overview');
+  const [upgradeConfirm, setUpgradeConfirm] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -105,11 +107,15 @@ export default function LoyaltyTiersPage() {
   };
 
   const handleUpgradeAllTiers = async () => {
-    if (!confirm('Check and upgrade all customer tiers based on their total spending?')) return;
+    setUpgradeConfirm(true);
+  };
+
+  const confirmUpgradeAllTiers = async () => {
     setUpgrading(true);
     try {
       await apiClient.post('/customers/loyalty/upgrade-all-tiers');
       toast.success('Customer tiers updated successfully');
+      setUpgradeConfirm(false);
       await loadData();
     } catch (err: any) {
       toast.error('Failed to upgrade tiers');
@@ -292,6 +298,16 @@ export default function LoyaltyTiersPage() {
       {activeTab === 'anniversaries' && (
         <EventList events={upcomingAnniversaries} type="anniversary" emptyMessage="No upcoming anniversaries in the next 30 days" />
       )}
+      <ConfirmModal
+        open={upgradeConfirm}
+        title="Sync Customer Tiers"
+        description="Cek dan upgrade semua tier customer berdasarkan total pengeluaran mereka? Proses ini mungkin membutuhkan beberapa saat."
+        confirmLabel="Ya, Sync Sekarang"
+        variant="warning"
+        loading={upgrading}
+        onConfirm={confirmUpgradeAllTiers}
+        onClose={() => setUpgradeConfirm(false)}
+      />
     </div>
   );
 }

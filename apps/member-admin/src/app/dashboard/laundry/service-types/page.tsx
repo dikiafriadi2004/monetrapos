@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Loader2, X, Shirt, Clock } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import toast from 'react-hot-toast';
+import { ConfirmModal } from '@/components/ui';
 
 interface ServiceType {
   id: string;
@@ -33,6 +34,8 @@ export default function LaundryServiceTypesPage() {
   const [modal, setModal] = useState<{ open: boolean; editing: ServiceType | null }>({ open: false, editing: null });
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; id: string; name: string } | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => { load(); }, []);
 
@@ -69,12 +72,19 @@ export default function LaundryServiceTypesPage() {
   };
 
   const remove = async (id: string, name: string) => {
-    if (!confirm(`Delete "${name}"?`)) return;
+    setDeleteConfirm({ open: true, id, name });
+  };
+
+  const confirmRemove = async () => {
+    if (!deleteConfirm) return;
+    setDeleteLoading(true);
     try {
-      await apiClient.delete(`/laundry/service-types/${id}`);
-      toast.success('Deleted');
+      await apiClient.delete(`/laundry/service-types/${deleteConfirm.id}`);
+      toast.success('Dihapus');
+      setDeleteConfirm(null);
       await load();
-    } catch { toast.error('Failed to delete'); }
+    } catch { toast.error('Gagal menghapus'); }
+    finally { setDeleteLoading(false); }
   };
 
   const formatPrice = (p: number, type: string) =>
@@ -186,6 +196,9 @@ export default function LaundryServiceTypesPage() {
           </div>
         </div>
       )}
+      <ConfirmModal open={!!deleteConfirm?.open} onClose={() => setDeleteConfirm(null)} onConfirm={confirmRemove}
+        title="Hapus Tipe Layanan" description={`Hapus "${deleteConfirm?.name}"? Tindakan ini tidak bisa dibatalkan.`}
+        confirmLabel="Ya, Hapus" loading={deleteLoading} />
     </div>
   );
 }

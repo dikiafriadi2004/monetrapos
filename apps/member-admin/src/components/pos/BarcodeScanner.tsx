@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Scan } from 'lucide-react';
 import { Product } from '@/types';
 import { productService } from '@/services/product.service';
@@ -23,28 +23,8 @@ export default function BarcodeScanner({
   const [error, setError] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    if (isOpen && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [isOpen]);
-
-  useEffect(() => {
-    // Listen for keyboard input (barcode scanner)
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (!isOpen) return;
-
-      // Barcode scanners typically send Enter after scanning
-      if (e.key === 'Enter' && barcode) {
-        handleSearch();
-      }
-    };
-
-    window.addEventListener('keypress', handleKeyPress);
-    return () => window.removeEventListener('keypress', handleKeyPress);
-  }, [isOpen, barcode]);
-
-  const handleSearch = async () => {
+  // Deklarasi handleSearch SEBELUM useEffect yang memakainya
+  const handleSearch = useCallback(async () => {
     if (!barcode.trim()) {
       setError('Please enter a barcode');
       return;
@@ -55,14 +35,16 @@ export default function BarcodeScanner({
 
     try {
       const product = await productService.getProductByBarcode(storeId, barcode);
-      
+
       if (!product.isActive) {
         setError('Product is not active');
+        setLoading(false);
         return;
       }
 
       if (product.stock < 1) {
         setError('Product is out of stock');
+        setLoading(false);
         return;
       }
 
@@ -75,7 +57,25 @@ export default function BarcodeScanner({
     } finally {
       setLoading(false);
     }
-  };
+  }, [barcode, storeId, onProductFound, onClose]);
+
+  useEffect(() => {
+    if (isOpen && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (!isOpen) return;
+      if (e.key === 'Enter' && barcode) {
+        handleSearch();
+      }
+    };
+
+    window.addEventListener('keypress', handleKeyPress);
+    return () => window.removeEventListener('keypress', handleKeyPress);
+  }, [isOpen, barcode, handleSearch]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

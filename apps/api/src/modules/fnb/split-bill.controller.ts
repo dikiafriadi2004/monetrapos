@@ -1,10 +1,10 @@
 import { Controller, Get, Post, Body, Param, Request, UseGuards } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { SplitBillService } from './split-bill.service';
 import type { SplitByItemsDto, SplitByAmountDto } from './split-bill.service';
 
 @Controller('fnb/split-bill')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(MemberJwtGuard)
 export class SplitBillController {
   constructor(private readonly splitBillService: SplitBillService) {}
 

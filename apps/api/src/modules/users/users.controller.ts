@@ -9,12 +9,12 @@ import {
   UseGuards,
   Request,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { UsersService } from './users.service';
 import { UserRole } from './user.entity';
 
 @Controller('users')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(MemberJwtGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 

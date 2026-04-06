@@ -3,10 +3,11 @@ import { Customer } from '@/types';
 
 export const customerService = {
   async getCustomers(storeId?: string): Promise<Customer[]> {
-    const response = await apiClient.get<Customer[]>('/customers', {
+    const response = await apiClient.get('/customers', {
       params: { storeId },
     });
-    return response.data;
+    const data = response.data;
+    return Array.isArray(data) ? data : (data?.data || []);
   },
 
   async searchCustomer(phone: string): Promise<Customer | null> {

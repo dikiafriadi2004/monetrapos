@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Loader2, X, ChevronDown, ChevronRight, ToggleLeft, ToggleRight } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import toast from 'react-hot-toast';
+import { ConfirmModal } from '@/components/ui';
 
 interface ModifierOption {
   id: string;
@@ -36,6 +37,8 @@ export default function FnbModifiersPage() {
   const [groupForm, setGroupForm] = useState(emptyGroup);
   const [optionForm, setOptionForm] = useState(emptyOption);
   const [saving, setSaving] = useState(false);
+  const [deleteGroupConfirm, setDeleteGroupConfirm] = useState<{ open: boolean; id: string; name: string }>({ open: false, id: '', name: '' });
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => { loadGroups(); }, []);
 
@@ -81,13 +84,19 @@ export default function FnbModifiersPage() {
     finally { setSaving(false); }
   };
 
-  const deleteGroup = async (id: string) => {
-    if (!confirm('Delete this modifier group and all its options?')) return;
+  const deleteGroup = async (id: string, name: string) => {
+    setDeleteGroupConfirm({ open: true, id, name });
+  };
+
+  const confirmDeleteGroup = async () => {
+    setDeleteLoading(true);
     try {
-      await apiClient.delete(`/fnb/modifiers/groups/${id}`);
+      await apiClient.delete(`/fnb/modifiers/groups/${deleteGroupConfirm.id}`);
       toast.success('Modifier group deleted');
+      setDeleteGroupConfirm({ open: false, id: '', name: '' });
       await loadGroups();
     } catch { toast.error('Failed to delete'); }
+    finally { setDeleteLoading(false); }
   };
 
   const openOptionModal = (groupId: string, option?: ModifierOption) => {
@@ -173,7 +182,7 @@ export default function FnbModifiersPage() {
                   <button onClick={() => openGroupModal(group)} className="btn btn-outline" style={{ height: 32, padding: '0 10px' }}>
                     <Edit2 size={14} />
                   </button>
-                  <button onClick={() => deleteGroup(group.id)} className="btn btn-outline" style={{ height: 32, padding: '0 10px', color: 'var(--danger)' }}>
+                  <button onClick={() => deleteGroup(group.id, group.name)} className="btn btn-outline" style={{ height: 32, padding: '0 10px', color: 'var(--danger)' }}>
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -261,8 +270,7 @@ export default function FnbModifiersPage() {
       )}
 
       {/* Option Modal */}
-      {optionModal.open && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {optionModal.open && (        <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <div onClick={() => setOptionModal({ open: false, groupId: '', editing: null })} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
           <div className="glass-panel animate-fade-in" style={{ position: 'relative', width: 400, maxWidth: '90vw', padding: 'var(--space-xl)', zIndex: 101 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 'var(--space-lg)' }}>
@@ -292,6 +300,15 @@ export default function FnbModifiersPage() {
           </div>
         </div>
       )}
+      <ConfirmModal
+        open={deleteGroupConfirm.open}
+        title="Hapus Modifier Group"
+        description={`Hapus modifier group "${deleteGroupConfirm.name}" beserta semua opsinya? Tindakan ini tidak dapat dibatalkan.`}
+        confirmLabel="Ya, Hapus"
+        loading={deleteLoading}
+        onConfirm={confirmDeleteGroup}
+        onClose={() => setDeleteGroupConfirm({ open: false, id: '', name: '' })}
+      />
     </div>
   );
 }

@@ -30,7 +30,7 @@ export default function FeaturesPage() {
 
   const fetchFeatures = async () => {
     try {
-      const data: any = await api.get('/features');
+      const data: any = await api.get('/admin/features');
       setFeatures(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
@@ -58,9 +58,9 @@ export default function FeaturesPage() {
     setSubmitting(true);
     try {
       if (editingFeature) {
-        await api.patch(`/features/${editingFeature.id}`, form);
+        await api.patch(`/admin/features/${editingFeature.id}`, form);
       } else {
-        await api.post('/features', { ...form, isActive: true });
+        await api.post('/admin/features', { ...form, isActive: true });
       }
       await fetchFeatures();
       setModalOpen(false);
@@ -75,7 +75,7 @@ export default function FeaturesPage() {
     if (!deleteConfirm.feature) return;
     setDeleting(true);
     try {
-      await api.delete(`/features/${deleteConfirm.feature.id}`);
+      await api.delete(`/admin/features/${deleteConfirm.feature.id}`);
       setFeatures(prev => prev.filter(f => f.id !== deleteConfirm.feature!.id));
       toast.success('Feature deleted');
       setDeleteConfirm({ open: false, feature: null });
@@ -88,7 +88,7 @@ export default function FeaturesPage() {
 
   const handleToggle = async (feature: Feature) => {
     try {
-      await api.patch(`/features/${feature.id}`, { isActive: !feature.isActive });
+      await api.patch(`/admin/features/${feature.id}`, { isActive: !feature.isActive });
       setFeatures(prev => prev.map(f => f.id === feature.id ? { ...f, isActive: !f.isActive } : f));
     } catch (err: any) {
       toast.error(err?.message || 'Failed to update feature');
@@ -127,8 +127,8 @@ export default function FeaturesPage() {
       {/* Header */}
       <div className="flex-between" style={{ marginBottom: 'var(--space-xl)' }}>
         <div>
-          <h1 style={{ fontSize: '1.75rem', marginBottom: 'var(--space-xs)' }}>Feature Marketplace</h1>
-          <p style={{ color: 'var(--text-secondary)' }}>Define and manage features available for subscription plans.</p>
+          <h1 style={{ fontSize: '1.75rem', marginBottom: 'var(--space-xs)' }}>Platform Features</h1>
+          <p style={{ color: 'var(--text-secondary)' }}>Kelola fitur-fitur yang tersedia di setiap subscription plan.</p>
         </div>
         <button onClick={openNewModal} className="btn btn-primary">
           <Plus size={18} /> Add Feature

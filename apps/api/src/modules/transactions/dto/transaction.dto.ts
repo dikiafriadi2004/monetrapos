@@ -2,7 +2,6 @@ import {
   IsString,
   IsOptional,
   IsNumber,
-  IsEnum,
   IsArray,
   ValidateNested,
   MaxLength,
@@ -10,7 +9,6 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { PaymentMethodType } from '../../../common/enums';
 
 export class CreateTransactionItemDto {
   @ApiProperty({ example: 'Nasi Goreng' })
@@ -59,9 +57,9 @@ export class CreateTransactionDto {
   @IsString()
   storeId: string;
 
-  @ApiProperty({ enum: PaymentMethodType, example: PaymentMethodType.CASH })
-  @IsEnum(PaymentMethodType)
-  paymentMethod: PaymentMethodType;
+  @ApiProperty({ example: 'cash', description: 'Payment method: cash, qris, edc, bank_transfer, ewallet, or custom method code' })
+  @IsString()
+  paymentMethod: string;
 
   @ApiProperty({ example: 100000 })
   @IsNumber()

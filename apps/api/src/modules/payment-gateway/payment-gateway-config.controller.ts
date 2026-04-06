@@ -1,7 +1,7 @@
-import { Controller, Get, Put, Body, UseGuards, Request, UnauthorizedException } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { Controller, Get, Put, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { IsString, IsBoolean, IsOptional } from 'class-validator';
+import { AdminJwtGuard } from '../admin-auth/guards/admin-jwt.guard';
 import { PaymentGatewayConfigService } from './payment-gateway-config.service';
 
 class UpdateXenditConfigDto {
@@ -14,29 +14,21 @@ class UpdateXenditConfigDto {
 
 @ApiTags('Payment Gateway Config')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AdminJwtGuard)
 @Controller('admin/payment-gateway')
 export class PaymentGatewayConfigController {
   constructor(private configService: PaymentGatewayConfigService) {}
 
-  private ensureAdmin(req: any) {
-    if (req.user?.type !== 'company_admin') {
-      throw new UnauthorizedException('Only platform admins can manage payment gateway config');
-    }
-  }
-
   @Get('config')
   @ApiOperation({ summary: 'Get Xendit config (safe - no secrets)' })
-  async getConfig(@Request() req: any) {
-    this.ensureAdmin(req);
+  async getConfig() {
     return this.configService.getSafeConfig('xendit');
   }
 
   @Put('config')
   @ApiOperation({ summary: 'Update Xendit config' })
-  async updateConfig(@Request() req: any, @Body() dto: UpdateXenditConfigDto) {
-    this.ensureAdmin(req);
-    const saved = await this.configService.upsertConfig('xendit', dto);
+  async updateConfig(@Body() dto: UpdateXenditConfigDto) {
+    await this.configService.upsertConfig('xendit', dto);
     return this.configService.getSafeConfig('xendit');
   }
 
@@ -54,8 +46,7 @@ export class PaymentGatewayConfigController {
 
   @Put('test')
   @ApiOperation({ summary: 'Test Xendit connection with real API call' })
-  async testConnection(@Request() req: any) {
-    this.ensureAdmin(req);
+  async testConnection() {
     try {
       const config = await this.configService.getXenditConfig();
       if (!config) {

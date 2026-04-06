@@ -11,7 +11,7 @@ import {
   Param,
   Query,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { SubscriptionsService } from './subscriptions.service';
 import { SubscriptionsCron } from './subscriptions.cron';
 import { BillingService } from '../billing/billing.service';
@@ -26,7 +26,7 @@ import {
 } from './dto';
 
 @Controller('subscriptions')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(MemberJwtGuard)
 export class SubscriptionsController {
   constructor(
     private readonly subscriptionsService: SubscriptionsService,

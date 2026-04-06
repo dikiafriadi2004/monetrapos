@@ -18,6 +18,7 @@ export interface OpenShiftRequest {
 
 export interface CloseShiftRequest {
   shiftId: string;
+  closingCash?: number;
   notes?: string;
 }
 

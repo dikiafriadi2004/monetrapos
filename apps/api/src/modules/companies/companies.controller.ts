@@ -3,19 +3,15 @@ import {
   Get,
   Post,
   Patch,
-  Delete,
   Body,
-  Param,
-  Query,
   Request,
   UseGuards,
-  ForbiddenException,
   BadRequestException,
   UseInterceptors,
   UploadedFile,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
+import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
@@ -26,7 +22,7 @@ import { UpdateCompanyDto, UpdateCompanySettingsDto } from './dto';
 
 @ApiTags('Companies')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(MemberJwtGuard)
 @Controller('companies')
 export class CompaniesController {
   constructor(private readonly companiesService: CompaniesService) {}
@@ -34,7 +30,6 @@ export class CompaniesController {
   @Get('profile')
   @ApiOperation({ summary: 'Get current company profile' })
   getProfile(@Request() req: any) {
-    // Extract companyId from JWT token (set by tenant middleware)
     const companyId = req.user.companyId || req.user.company_id;
     return this.companiesService.getProfile(companyId);
   }
@@ -42,7 +37,6 @@ export class CompaniesController {
   @Patch('profile')
   @ApiOperation({ summary: 'Update company profile' })
   updateProfile(@Request() req: any, @Body() dto: UpdateCompanyDto) {
-    // Extract companyId from JWT token (set by tenant middleware)
     const companyId = req.user.companyId || req.user.company_id;
     return this.companiesService.updateProfile(companyId, dto);
   }
@@ -115,76 +109,5 @@ export class CompaniesController {
 
     await this.companiesService.updateProfile(companyId, { logoUrl } as any);
     return { logoUrl };
-  }
-
-  // ============================================
-  // COMPANY ADMIN (Super Admin) ENDPOINTS
-  // ============================================
-
-  private requireAdmin(req: any) {
-    if (req.user?.type !== 'company_admin') {
-      throw new ForbiddenException('Only company admins can access this endpoint');
-    }
-  }
-
-  @Get('analytics')
-  @ApiOperation({ summary: '[Admin] Get member analytics overview' })
-  async getMemberAnalytics(@Request() req: any) {
-    this.requireAdmin(req);
-    return this.companiesService.getMemberAnalytics();
-  }
-
-  @Get('members')
-  @ApiOperation({ summary: '[Admin] List all member companies' })
-  @ApiQuery({ name: 'page', required: false })
-  @ApiQuery({ name: 'limit', required: false })
-  @ApiQuery({ name: 'search', required: false })
-  @ApiQuery({ name: 'status', required: false })
-  @ApiQuery({ name: 'subscriptionStatus', required: false })
-  async findAllMembers(
-    @Request() req: any,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number,
-    @Query('search') search?: string,
-    @Query('status') status?: string,
-    @Query('subscriptionStatus') subscriptionStatus?: string,
-  ) {
-    this.requireAdmin(req);
-    return this.companiesService.findAllMembers({ page: page ? +page : 1, limit: limit ? +limit : 20, search, status, subscriptionStatus });
-  }
-
-  @Post('members')
-  @ApiOperation({ summary: '[Admin] Create a new member company' })
-  async createMember(@Request() req: any, @Body() dto: any) {
-    this.requireAdmin(req);
-    return this.companiesService.createMemberByAdmin(dto);
-  }
-
-  @Get('members/:id')
-  @ApiOperation({ summary: '[Admin] Get member company details' })
-  async getMemberDetails(@Request() req: any, @Param('id') id: string) {
-    this.requireAdmin(req);
-    return this.companiesService.getMemberDetails(id);
-  }
-
-  @Patch('members/:id')
-  @ApiOperation({ summary: '[Admin] Update member company' })
-  async updateMember(@Request() req: any, @Param('id') id: string, @Body() dto: any) {
-    this.requireAdmin(req);
-    return this.companiesService.updateMemberByAdmin(id, dto);
-  }
-
-  @Patch('members/:id/status')
-  @ApiOperation({ summary: '[Admin] Update member status (activate/suspend/cancel)' })
-  async updateMemberStatus(@Request() req: any, @Param('id') id: string, @Body() dto: { status: string; reason?: string }) {
-    this.requireAdmin(req);
-    return this.companiesService.updateMemberStatus(id, dto);
-  }
-
-  @Delete('members/:id')
-  @ApiOperation({ summary: '[Admin] Soft delete member company' })
-  async deleteMember(@Request() req: any, @Param('id') id: string) {
-    this.requireAdmin(req);
-    return this.companiesService.softDeleteMember(id);
   }
 }

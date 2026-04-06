@@ -72,9 +72,10 @@ export class LoggingInterceptor implements NestInterceptor {
         next: (data) => {
           const responseTime = Date.now() - now;
           const sanitizedResponse = this.sanitizeData(data);
+          const serialized = JSON.stringify(sanitizedResponse) ?? '';
           const responsePreview =
-            JSON.stringify(sanitizedResponse).substring(0, 200) +
-            (JSON.stringify(sanitizedResponse).length > 200 ? '...' : '');
+            serialized.substring(0, 200) +
+            (serialized.length > 200 ? '...' : '');
 
           this.logger.log(
             `← [${method}] ${url} | ${responseTime}ms | User: ${userId}`,

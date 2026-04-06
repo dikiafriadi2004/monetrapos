@@ -5,6 +5,7 @@ import { Shield, Plus, Edit2, Trash2, Loader2, X, ChevronDown, ChevronRight } fr
 import apiClient from '@/lib/api-client';
 import { useStore } from '@/hooks/useStore';
 import toast from 'react-hot-toast';
+import { ConfirmModal } from '@/components/ui';
 
 interface Permission {
   id: string;
@@ -31,6 +32,8 @@ export default function RolesPage() {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [modal, setModal] = useState<{ open: boolean; editing: Role | null }>({ open: false, editing: null });
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; role: Role | null }>({ open: false, role: null });
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [form, setForm] = useState({ name: '', description: '', permissionIds: [] as string[] });
   const [saving, setSaving] = useState(false);
   const [storeId, setStoreId] = useState('');
@@ -92,12 +95,19 @@ export default function RolesPage() {
   };
 
   const remove = async (role: Role) => {
-    if (!confirm(`Delete role "${role.name}"?`)) return;
+    setDeleteConfirm({ open: true, role });
+  };
+
+  const confirmRemove = async () => {
+    if (!deleteConfirm.role) return;
+    setDeleteLoading(true);
     try {
-      await apiClient.delete(`/roles/${role.id}`);
-      toast.success('Role deleted');
-      setRoles(prev => prev.filter(r => r.id !== role.id));
-    } catch { toast.error('Failed to delete role'); }
+      await apiClient.delete(`/roles/${deleteConfirm.role.id}`);
+      toast.success('Role dihapus');
+      setRoles(prev => prev.filter(r => r.id !== deleteConfirm.role!.id));
+      setDeleteConfirm({ open: false, role: null });
+    } catch { toast.error('Gagal menghapus role'); }
+    finally { setDeleteLoading(false); }
   };
 
   const togglePermission = (id: string) => {
@@ -245,6 +255,9 @@ export default function RolesPage() {
           </div>
         </div>
       )}
+      <ConfirmModal open={deleteConfirm.open} onClose={() => setDeleteConfirm({ open: false, role: null })} onConfirm={confirmRemove}
+        title="Hapus Role" description={`Hapus role "${deleteConfirm.role?.name}"? Karyawan yang menggunakan role ini akan kehilangan akses.`}
+        confirmLabel="Ya, Hapus" loading={deleteLoading} />
       <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { 100% { transform: rotate(360deg); } }` }} />
     </div>
   );

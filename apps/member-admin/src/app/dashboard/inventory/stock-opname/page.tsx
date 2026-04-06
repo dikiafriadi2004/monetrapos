@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { stockOpnameService, StockOpname, StockOpnameStatus, CreateStockOpnameDto } from '@/services/stock-opname.service';
 import { ClipboardList, Plus, Search, Eye, CheckCircle, XCircle, Loader2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { ConfirmModal } from '@/components/ui';
 
 const STATUS_COLORS: Record<string, string> = {
   draft: '#6b7280', in_progress: '#3b82f6', completed: '#10b981', cancelled: '#ef4444',
@@ -16,6 +17,8 @@ export default function StockOpnamePage() {
   const [statusFilter, setStatusFilter] = useState<StockOpnameStatus | ''>('');
   const [showModal, setShowModal] = useState(false);
   const [selected, setSelected] = useState<StockOpname | null>(null);
+  const [actionConfirm, setActionConfirm] = useState<{ open: boolean; type: 'complete' | 'cancel'; opname: StockOpname | null }>({ open: false, type: 'complete', opname: null });
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => { load(); }, [statusFilter]);
 
@@ -29,21 +32,28 @@ export default function StockOpnamePage() {
   };
 
   const handleComplete = async (opname: StockOpname) => {
-    if (!confirm('Complete this stock opname and apply adjustments?')) return;
-    try {
-      await stockOpnameService.complete(opname.id, true);
-      toast.success('Stock opname completed');
-      await load();
-    } catch { toast.error('Failed to complete'); }
+    setActionConfirm({ open: true, type: 'complete', opname });
   };
 
   const handleCancel = async (opname: StockOpname) => {
-    if (!confirm('Cancel this stock opname?')) return;
+    setActionConfirm({ open: true, type: 'cancel', opname });
+  };
+
+  const confirmAction = async () => {
+    if (!actionConfirm.opname) return;
+    setActionLoading(true);
     try {
-      await stockOpnameService.cancel(opname.id);
-      toast.success('Cancelled');
+      if (actionConfirm.type === 'complete') {
+        await stockOpnameService.complete(actionConfirm.opname.id, true);
+        toast.success('Stock opname completed');
+      } else {
+        await stockOpnameService.cancel(actionConfirm.opname.id);
+        toast.success('Cancelled');
+      }
+      setActionConfirm({ open: false, type: 'complete', opname: null });
       await load();
-    } catch { toast.error('Failed to cancel'); }
+    } catch { toast.error(actionConfirm.type === 'complete' ? 'Failed to complete' : 'Failed to cancel'); }
+    finally { setActionLoading(false); }
   };
 
   const filtered = opnames.filter(o =>
@@ -133,6 +143,19 @@ export default function StockOpnamePage() {
 
       {showModal && <CreateModal onClose={() => setShowModal(false)} onSuccess={() => { setShowModal(false); load(); }} />}
       {selected && <DetailsModal opname={selected} onClose={() => setSelected(null)} />}
+      <ConfirmModal
+        open={actionConfirm.open}
+        title={actionConfirm.type === 'complete' ? 'Selesaikan Stock Opname' : 'Batalkan Stock Opname'}
+        description={actionConfirm.type === 'complete'
+          ? `Selesaikan stock opname "${actionConfirm.opname?.opnameNumber}" dan terapkan penyesuaian stok? Tindakan ini tidak dapat dibatalkan.`
+          : `Batalkan stock opname "${actionConfirm.opname?.opnameNumber}"? Tindakan ini tidak dapat dibatalkan.`
+        }
+        confirmLabel={actionConfirm.type === 'complete' ? 'Ya, Selesaikan' : 'Ya, Batalkan'}
+        variant={actionConfirm.type === 'complete' ? 'warning' : 'danger'}
+        loading={actionLoading}
+        onConfirm={confirmAction}
+        onClose={() => setActionConfirm({ open: false, type: 'complete', opname: null })}
+      />
       <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { 100% { transform: rotate(360deg); } }` }} />
     </div>
   );

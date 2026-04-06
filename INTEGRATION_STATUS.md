@@ -359,6 +359,22 @@ Semua endpoint backend yang relevan untuk member-admin sudah terintegrasi dengan
 
 ## 🆕 UPDATE TERBARU (April 2026)
 
+### Perbaikan Features & Add-ons
+
+**Root cause:** Features module menggunakan `companyId` sebagai filter tapi diisi dengan admin ID, sehingga data tidak pernah muncul. Add-ons seeder tidak dipanggil di bootstrap.
+
+**Yang diperbaiki:**
+1. **Features service** — dihapus filter `companyId`, features sekarang bersifat global (platform-level)
+2. **Features controller** — endpoint dipindah ke `/admin/features` (konsisten dengan admin routes lain)
+3. **Features seeder** — 21 default features di-seed otomatis saat bootstrap (pos_terminal, inventory, kds, fnb_module, dll)
+4. **Add-ons seeder** — dipanggil otomatis saat bootstrap (10 add-ons default)
+5. **Company-admin features page** — endpoint diupdate ke `/admin/features`, label diubah dari "Feature Marketplace" → "Platform Features"
+6. **Sidebar company-admin** — "Marketplace" → "Platform Features", "Add-ons" → "Add-ons Catalog"
+
+**Perbedaan yang jelas sekarang:**
+- **Platform Features** (`/admin/features`) = fitur yang di-bundle dalam subscription plan (otomatis, tidak berbayar terpisah)
+- **Add-ons Catalog** (`/admin/add-ons`) = produk berbayar tambahan yang bisa dibeli member secara terpisah
+
 ### Fitur Baru yang Ditambahkan
 
 1. **Landing Page CMS** — Sistem konten landing page yang bisa diedit dari company-admin

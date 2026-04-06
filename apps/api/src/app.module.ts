@@ -13,6 +13,7 @@ import { validate } from './config/env.validation';
 import { QueueModule } from './common/queue/queue.module';
 import { CacheModule } from './common/cache/cache.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { AdminAuthModule } from './modules/admin-auth/admin-auth.module';
 import { CompaniesModule } from './modules/companies/companies.module';
 import { UsersModule } from './modules/users/users.module';
 import { FeaturesModule } from './modules/features/features.module';
@@ -44,8 +45,7 @@ import { LaundryModule } from './modules/laundry/laundry.module';
 import { HealthModule } from './health/health.module';
 import { LandingModule } from './modules/landing/landing.module';
 import { EmailModule } from './modules/email/email.module';
-import { PermissionSeeder } from './common/seeders/permission.seeder';
-import { AdminSeeder } from './common/seeders/admin.seeder';
+
 import {
   TenantMiddleware,
   SubscriptionAccessMiddleware,
@@ -98,6 +98,7 @@ import { PaymentGatewayConfig } from './modules/payment-gateway/payment-gateway-
 import { SubscriptionHistory } from './modules/subscriptions/subscription-history.entity';
 import { LandingContent } from './modules/landing/landing-content.entity';
 import { EmailConfig } from './modules/email/email-config.entity';
+import { AdminUser } from './modules/admin-auth/admin-user.entity';
 
 const entities = [
   Company,
@@ -149,6 +150,7 @@ const entities = [
   SubscriptionHistory,
   LandingContent,
   EmailConfig,
+  AdminUser,
 ];
 
 @Module({
@@ -183,6 +185,7 @@ const entities = [
     }),
     TypeOrmModule.forFeature([Permission, Company, User, Subscription]),
     AuthModule,
+    AdminAuthModule,
     CompaniesModule,
     UsersModule,
     FeaturesModule,
@@ -217,7 +220,6 @@ const entities = [
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
-    // PermissionSeeder, AdminSeeder, // Disabled - run manually with npm run seed
   ],
 })
 export class AppModule implements NestModule {
@@ -233,6 +235,8 @@ export class AppModule implements NestModule {
         { path: 'auth/forgot-password', method: RequestMethod.POST },
         { path: 'auth/reset-password', method: RequestMethod.POST },
         { path: 'auth/refresh', method: RequestMethod.POST },
+        { path: 'admin/auth/login', method: RequestMethod.POST },
+        { path: 'admin/auth/refresh', method: RequestMethod.POST },
         { path: 'payment-gateway/webhook/(.*)', method: RequestMethod.ALL },
         { path: 'landing', method: RequestMethod.GET },
         { path: 'landing/(.*)', method: RequestMethod.GET },
@@ -245,6 +249,7 @@ export class AppModule implements NestModule {
       .exclude(
         { path: 'health', method: RequestMethod.GET },
         { path: 'auth/(.*)', method: RequestMethod.ALL },
+        { path: 'admin/(.*)', method: RequestMethod.ALL }, // Admin routes bypass subscription check
         { path: 'payment-gateway/webhook/(.*)', method: RequestMethod.ALL },
         { path: 'subscriptions/(.*)', method: RequestMethod.ALL }, // Allow subscription management
         { path: 'billing/(.*)', method: RequestMethod.ALL }, // Allow billing/payment

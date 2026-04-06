@@ -1,5 +1,4 @@
 ﻿import { Test, TestingModule } from '@nestjs/testing';
-import { UnauthorizedException } from '@nestjs/common';
 import { AdminCompaniesController } from './admin-companies.controller';
 import { CompaniesService } from './companies.service';
 import { CompanyFilterDto, UpdateCompanyStatusDto } from './dto';
@@ -14,23 +13,6 @@ describe('AdminCompaniesController', () => {
     updateMemberStatus: jest.fn(),
     getMemberAnalytics: jest.fn(),
     softDeleteMember: jest.fn(),
-  };
-
-  const mockCompanyAdminRequest = {
-    user: {
-      id: 'admin-123',
-      type: 'company_admin',
-      email: 'admin@MonetraPOS.com',
-    },
-  };
-
-  const mockMemberRequest = {
-    user: {
-      id: 'member-123',
-      type: 'member',
-      companyId: 'company-123',
-      email: 'member@example.com',
-    },
   };
 
   beforeEach(async () => {
@@ -86,7 +68,7 @@ describe('AdminCompaniesController', () => {
 
       mockCompaniesService.findAllMembers.mockResolvedValue(mockResult);
 
-      const result = await controller.listMembers(mockCompanyAdminRequest, filters);
+      const result = await controller.listMembers(filters);
 
       expect(result).toEqual(mockResult);
       expect(service.findAllMembers).toHaveBeenCalledWith(filters);
@@ -104,7 +86,7 @@ describe('AdminCompaniesController', () => {
         meta: { page: 1, limit: 10, total: 0, totalPages: 0 },
       });
 
-      await controller.listMembers(mockCompanyAdminRequest, filters);
+      await controller.listMembers(filters);
 
       expect(service.findAllMembers).toHaveBeenCalledWith(filters);
     });
@@ -121,19 +103,9 @@ describe('AdminCompaniesController', () => {
         meta: { page: 1, limit: 10, total: 0, totalPages: 0 },
       });
 
-      await controller.listMembers(mockCompanyAdminRequest, filters);
+      await controller.listMembers(filters);
 
       expect(service.findAllMembers).toHaveBeenCalledWith(filters);
-    });
-
-    it('should throw UnauthorizedException if not company admin', async () => {
-      const filters: CompanyFilterDto = { page: 1, limit: 10 };
-
-      await expect(
-        controller.listMembers(mockMemberRequest, filters),
-      ).rejects.toThrow(UnauthorizedException);
-
-      expect(service.findAllMembers).not.toHaveBeenCalled();
     });
   });
 
@@ -157,21 +129,10 @@ describe('AdminCompaniesController', () => {
 
       mockCompaniesService.getMemberDetails.mockResolvedValue(mockDetails);
 
-      const result = await controller.getMemberDetails(
-        mockCompanyAdminRequest,
-        companyId,
-      );
+      const result = await controller.getMemberDetails(companyId);
 
       expect(result).toEqual(mockDetails);
       expect(service.getMemberDetails).toHaveBeenCalledWith(companyId);
-    });
-
-    it('should throw UnauthorizedException if not company admin', async () => {
-      await expect(
-        controller.getMemberDetails(mockMemberRequest, 'company-123'),
-      ).rejects.toThrow(UnauthorizedException);
-
-      expect(service.getMemberDetails).not.toHaveBeenCalled();
     });
   });
 
@@ -189,15 +150,9 @@ describe('AdminCompaniesController', () => {
         status: 'suspended',
       };
 
-      mockCompaniesService.updateMemberStatus.mockResolvedValue(
-        mockUpdatedCompany,
-      );
+      mockCompaniesService.updateMemberStatus.mockResolvedValue(mockUpdatedCompany);
 
-      const result = await controller.updateMemberStatus(
-        mockCompanyAdminRequest,
-        companyId,
-        dto,
-      );
+      const result = await controller.updateMemberStatus(companyId, dto);
 
       expect(result).toEqual(mockUpdatedCompany);
       expect(service.updateMemberStatus).toHaveBeenCalledWith(companyId, dto);
@@ -216,30 +171,12 @@ describe('AdminCompaniesController', () => {
         status: 'active',
       };
 
-      mockCompaniesService.updateMemberStatus.mockResolvedValue(
-        mockUpdatedCompany,
-      );
+      mockCompaniesService.updateMemberStatus.mockResolvedValue(mockUpdatedCompany);
 
-      const result = await controller.updateMemberStatus(
-        mockCompanyAdminRequest,
-        companyId,
-        dto,
-      );
+      const result = await controller.updateMemberStatus(companyId, dto);
 
       expect(result).toEqual(mockUpdatedCompany);
       expect(service.updateMemberStatus).toHaveBeenCalledWith(companyId, dto);
-    });
-
-    it('should throw UnauthorizedException if not company admin', async () => {
-      const dto: UpdateCompanyStatusDto = {
-        status: 'suspended',
-      };
-
-      await expect(
-        controller.updateMemberStatus(mockMemberRequest, 'company-123', dto),
-      ).rejects.toThrow(UnauthorizedException);
-
-      expect(service.updateMemberStatus).not.toHaveBeenCalled();
     });
   });
 
@@ -270,18 +207,10 @@ describe('AdminCompaniesController', () => {
 
       mockCompaniesService.getMemberAnalytics.mockResolvedValue(mockAnalytics);
 
-      const result = await controller.getMemberAnalytics(mockCompanyAdminRequest);
+      const result = await controller.getMemberAnalytics();
 
       expect(result).toEqual(mockAnalytics);
       expect(service.getMemberAnalytics).toHaveBeenCalled();
-    });
-
-    it('should throw UnauthorizedException if not company admin', async () => {
-      await expect(
-        controller.getMemberAnalytics(mockMemberRequest),
-      ).rejects.toThrow(UnauthorizedException);
-
-      expect(service.getMemberAnalytics).not.toHaveBeenCalled();
     });
   });
 
@@ -294,26 +223,12 @@ describe('AdminCompaniesController', () => {
         deletedAt: new Date(),
       };
 
-      mockCompaniesService.softDeleteMember.mockResolvedValue(
-        mockDeletedCompany,
-      );
+      mockCompaniesService.softDeleteMember.mockResolvedValue(mockDeletedCompany);
 
-      const result = await controller.deleteMember(
-        mockCompanyAdminRequest,
-        companyId,
-      );
+      const result = await controller.deleteMember(companyId);
 
       expect(result).toEqual(mockDeletedCompany);
       expect(service.softDeleteMember).toHaveBeenCalledWith(companyId);
     });
-
-    it('should throw UnauthorizedException if not company admin', async () => {
-      await expect(
-        controller.deleteMember(mockMemberRequest, 'company-123'),
-      ).rejects.toThrow(UnauthorizedException);
-
-      expect(service.softDeleteMember).not.toHaveBeenCalled();
-    });
   });
 });
-

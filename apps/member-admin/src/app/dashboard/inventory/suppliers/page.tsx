@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { suppliersService, Supplier, CreateSupplierDto, UpdateSupplierDto } from '@/services/suppliers.service';
 import { Building2, Plus, Search, Edit2, Trash2, Phone, Mail, MapPin, User, FileText, Loader2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { ConfirmModal } from '@/components/ui';
 
 export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -12,6 +13,8 @@ export default function SuppliersPage() {
   const [showActiveOnly, setShowActiveOnly] = useState(false);
   const [modal, setModal] = useState<{ open: boolean; mode: 'create' | 'edit'; supplier: Supplier | null }>({ open: false, mode: 'create', supplier: null });
   const [detailSupplier, setDetailSupplier] = useState<Supplier | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; supplier: Supplier | null }>({ open: false, supplier: null });
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => { load(); }, [searchTerm, showActiveOnly]);
 
@@ -25,12 +28,19 @@ export default function SuppliersPage() {
   };
 
   const handleDelete = async (s: Supplier) => {
-    if (!confirm(`Delete ${s.name}?`)) return;
+    setDeleteConfirm({ open: true, supplier: s });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm.supplier) return;
+    setDeleteLoading(true);
     try {
-      await suppliersService.delete(s.id);
+      await suppliersService.delete(deleteConfirm.supplier.id);
       toast.success('Deleted');
+      setDeleteConfirm({ open: false, supplier: null });
       load();
     } catch { toast.error('Failed to delete'); }
+    finally { setDeleteLoading(false); }
   };
 
   const handleToggle = async (s: Supplier) => {
@@ -112,6 +122,15 @@ export default function SuppliersPage() {
           onClose={() => setDetailSupplier(null)}
           onEdit={() => { setDetailSupplier(null); setModal({ open: true, mode: 'edit', supplier: detailSupplier }); }} />
       )}
+      <ConfirmModal
+        open={deleteConfirm.open}
+        title="Hapus Supplier"
+        description={`Hapus supplier "${deleteConfirm.supplier?.name}"? Tindakan ini tidak dapat dibatalkan.`}
+        confirmLabel="Ya, Hapus"
+        loading={deleteLoading}
+        onConfirm={confirmDelete}
+        onClose={() => setDeleteConfirm({ open: false, supplier: null })}
+      />
       <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { 100% { transform: rotate(360deg); } }` }} />
     </div>
   );

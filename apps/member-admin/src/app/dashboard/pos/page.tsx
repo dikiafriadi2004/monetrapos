@@ -1,7 +1,7 @@
-﻿'use client';
+'use client';
 
 import { useState, useEffect } from 'react';
-import { ShoppingCart, Receipt, AlertCircle, Scan, Tag, CreditCard, UtensilsCrossed } from 'lucide-react';
+import { ShoppingCart, Receipt, AlertCircle, Scan, Tag, CreditCard } from 'lucide-react';
 import ProductSearch from '@/components/pos/ProductSearch';
 import Cart from '@/components/pos/Cart';
 import CustomerSelect from '@/components/pos/CustomerSelect';
@@ -14,17 +14,17 @@ import ReceiptPreview from '@/components/pos/ReceiptPreview';
 import { Product, Customer, CartItem, PaymentMethodType } from '@/types';
 import { transactionService } from '@/services/transaction.service';
 import { shiftService } from '@/services/shift.service';
-import { customerService } from '@/services/customer.service';
 import { paymentMethodService } from '@/services/payment-method.service';
 import { useAuth } from '@/contexts/AuthContext';
 import { PaymentMethod } from '@/types/payment-method.types';
 import toast from 'react-hot-toast';
 import apiClient from '@/lib/api-client';
+import { getImageUrl } from '@/lib/date';
 
 const ORDER_TYPES = [
-  { value: 'dine-in',  label: 'Dine-in',  emoji: '🪑' },
-  { value: 'takeaway', label: 'Takeaway', emoji: '🥡' },
-  { value: 'delivery', label: 'Delivery', emoji: '🛵' },
+  { value: 'dine-in',  label: 'Dine-in',  emoji: '??' },
+  { value: 'takeaway', label: 'Takeaway', emoji: '??' },
+  { value: 'delivery', label: 'Delivery', emoji: '??' },
 ];
 
 export default function POSPage() {
@@ -35,6 +35,10 @@ export default function POSPage() {
   const [selectedStoreId, setSelectedStoreId] = useState<string>('');
   const [stores, setStores] = useState<any[]>([]);
   const storeId = selectedStoreId;
+  // Active store data (for receipt)
+  const [activeStore, setActiveStore] = useState<any>(null);
+  const [receiptSettings, setReceiptSettings] = useState<any>({});
+  const [companyLogoUrl, setCompanyLogoUrl] = useState<string | null>(null);
   const [orderType, setOrderType] = useState<string>('dine-in'); // untuk FnB
   const [selectedTableId, setSelectedTableId] = useState<string>(''); // untuk FnB dine-in
   const [tables, setTables] = useState<any[]>([]);
@@ -49,6 +53,7 @@ export default function POSPage() {
   const [isReceiptPreviewOpen, setIsReceiptPreviewOpen] = useState(false);
   const [lastTransaction, setLastTransaction] = useState<any>(null);
   const [activeShift, setActiveShift] = useState<any>(null);
+  const [shiftLoading, setShiftLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [heldTransactions, setHeldTransactions] = useState<Array<{
@@ -60,13 +65,20 @@ export default function POSPage() {
     timestamp: Date;
   }>>([]);
 
-  // Tax and discount — fetched from company settings, fallback 11%
-  const [taxRate, setTaxRate] = useState(0.11);
+  // Tax and discount � fetched from company settings, fallback 0%
+  const [taxRate, setTaxRate] = useState(0);
+  const [taxLabel, setTaxLabel] = useState('Tax');
+  const [taxNumber, setTaxNumber] = useState<string | null>(null);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [discountInfo, setDiscountInfo] = useState<{
     type: 'percentage' | 'fixed';
     value: number;
+    promoCode?: string;
   } | null>(null);
+  const [promoCode, setPromoCode] = useState('');
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [emailModal, setEmailModal] = useState(false);
+  const [emailInput, setEmailInput] = useState('');
 
   useEffect(() => {
     // Load stores first
@@ -76,6 +88,7 @@ export default function POSPage() {
         setStores(list);
         if (list.length > 0 && !selectedStoreId) {
           setSelectedStoreId(list[0].id);
+          setActiveStore(list[0]);
         }
       }).catch(console.error);
     });
@@ -83,7 +96,10 @@ export default function POSPage() {
 
   useEffect(() => {
     if (storeId) {
-      setActiveShift(null); // reset shift saat store berubah
+      setActiveShift(null);
+      // Update active store data when storeId changes
+      const found = stores.find((s: any) => s.id === storeId);
+      if (found) setActiveStore(found);
       checkActiveShift(storeId);
       fetchPaymentMethods();
       fetchTaxRate();
@@ -130,6 +146,7 @@ export default function POSPage() {
   }, [cartItems]);
 
   const checkActiveShift = async (storeId: string) => {
+    setShiftLoading(true);
     try {
       const shift = await shiftService.getActiveShift(storeId);
       setActiveShift(shift);
@@ -138,6 +155,9 @@ export default function POSPage() {
       }
     } catch (error) {
       console.error('Failed to check active shift:', error);
+      setActiveShift(null);
+    } finally {
+      setShiftLoading(false);
     }
   };
 
@@ -152,13 +172,28 @@ export default function POSPage() {
 
   const fetchTaxRate = async () => {
     try {
-      const res = await apiClient.get('/companies/settings');
-      const rate = res.data?.taxSettings?.defaultTaxRate;
-      if (typeof rate === 'number' && rate >= 0) {
-        setTaxRate(rate / 100); // API returns percentage (e.g. 11), convert to decimal
+      const [settingsRes, profileRes] = await Promise.allSettled([
+        apiClient.get('/companies/settings'),
+        apiClient.get('/companies/profile'),
+      ]);
+
+      if (settingsRes.status === 'fulfilled') {
+        const data = settingsRes.value.data;
+        const rate = data?.taxSettings?.defaultTaxRate;
+        const label = data?.taxSettings?.taxLabel;
+        const tNum = data?.taxSettings?.taxNumber;
+        if (typeof rate === 'number' && rate >= 0) setTaxRate(rate / 100);
+        if (label) setTaxLabel(label);
+        if (tNum) setTaxNumber(tNum);
+        if (data?.receiptSettings) setReceiptSettings(data.receiptSettings);
+      }
+
+      if (profileRes.status === 'fulfilled') {
+        const profile = profileRes.value.data;
+        if (profile?.logoUrl) setCompanyLogoUrl(profile.logoUrl);
       }
     } catch {
-      // silently fallback to default 11%
+      // silently fallback
     }
   };
 
@@ -173,8 +208,9 @@ export default function POSPage() {
   };
 
   const handleAddProduct = (product: Product, variant?: { id: string; name: string; priceAdjustment: number }) => {
-    // Unique key: product + variant combo
     const itemKey = variant ? `${product.id}__${variant.id}` : product.id;
+    // Pastikan price selalu number
+    const price = Number(product.price) || 0;
     const existingIndex = cartItems.findIndex(
       (item) => (item as any).itemKey === itemKey
     );
@@ -182,25 +218,25 @@ export default function POSPage() {
     if (existingIndex >= 0) {
       const newItems = [...cartItems];
       const newQuantity = newItems[existingIndex].quantity + 1;
-      if (newQuantity > product.stock) {
+      if (newQuantity > (product.stock || 0)) {
         toast.error(`Stok tidak cukup. Tersedia: ${product.stock}`);
         return;
       }
       newItems[existingIndex].quantity = newQuantity;
-      newItems[existingIndex].subtotal = newQuantity * product.price;
+      newItems[existingIndex].subtotal = newQuantity * newItems[existingIndex].price;
       setCartItems(newItems);
     } else {
-      if (product.stock < 1) {
+      if ((product.stock || 0) < 1) {
         toast.error('Stok habis');
         return;
       }
       setCartItems([
         ...cartItems,
         {
-          product,
+          product: { ...product, price },
           quantity: 1,
-          price: product.price,
-          subtotal: product.price,
+          price,
+          subtotal: price,
           variantName: variant?.name,
           variantId: variant?.id,
           itemKey,
@@ -211,17 +247,14 @@ export default function POSPage() {
 
   const handleUpdateQuantity = (index: number, quantity: number) => {
     if (quantity < 1) return;
-
     const newItems = [...cartItems];
     const item = newItems[index];
-
-    if (quantity > item.product.stock) {
-      toast.error(`Insufficient stock. Available: ${item.product.stock}`);
+    if (quantity > (item.product?.stock || 999)) {
+      toast.error(`Insufficient stock. Available: ${item.product?.stock}`);
       return;
     }
-
     item.quantity = quantity;
-    item.subtotal = quantity * item.price;
+    item.subtotal = quantity * Number(item.price);
     setCartItems(newItems);
   };
 
@@ -237,6 +270,55 @@ export default function POSPage() {
   const handleRemoveDiscount = () => {
     setDiscountAmount(0);
     setDiscountInfo(null);
+    setPromoCode('');
+  };
+
+  const sendReceiptEmail = async (email: string) => {
+    if (!lastTransaction?.id) { toast.error('Transaction ID tidak ditemukan'); return; }
+    const toastId = toast.loading(`Mengirim struk ke ${email}...`);
+    try {
+      const res: any = await apiClient.post('/receipts/email', {
+        transactionId: lastTransaction.id,
+        email: email.trim(),
+      });
+      const data = res.data || res;
+      if (data?.success === false) {
+        toast.error(data?.message || 'Gagal mengirim email', { id: toastId });
+      } else {
+        toast.success(`? Struk berhasil dikirim ke ${email}`, { id: toastId, duration: 4000 });
+        setEmailModal(false);
+        setEmailInput('');
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Gagal mengirim email struk', { id: toastId });
+    }
+  };
+
+  const handleApplyPromoCode = async () => {
+    if (!promoCode.trim()) return;
+    if (subtotal <= 0) { toast.error('Tambahkan produk ke keranjang terlebih dahulu'); return; }
+    setPromoLoading(true);
+    try {
+      const res = await apiClient.post('/discounts/validate', {
+        promoCode: promoCode.trim(),
+        transactionTotal: subtotal,
+      });
+      const data = res.data || res;
+      if (data.valid === false) {
+        toast.error(data.message || 'Kode promo tidak valid');
+        return;
+      }
+      const discAmt = Number(data.discountAmount || 0);
+      const discType = data.discount?.type === 'percentage' ? 'percentage' : 'fixed';
+      const discValue = Number(data.discount?.value || discAmt);
+      setDiscountAmount(discAmt);
+      setDiscountInfo({ type: discType, value: discValue, promoCode: promoCode.trim() });
+      toast.success(`Promo "${promoCode.trim()}" berhasil diterapkan! Hemat Rp ${discAmt.toLocaleString('id-ID')}`);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Kode promo tidak valid');
+    } finally {
+      setPromoLoading(false);
+    }
   };
 
   const handleItemDiscount = (index: number) => {
@@ -246,11 +328,10 @@ export default function POSPage() {
 
   const handleApplyItemDiscount = (discountAmount: number, discountType: 'percentage' | 'fixed', discountValue: number) => {
     if (selectedItemIndex === null) return;
-
     const newItems = [...cartItems];
     const item = newItems[selectedItemIndex];
-    const originalSubtotal = item.price * item.quantity;
-    item.subtotal = originalSubtotal - discountAmount;
+    const originalSubtotal = Number(item.price) * item.quantity;
+    item.subtotal = Math.max(0, originalSubtotal - discountAmount);
     setCartItems(newItems);
     setSelectedItemIndex(null);
   };
@@ -287,10 +368,9 @@ export default function POSPage() {
   };
 
   const calculateTotals = () => {
-    const subtotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
-    const tax = subtotal * taxRate;
-    const total = subtotal + tax - discountAmount;
-
+    const subtotal = cartItems.reduce((sum, item) => sum + Number(item.subtotal), 0);
+    const tax = Math.round(subtotal * taxRate);
+    const total = Math.max(0, subtotal + tax - Number(discountAmount));
     return { subtotal, tax, total };
   };
 
@@ -339,32 +419,32 @@ export default function POSPage() {
         })),
       });
 
-      // Add loyalty points if customer selected
-      if (selectedCustomer) {
-        const points = Math.floor(total / 10000); // 1 point per 10k
-        if (points > 0) {
-          await customerService.addPoints(
-            selectedCustomer.id,
-            points,
-            'Purchase reward',
-            transaction.id
-          );
-        }
-      }
-
-      // Success
+      // Success � backend handles loyalty points automatically
       setLastTransaction({
-        transactionNumber: transaction.transactionNumber,
+        id: transaction.id,
+        transactionNumber: transaction.transactionNumber || transaction.invoiceNumber,
         items: cartItems,
         subtotal,
         tax,
+        taxRate: taxRate * 100,
+        taxLabel,
         discount: discountAmount,
         total,
         paidAmount,
-        changeAmount,
+        changeAmount: Math.max(0, changeAmount),
         paymentMethod,
         customerName: selectedCustomer?.name,
-        employeeName: `${user?.firstName} ${user?.lastName}`,
+        customerEmail: selectedCustomer?.email || null,
+        employeeName: `${user?.firstName || ''} ${user?.lastName || ''}`.trim(),
+        // Store info for receipt
+        storeName: activeStore?.name || '',
+        storeAddress: activeStore?.address || null,
+        storePhone: activeStore?.phone || null,
+        storeLogo: receiptSettings?.showLogo !== false ? getImageUrl(activeStore?.receiptLogoUrl || companyLogoUrl) : null,
+        headerText: receiptSettings?.headerText || null,
+        footerText: receiptSettings?.footerText || null,
+        showTaxNumber: receiptSettings?.showTaxNumber || false,
+        taxNumber: taxNumber,
       });
 
       // Reset cart
@@ -372,7 +452,10 @@ export default function POSPage() {
       setSelectedCustomer(null);
       setDiscountAmount(0);
       setDiscountInfo(null);
+      setPromoCode('');
       setIsPaymentModalOpen(false);
+
+      toast.success('Transaksi berhasil!');
 
       // Show receipt preview
       setIsReceiptPreviewOpen(true);
@@ -386,7 +469,7 @@ export default function POSPage() {
 
   const { subtotal, tax, total } = calculateTotals();
 
-  if (!storeId) {
+  if (!storeId || shiftLoading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
         <div style={{ textAlign: 'center' }}>
@@ -423,7 +506,7 @@ export default function POSPage() {
             {stores.length > 1 && (
               <select
                 value={selectedStoreId}
-                onChange={e => { setSelectedStoreId(e.target.value); setActiveShift(null); }}
+                onChange={e => { setSelectedStoreId(e.target.value); setActiveShift(null); setActiveStore(stores.find((s: any) => s.id === e.target.value) || null); }}
                 style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', fontSize: '0.875rem' }}
               >
                 {stores.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -460,7 +543,7 @@ export default function POSPage() {
                 onChange={e => setSelectedTableId(e.target.value)}
                 style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', fontSize: '0.875rem', minWidth: 140 }}
               >
-                <option value="">🪑 Pilih Meja</option>
+                <option value="">?? Pilih Meja</option>
                 {tables.map((t: any) => (
                   <option key={t.id} value={t.id}>
                     Meja {t.table_number}{t.section ? ` (${t.section})` : ''}
@@ -526,7 +609,7 @@ export default function POSPage() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                           <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>
-                            {held.items.length} items{held.customer && ` — ${held.customer.name}`}
+                            {held.items.length} items{held.customer && ` � ${held.customer.name}`}
                           </div>
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
                             {new Date(held.timestamp).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' })}
@@ -542,13 +625,37 @@ export default function POSPage() {
               </div>
             )}
 
+            {/* Promo Code Input */}
+            {!discountInfo && (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="text"
+                  value={promoCode}
+                  onChange={e => setPromoCode(e.target.value.toUpperCase())}
+                  onKeyDown={e => e.key === 'Enter' && handleApplyPromoCode()}
+                  placeholder="Kode promo..."
+                  className="form-input"
+                  style={{ flex: 1, height: 36, fontSize: '0.875rem' }}
+                  disabled={cartItems.length === 0}
+                />
+                <button
+                  onClick={handleApplyPromoCode}
+                  disabled={!promoCode.trim() || promoLoading || cartItems.length === 0}
+                  className="btn btn-outline"
+                  style={{ height: 36, padding: '0 12px', fontSize: '0.8rem', color: 'var(--success)', borderColor: 'var(--success)' }}
+                >
+                  {promoLoading ? <span style={{ fontSize: '0.75rem' }}>...</span> : 'Terapkan'}
+                </button>
+              </div>
+            )}
+
             {/* Discount Info */}
             {discountInfo && (
               <div style={{ padding: 16, background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 'var(--radius-md)' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>
                     <div style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--success)' }}>
-                      Discount: {discountInfo.type === 'percentage' ? `${discountInfo.value}%` : `Rp ${discountInfo.value.toLocaleString('id-ID')}`}
+                      {discountInfo.promoCode ? `Promo "${discountInfo.promoCode}"` : 'Discount'}: {discountInfo.type === 'percentage' ? `${discountInfo.value}%` : `Rp ${discountInfo.value.toLocaleString('id-ID')}`}
                     </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--success)', marginTop: 4 }}>
                       Saving: Rp {discountAmount.toLocaleString('id-ID')}
@@ -595,6 +702,8 @@ export default function POSPage() {
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
         total={total}
+        storeId={storeId}
+        companyId={(company as any)?.id}
         paymentMethods={paymentMethods}
         onConfirm={handlePayment}
       />
@@ -639,22 +748,35 @@ export default function POSPage() {
               })),
             });
             setLastTransaction({
-              transactionNumber: transaction.transactionNumber,
+              id: transaction.id,
+              transactionNumber: transaction.transactionNumber || transaction.invoiceNumber,
               items: cartItems,
               subtotal,
               tax,
+              taxRate: taxRate * 100,
+              taxLabel,
               discount: discountAmount,
               total: txTotal,
               paidAmount: totalPaid,
-              changeAmount,
+              changeAmount: Math.max(0, changeAmount),
               paymentMethod: `Split (${payments.map(p => p.method).join(', ')})`,
               customerName: selectedCustomer?.name,
-              employeeName: `${user?.firstName} ${user?.lastName}`,
+              customerEmail: selectedCustomer?.email || null,
+              employeeName: `${user?.firstName || ''} ${user?.lastName || ''}`.trim(),
+              storeName: activeStore?.name || '',
+              storeAddress: activeStore?.address || null,
+              storePhone: activeStore?.phone || null,
+              storeLogo: receiptSettings?.showLogo !== false ? getImageUrl(activeStore?.receiptLogoUrl || companyLogoUrl) : null,
+              headerText: receiptSettings?.headerText || null,
+              footerText: receiptSettings?.footerText || null,
+              showTaxNumber: receiptSettings?.showTaxNumber || false,
+              taxNumber: taxNumber,
             });
             setCartItems([]);
             setSelectedCustomer(null);
             setDiscountAmount(0);
             setDiscountInfo(null);
+            setPromoCode('');
             setIsSplitPaymentModalOpen(false);
             setIsReceiptPreviewOpen(true);
             toast.success('Split payment processed');
@@ -718,7 +840,7 @@ export default function POSPage() {
               `).join('')}
               <div class="divider"></div>
               <div class="row"><span>Subtotal</span><span>Rp ${lastTransaction.subtotal?.toLocaleString('id-ID')}</span></div>
-              <div class="row"><span>Tax</span><span>Rp ${lastTransaction.tax?.toLocaleString('id-ID')}</span></div>
+              ${lastTransaction.tax > 0 ? `<div class="row"><span>${lastTransaction.taxLabel || 'Tax'}${lastTransaction.taxRate != null ? ` (${lastTransaction.taxRate}%)` : ''}</span><span>Rp ${lastTransaction.tax?.toLocaleString('id-ID')}</span></div>` : ''}
               ${lastTransaction.discount ? `<div class="row"><span>Discount</span><span>-Rp ${lastTransaction.discount?.toLocaleString('id-ID')}</span></div>` : ''}
               <div class="row"><strong>Total</strong><strong>Rp ${lastTransaction.total?.toLocaleString('id-ID')}</strong></div>
               <div class="row"><span>Paid</span><span>Rp ${lastTransaction.paidAmount?.toLocaleString('id-ID')}</span></div>
@@ -732,21 +854,99 @@ export default function POSPage() {
           }
         }}
         onEmail={async () => {
-          if (!lastTransaction?.customerEmail) {
-            toast.error('No customer email available');
-            return;
-          }
-          try {
-            await import('@/lib/api-client').then(m => m.default.post('/receipts/email', {
-              transactionId: lastTransaction.id,
-              email: lastTransaction.customerEmail,
-            }));
-            toast.success('Receipt sent to ' + lastTransaction.customerEmail);
-          } catch {
-            toast.error('Failed to send receipt email');
+          // Jika customer punya email, langsung kirim
+          if (lastTransaction?.customerEmail) {
+            await sendReceiptEmail(lastTransaction.customerEmail);
+          } else {
+            // Buka modal input email custom
+            setEmailInput('');
+            setEmailModal(true);
           }
         }}
       />
+
+      {/* Email Input Modal */}
+      {emailModal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 10000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '1rem',
+        }}>
+          <div
+            onClick={() => setEmailModal(false)}
+            style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+          />
+          <div style={{
+            position: 'relative', zIndex: 10001,
+            background: 'var(--bg-secondary, #fff)',
+            borderRadius: '16px',
+            boxShadow: '0 25px 50px rgba(0,0,0,0.25)',
+            width: '100%', maxWidth: '400px',
+            padding: '1.75rem',
+          }}>
+            {/* Header */}
+            <div style={{ marginBottom: '1.25rem' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Kirim Struk via Email</h3>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: 4 }}>
+                Masukkan alamat email untuk mengirim struk transaksi
+              </p>
+            </div>
+
+            {/* Input */}
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: 6, color: 'var(--text-primary)' }}>
+                Alamat Email *
+              </label>
+              <input
+                type="email"
+                value={emailInput}
+                onChange={e => setEmailInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && emailInput.trim()) sendReceiptEmail(emailInput.trim());
+                  if (e.key === 'Escape') setEmailModal(false);
+                }}
+                placeholder="contoh@email.com"
+                autoFocus
+                style={{
+                  width: '100%', padding: '10px 14px', fontSize: '1rem',
+                  border: '2px solid var(--border-color, #e5e7eb)',
+                  borderRadius: '8px', outline: 'none', boxSizing: 'border-box',
+                  background: 'var(--bg-primary, #fff)',
+                  color: 'var(--text-primary, #111)',
+                }}
+              />
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button
+                onClick={() => setEmailModal(false)}
+                style={{
+                  flex: 1, padding: '10px', borderRadius: '8px',
+                  border: '1px solid var(--border-color, #e5e7eb)',
+                  background: 'var(--bg-tertiary, #f3f4f6)',
+                  cursor: 'pointer', fontWeight: 500, fontSize: '0.9rem',
+                  color: 'var(--text-primary)',
+                }}
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => emailInput.trim() && sendReceiptEmail(emailInput.trim())}
+                disabled={!emailInput.trim()}
+                style={{
+                  flex: 2, padding: '10px', borderRadius: '8px', border: 'none',
+                  background: !emailInput.trim() ? '#9ca3af' : '#10b981',
+                  color: 'white', cursor: !emailInput.trim() ? 'not-allowed' : 'pointer',
+                  fontWeight: 700, fontSize: '0.95rem',
+                }}
+              >
+                Kirim Struk
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

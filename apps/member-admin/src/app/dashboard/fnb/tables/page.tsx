@@ -5,6 +5,7 @@ import { fnbService, FnbTable, TableStatus } from '@/services/fnb.service';
 import { useStore } from '@/hooks/useStore';
 import { Grid3x3, Plus, Edit2, Trash2, Loader2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { ConfirmModal } from '@/components/ui';
 
 const STATUS_CONFIG: Record<TableStatus, { label: string; color: string }> = {
   [TableStatus.AVAILABLE]: { label: 'Tersedia', color: 'var(--success)' },
@@ -20,6 +21,8 @@ export default function FnbTablesPage() {
   const [modal, setModal] = useState<{ open: boolean; editing: FnbTable | null }>({ open: false, editing: null });
   const [form, setForm] = useState({ tableNumber: '', capacity: 4, floor: '', status: TableStatus.AVAILABLE });
   const [saving, setSaving] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; table: FnbTable | null }>({ open: false, table: null });
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => { if (storeId) loadTables(); }, [storeId]);
 
@@ -59,12 +62,19 @@ export default function FnbTablesPage() {
   };
 
   const remove = async (table: FnbTable) => {
-    if (!confirm(`Hapus meja ${table.tableNumber}?`)) return;
+    setDeleteConfirm({ open: true, table });
+  };
+
+  const confirmRemove = async () => {
+    if (!deleteConfirm.table) return;
+    setDeleteLoading(true);
     try {
-      await fnbService.deleteTable(table.id);
+      await fnbService.deleteTable(deleteConfirm.table.id);
       toast.success('Meja berhasil dihapus');
-      setTables(prev => prev.filter(t => t.id !== table.id));
+      setTables(prev => prev.filter(t => t.id !== deleteConfirm.table!.id));
+      setDeleteConfirm({ open: false, table: null });
     } catch { toast.error('Gagal menghapus meja'); }
+    finally { setDeleteLoading(false); }
   };
 
   if (loading) return (
@@ -175,6 +185,9 @@ export default function FnbTablesPage() {
           </div>
         </div>
       )}
+      <ConfirmModal open={!!deleteConfirm?.open} onClose={() => setDeleteConfirm({ open: false, table: null })} onConfirm={confirmRemove}
+        title="Hapus Meja" description={`Hapus meja "${deleteConfirm?.table?.tableNumber}"? Tindakan ini tidak bisa dibatalkan.`}
+        confirmLabel="Ya, Hapus" loading={deleteLoading} />
       <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { 100% { transform: rotate(360deg); } }` }} />
     </div>
   );

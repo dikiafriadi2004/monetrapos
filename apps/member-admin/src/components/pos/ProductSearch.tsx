@@ -99,34 +99,34 @@ export default function ProductSearch({ storeId, onSelectProduct }: ProductSearc
   };
 
   const handleProductClick = async (product: Product) => {
-    // If product has variants, show variant picker
-    if (product.hasVariants || (product.variants && product.variants.length > 0)) {
+    // Normalize price ke number dulu
+    const normalizedProduct = { ...product, price: Number(product.price) || 0, stock: Number(product.stock) || 0 };
+
+    if (normalizedProduct.hasVariants || (normalizedProduct.variants && normalizedProduct.variants.length > 0)) {
       try {
-        // Use already-loaded variants or fetch them
-        let variants = product.variants || [];
+        let variants = normalizedProduct.variants || [];
         if (variants.length === 0) {
-          const res = await apiClient.get(`/products/${product.id}/variants`);
+          const res = await apiClient.get(`/products/${normalizedProduct.id}/variants`);
           variants = Array.isArray(res.data) ? res.data : (res.data?.data || []);
         }
         const activeVariants = variants.filter((v: any) => v.isActive !== false);
         if (activeVariants.length > 0) {
-          setVariantProduct({ product, variants: activeVariants });
+          setVariantProduct({ product: normalizedProduct, variants: activeVariants });
           return;
         }
       } catch {
         // fallback: add product without variant
       }
     }
-    onSelectProduct(product);
+    onSelectProduct(normalizedProduct);
   };
 
   const handleVariantSelect = (variant: any) => {
     if (!variantProduct) return;
     const { product } = variantProduct;
     const finalPrice = Number(product.price) + Number(variant.priceAdjustment || 0);
-    // Pass product with overridden price and variant info
     onSelectProduct(
-      { ...product, price: finalPrice, stock: variant.stock ?? product.stock },
+      { ...product, price: finalPrice, stock: Number(variant.stock ?? product.stock) },
       { id: variant.id, name: variant.name, priceAdjustment: Number(variant.priceAdjustment || 0) }
     );
     setVariantProduct(null);
@@ -188,14 +188,14 @@ export default function ProductSearch({ storeId, onSelectProduct }: ProductSearc
                   background: 'var(--bg-secondary)',
                   border: '1px solid var(--border-color)',
                   borderRadius: 'var(--radius-md)',
-                  cursor: (!hasVar && product.stock === 0) ? 'not-allowed' : 'pointer',
+                  cursor: (!hasVar && Number(product.stock) === 0) ? 'not-allowed' : 'pointer',
                   textAlign: 'left',
                   transition: 'all 0.15s',
-                  opacity: (!hasVar && product.stock === 0) ? 0.5 : 1,
+                  opacity: (!hasVar && Number(product.stock) === 0) ? 0.5 : 1,
                   position: 'relative',
                 }}
-                disabled={!hasVar && product.stock === 0}
-                title={(!hasVar && product.stock === 0) ? 'Stok habis' : product.name}
+                disabled={!hasVar && Number(product.stock) === 0}
+                title={(!hasVar && Number(product.stock) === 0) ? 'Stok habis' : product.name}
               >
                 {/* Variant badge */}
                 {hasVar && (
@@ -231,9 +231,9 @@ export default function ProductSearch({ storeId, onSelectProduct }: ProductSearc
                 <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--success)' }}>
                   {hasVar ? 'Lihat varian' : `Rp ${Number(product.price).toLocaleString('id-ID')}`}
                 </div>
-                <div style={{ fontSize: '0.7rem', color: (!hasVar && product.stock <= 5) ? 'var(--danger)' : 'var(--text-tertiary)', marginTop: 2 }}>
+                <div style={{ fontSize: '0.7rem', color: (!hasVar && Number(product.stock) <= 5) ? 'var(--danger)' : 'var(--text-tertiary)', marginTop: 2 }}>
                   {hasVar ? <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}><ChevronRight size={10} /> Pilih varian</span>
-                    : product.stock === 0 ? 'Habis' : `Stok: ${product.stock}`}
+                    : Number(product.stock) === 0 ? 'Habis' : `Stok: ${product.stock}`}
                 </div>
               </button>
             );

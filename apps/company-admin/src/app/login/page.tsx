@@ -17,7 +17,7 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true); setError('');
     try {
-      const res: any = await api.post('/auth/login', { email, password });
+      const res: any = await api.post('/admin/auth/login', { email, password });
       const token = res.accessToken || res.access_token || res.token;
       if (token) {
         localStorage.setItem('company_token', token);

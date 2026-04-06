@@ -1,4 +1,4 @@
-export type UserType = 'company_admin' | 'member' | 'employee';
+export type UserType = 'member' | 'employee';
 export type UserRole = 'owner' | 'admin' | 'manager' | 'accountant';
 
 export interface User {
@@ -9,7 +9,7 @@ export interface User {
   name?: string;
   // UserRole — level akses dalam company (owner/admin/manager/accountant)
   role: UserRole | string;
-  // UserType — jenis akun (company_admin/member/employee)
+  // UserType — jenis akun (member/employee)
   type?: UserType;
   companyId: string;
   // Permissions dari role employee (hanya untuk type=employee)

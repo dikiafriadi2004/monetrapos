@@ -56,9 +56,9 @@ export class SubscriptionAccessMiddleware implements NestMiddleware {
       return next();
     }
 
-    // Skip subscription check for company_admin (platform admin)
+    // Skip subscription check for admin routes (handled by AdminJwtGuard)
     const userType = (req as any).user?.type;
-    if (userType === 'company_admin') {
+    if (userType === 'admin') {
       return next();
     }
 

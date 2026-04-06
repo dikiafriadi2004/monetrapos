@@ -115,6 +115,24 @@ export class BillingService {
     });
   }
 
+  async cancelInvoice(id: string, reason?: string): Promise<Invoice> {
+    const invoice = await this.invoiceRepository.findOne({
+      where: { id },
+      relations: ['company'],
+    });
+
+    if (!invoice) {
+      throw new NotFoundException('Invoice not found');
+    }
+
+    invoice.status = InvoiceStatus.CANCELLED;
+    if (reason) {
+      invoice.notes = reason;
+    }
+
+    return this.invoiceRepository.save(invoice);
+  }
+
   async findInvoice(id: string, companyId: string | null): Promise<Invoice> {
     const where: any = { id };
     if (companyId) {

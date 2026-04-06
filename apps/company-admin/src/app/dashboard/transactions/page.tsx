@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Receipt, TrendingUp, Search, CheckCircle, RefreshCcw, AlertCircle } from 'lucide-react';
+import { Receipt, TrendingUp, Search, CheckCircle, RefreshCcw, AlertCircle, XCircle } from 'lucide-react';
 import { api } from '../../../lib/api';
 import toast from 'react-hot-toast';
 import ConfirmModal from '../../../components/ConfirmModal';
@@ -25,7 +25,9 @@ export default function TransactionsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [verifyConfirm, setVerifyConfirm] = useState<{ open: boolean; invoice: Invoice | null }>({ open: false, invoice: null });
+  const [cancelConfirm, setCancelConfirm] = useState<{ open: boolean; invoice: Invoice | null }>({ open: false, invoice: null });
   const [verifying, setVerifying] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   const fetchInvoices = async () => {
     setLoading(true);
@@ -60,6 +62,23 @@ export default function TransactionsPage() {
       toast.error(err?.message || 'Verifikasi gagal');
     } finally {
       setVerifying(false);
+    }
+  };
+
+  const handleCancelInvoice = async () => {
+    if (!cancelConfirm.invoice) return;
+    setCancelling(true);
+    try {
+      await api.patch(`/billing/admin/invoices/${cancelConfirm.invoice.id}/cancel`, {
+        reason: 'Dibatalkan oleh admin',
+      });
+      toast.success('Invoice berhasil dibatalkan');
+      setCancelConfirm({ open: false, invoice: null });
+      fetchInvoices();
+    } catch (err: any) {
+      toast.error(err?.message || 'Gagal membatalkan invoice');
+    } finally {
+      setCancelling(false);
     }
   };
 
@@ -125,7 +144,7 @@ export default function TransactionsPage() {
             <input type="text" placeholder="Cari invoice atau member..." className="form-input" style={{ paddingLeft: '36px', height: '36px' }} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
           </div>
           <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
-            {['all', 'pending', 'paid', 'failed'].map(s => (
+            {['all', 'pending', 'paid', 'failed', 'cancelled'].map(s => (
               <button key={s} onClick={() => setFilterStatus(s)} className={`btn ${filterStatus === s ? 'btn-primary' : 'btn-outline'}`} style={{ height: '36px', padding: '0 12px', fontSize: '0.8rem', textTransform: 'capitalize' }}>
                 {s === 'all' ? 'Semua' : s}
               </button>
@@ -148,7 +167,7 @@ export default function TransactionsPage() {
               <div style={{ flex: 1 }}>Amount</div>
               <div style={{ flex: 0.8 }}>Status</div>
               <div style={{ flex: 1 }}>Tanggal</div>
-              <div style={{ width: '120px' }}>Aksi</div>
+              <div style={{ width: '160px' }}>Aksi</div>
             </div>
             {filtered.map(inv => (
               <div key={inv.id} className="animate-fade-in" style={{ display: 'flex', alignItems: 'center', padding: 'var(--space-md) var(--space-lg)', borderBottom: '1px solid var(--border-subtle)' }}>
@@ -163,15 +182,25 @@ export default function TransactionsPage() {
                 </div>
                 <div style={{ flex: 0.8 }}>{statusBadge(inv.status)}</div>
                 <div style={{ flex: 1, color: 'var(--text-tertiary)', fontSize: '0.85rem' }}>{fmtDate(inv.createdAt)}</div>
-                <div style={{ width: '120px', display: 'flex', gap: '6px' }}>
+                <div style={{ width: '160px', display: 'flex', gap: '6px' }}>
                   {inv.status === 'pending' && (
-                    <button onClick={() => setVerifyConfirm({ open: true, invoice: inv })} className="btn btn-success btn-sm" style={{ fontSize: '0.75rem' }}>
-                      <CheckCircle size={13} /> Verifikasi
-                    </button>
+                    <>
+                      <button onClick={() => setVerifyConfirm({ open: true, invoice: inv })} className="btn btn-success btn-sm" style={{ fontSize: '0.75rem' }}>
+                        <CheckCircle size={13} /> Verifikasi
+                      </button>
+                      <button onClick={() => setCancelConfirm({ open: true, invoice: inv })} className="btn btn-danger btn-sm" style={{ fontSize: '0.75rem' }}>
+                        <XCircle size={13} /> Batal
+                      </button>
+                    </>
                   )}
                   {inv.status === 'paid' && (
                     <span style={{ fontSize: '0.8rem', color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <CheckCircle size={14} /> Lunas
+                    </span>
+                  )}
+                  {(inv.status === 'cancelled' || inv.status === 'failed') && (
+                    <span style={{ fontSize: '0.8rem', color: 'var(--danger)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <XCircle size={14} /> {inv.status}
                     </span>
                   )}
                 </div>
@@ -190,6 +219,17 @@ export default function TransactionsPage() {
         loading={verifying}
         onConfirm={handleVerifyPayment}
         onClose={() => setVerifyConfirm({ open: false, invoice: null })}
+      />
+
+      <ConfirmModal
+        open={cancelConfirm.open}
+        title="Batalkan Invoice"
+        description={`Yakin ingin membatalkan invoice "${cancelConfirm.invoice?.invoiceNumber}" (${fmt(Number(cancelConfirm.invoice?.total || 0))})? Tindakan ini tidak dapat dibatalkan.`}
+        confirmLabel="Ya, Batalkan Invoice"
+        variant="danger"
+        loading={cancelling}
+        onConfirm={handleCancelInvoice}
+        onClose={() => setCancelConfirm({ open: false, invoice: null })}
       />
     </div>
   );

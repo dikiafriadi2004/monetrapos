@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 4403",
+    "dev": "next dev -p 4403 --hostname 0.0.0.0",
     "build": "next build",
     "start": "next start -p 4403",
     "lint": "eslint"
@@ -13,6 +13,7 @@
     "@tanstack/react-query": "^5.95.2",
     "axios": "^1.13.6",
     "date-fns": "^2.30.0",
+    "jsqr": "^1.4.0",
     "lucide-react": "^1.6.0",
     "next": "16.2.1",
     "react": "19.2.4",

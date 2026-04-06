@@ -22,7 +22,7 @@ export default function AuditLogsPage() {
   const fetchLogs = async () => {
     setLoading(true);
     try {
-      const data: any = await api.get('/audit/logs');
+      const data: any = await api.get('/admin/audit/logs');
       setLogs(Array.isArray(data) ? data : (data?.data || []));
     } catch (err) { console.error(err); }
     finally { setLoading(false); }

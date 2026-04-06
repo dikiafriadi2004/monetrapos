@@ -14,14 +14,14 @@ import {
   ApiOperation,
   ApiQuery,
 } from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { PermissionGuard, RequirePermissions } from '../auth/guards';
 import { TransactionsService } from './transactions.service';
 import { CreateTransactionDto, VoidTransactionDto } from './dto';
 
 @ApiTags('Transactions')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'), PermissionGuard)
+@UseGuards(MemberJwtGuard, PermissionGuard)
 @Controller('transactions')
 export class TransactionsController {
   constructor(private readonly transactionsService: TransactionsService) {}

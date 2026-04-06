@@ -97,7 +97,7 @@ class DiscountsService {
   }
 
   async validatePromoCode(promoCode: string, totalAmount: number): Promise<any> {
-    const res = await apiClient.post('/discounts/validate', { promoCode, totalAmount });
+    const res = await apiClient.post('/discounts/validate', { promoCode, transactionTotal: totalAmount });
     return res.data;
   }
 }

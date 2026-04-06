@@ -376,8 +376,22 @@ export class AdvancedReportsService {
       }
     }
 
-    // Operating expenses (simplified - in real app, would come from expenses table)
-    const operatingExpenses = 0; // TODO: Implement expenses tracking
+    // Operating expenses: estimated from purchase orders cost in period
+    let operatingExpenses = 0;
+    try {
+      const purchaseResult = await this.transactionRepository.manager
+        .createQueryBuilder()
+        .select('SUM(po.total_amount)', 'total')
+        .from('purchase_orders', 'po')
+        .where('po.company_id = :companyId', { companyId })
+        .andWhere('po.created_at BETWEEN :startDate AND :endDate', { startDate, endDate })
+        .andWhere('po.status IN (:...statuses)', { statuses: ['received', 'completed'] })
+        .getRawOne();
+      operatingExpenses = Number(purchaseResult?.total || 0);
+    } catch {
+      // purchase_orders table may not exist in all deployments
+      operatingExpenses = 0;
+    }
 
     const totalCost = costOfGoodsSold + operatingExpenses;
 

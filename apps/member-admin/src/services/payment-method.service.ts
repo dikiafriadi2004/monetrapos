@@ -12,7 +12,8 @@ export const paymentMethodService = {
    */
   async getAll(): Promise<PaymentMethod[]> {
     const response = await apiClient.get(API_ENDPOINTS.PAYMENT_METHODS.BASE);
-    return response.data;
+    const data = response.data;
+    return Array.isArray(data) ? data : (data?.data || []);
   },
 
   /**

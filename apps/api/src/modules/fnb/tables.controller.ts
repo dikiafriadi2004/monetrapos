@@ -13,11 +13,11 @@ import {
 import { TablesService } from './tables.service';
 import { CreateTableDto } from './dto/create-table.dto';
 import { UpdateTableDto, UpdateTableStatusDto } from './dto/update-table.dto';
-import { AuthGuard } from '@nestjs/passport';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { TableStatus } from './table.entity';
 
 @Controller('fnb/tables')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(MemberJwtGuard)
 export class TablesController {
   constructor(private readonly tablesService: TablesService) {}
 

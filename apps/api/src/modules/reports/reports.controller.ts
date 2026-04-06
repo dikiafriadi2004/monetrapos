@@ -7,7 +7,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { PermissionGuard, RequirePermissions } from '../auth/guards';
 import { ReportsService } from './reports.service';
 import {
@@ -22,7 +22,7 @@ import {
 } from './dto';
 
 @Controller('reports')
-@UseGuards(AuthGuard('jwt'), PermissionGuard)
+@UseGuards(MemberJwtGuard, PermissionGuard)
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 

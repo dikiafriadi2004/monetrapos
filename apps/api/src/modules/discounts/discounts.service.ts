@@ -18,24 +18,36 @@ export class DiscountsService {
   ) {}
 
   async create(createDto: CreateDiscountDto, companyId: string): Promise<Discount> {
+    // Normalize field names — frontend may send discountType, minPurchaseAmount, maxDiscountAmount
+    const normalizedType = this.normalizeDiscountType(
+      (createDto as any).discountType || createDto.type
+    );
+    const minTransaction = createDto.minTransaction ?? (createDto as any).minPurchaseAmount ?? undefined;
+    const maxDiscount = createDto.maxDiscount ?? (createDto as any).maxDiscountAmount ?? undefined;
+    // usageLimit: 0 means unlimited → set to undefined
+    const usageLimit = createDto.usageLimit && createDto.usageLimit > 0 ? createDto.usageLimit : undefined;
+
     // Validate promo code uniqueness if provided
     if (createDto.promoCode) {
       const existing = await this.discountRepository.findOne({
         where: { promoCode: createDto.promoCode, companyId },
       });
-
       if (existing) {
         throw new BadRequestException('Promo code already exists');
       }
     }
 
     // Validate percentage discount
-    if (createDto.type === DiscountType.PERCENTAGE && createDto.value > 100) {
+    if (normalizedType === DiscountType.PERCENTAGE && createDto.value > 100) {
       throw new BadRequestException('Percentage discount cannot exceed 100%');
     }
 
     const discount = this.discountRepository.create({
       ...createDto,
+      type: normalizedType as any,
+      minTransaction,
+      maxDiscount,
+      usageLimit,
       companyId,
       scope: createDto.scope || DiscountScope.ALL,
     });
@@ -87,12 +99,21 @@ export class DiscountsService {
   ): Promise<Discount> {
     const discount = await this.findOne(id, companyId);
 
+    // Normalize field names
+    const normalizedType = (updateDto as any).discountType || (updateDto as any).type
+      ? this.normalizeDiscountType((updateDto as any).discountType || (updateDto as any).type)
+      : undefined;
+    const minTransaction = (updateDto as any).minTransaction ?? (updateDto as any).minPurchaseAmount;
+    const maxDiscount = (updateDto as any).maxDiscount ?? (updateDto as any).maxDiscountAmount;
+    const usageLimit = (updateDto as any).usageLimit !== undefined
+      ? ((updateDto as any).usageLimit > 0 ? (updateDto as any).usageLimit : undefined)
+      : undefined;
+
     // Validate promo code uniqueness if changed
     if (updateDto.promoCode && updateDto.promoCode !== discount.promoCode) {
       const existing = await this.discountRepository.findOne({
         where: { promoCode: updateDto.promoCode, companyId },
       });
-
       if (existing && existing.id !== id) {
         throw new BadRequestException('Promo code already exists');
       }
@@ -100,21 +121,31 @@ export class DiscountsService {
 
     // Validate percentage discount
     if (
-      updateDto.type === DiscountType.PERCENTAGE &&
+      (normalizedType === DiscountType.PERCENTAGE || discount.type === DiscountType.PERCENTAGE) &&
       updateDto.value !== undefined &&
       updateDto.value > 100
     ) {
       throw new BadRequestException('Percentage discount cannot exceed 100%');
     }
 
-    Object.assign(discount, updateDto);
+    const updateData: any = { ...updateDto };
+    if (normalizedType) updateData.type = normalizedType;
+    if (minTransaction !== undefined) updateData.minTransaction = minTransaction;
+    if (maxDiscount !== undefined) updateData.maxDiscount = maxDiscount;
+    if (usageLimit !== undefined) updateData.usageLimit = usageLimit;
+    // Remove frontend-only fields
+    delete updateData.discountType;
+    delete updateData.minPurchaseAmount;
+    delete updateData.maxDiscountAmount;
+
+    Object.assign(discount, updateData);
     return await this.discountRepository.save(discount);
   }
 
   async remove(id: string, companyId: string): Promise<void> {
     const discount = await this.findOne(id, companyId);
-    discount.isActive = false;
-    await this.discountRepository.save(discount);
+    // Hard delete — remove from DB
+    await this.discountRepository.remove(discount);
   }
 
   async validatePromoCode(
@@ -279,6 +310,20 @@ export class DiscountsService {
 
     // Increment usage count
     await this.discountRepository.increment({ id: discountId }, 'usageCount', 1);
+  }
+
+  /**
+   * Normalize discount type — frontend may send 'fixed_amount', backend expects 'fixed'
+   */
+  private normalizeDiscountType(type: string): DiscountType {
+    const map: Record<string, DiscountType> = {
+      percentage: DiscountType.PERCENTAGE,
+      fixed: DiscountType.FIXED,
+      fixed_amount: DiscountType.FIXED,
+      buy_x_get_y: DiscountType.BUY_X_GET_Y,
+      voucher: DiscountType.VOUCHER,
+    };
+    return map[type?.toLowerCase()] ?? DiscountType.PERCENTAGE;
   }
 
   async generatePromoCode(prefix: string, length: number = 8): Promise<string> {

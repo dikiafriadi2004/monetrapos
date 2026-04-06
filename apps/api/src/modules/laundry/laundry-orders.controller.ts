@@ -9,14 +9,14 @@ import {
   Request,
   Query,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { LaundryOrdersService } from './laundry-orders.service';
 import { CreateLaundryOrderDto } from './dto/create-laundry-order.dto';
 import { UpdateLaundryOrderDto, UpdateLaundryOrderStatusDto } from './dto/update-laundry-order.dto';
 import { LaundryOrderStatus } from './laundry-order.entity';
 
 @Controller('laundry/orders')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(MemberJwtGuard)
 export class LaundryOrdersController {
   constructor(private readonly ordersService: LaundryOrdersService) {}
 

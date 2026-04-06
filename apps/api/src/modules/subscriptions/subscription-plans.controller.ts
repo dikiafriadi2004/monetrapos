@@ -8,9 +8,8 @@ import {
   Param,
   UseGuards,
   Request,
-  UnauthorizedException,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { AdminJwtGuard } from '../admin-auth/guards/admin-jwt.guard';
 import { SubscriptionPlansService } from './subscription-plans.service';
 
 @Controller('subscription-plans')
@@ -68,22 +67,15 @@ export class SubscriptionPlansController {
   }
 
   // ============================================
-  // ADMIN ENDPOINTS (Protected - company_admin only)
+  // ADMIN ENDPOINTS (Protected - AdminJwtGuard)
   // ============================================
-
-  private ensureAdmin(req: any) {
-    if (req.user?.type !== 'company_admin') {
-      throw new UnauthorizedException('Only platform admins can manage subscription plans');
-    }
-  }
 
   /**
    * Create new plan (ADMIN ONLY)
    */
   @Post()
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AdminJwtGuard)
   async create(
-    @Request() req: any,
     @Body()
     body: {
       name: string;
@@ -105,7 +97,6 @@ export class SubscriptionPlansController {
       sortOrder?: number;
     },
   ) {
-    this.ensureAdmin(req);
     return this.subscriptionPlansService.create(body);
   }
 
@@ -113,9 +104,8 @@ export class SubscriptionPlansController {
    * Update plan (ADMIN ONLY)
    */
   @Put(':id')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AdminJwtGuard)
   async update(
-    @Request() req: any,
     @Param('id') id: string,
     @Body()
     body: Partial<{
@@ -138,7 +128,6 @@ export class SubscriptionPlansController {
       sortOrder: number;
     }>,
   ) {
-    this.ensureAdmin(req);
     return this.subscriptionPlansService.update(id, body);
   }
 
@@ -146,9 +135,8 @@ export class SubscriptionPlansController {
    * Delete plan (ADMIN ONLY)
    */
   @Delete(':id')
-  @UseGuards(AuthGuard('jwt'))
-  async remove(@Request() req: any, @Param('id') id: string) {
-    this.ensureAdmin(req);
+  @UseGuards(AdminJwtGuard)
+  async remove(@Param('id') id: string) {
     await this.subscriptionPlansService.remove(id);
     return { message: 'Plan deleted successfully' };
   }
@@ -157,9 +145,8 @@ export class SubscriptionPlansController {
    * Seed default plans (ADMIN ONLY)
    */
   @Post('seed')
-  @UseGuards(AuthGuard('jwt'))
-  async seed(@Request() req: any) {
-    this.ensureAdmin(req);
+  @UseGuards(AdminJwtGuard)
+  async seed() {
     await this.subscriptionPlansService.seedDefaultPlans();
     return { message: 'Plans seeded successfully' };
   }
@@ -168,13 +155,11 @@ export class SubscriptionPlansController {
    * Create or update duration option for a plan (ADMIN ONLY)
    */
   @Post(':id/durations')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AdminJwtGuard)
   async createDuration(
-    @Request() req: any,
     @Param('id') planId: string,
     @Body() body: { durationMonths: number },
   ) {
-    this.ensureAdmin(req);
     return this.subscriptionPlansService.createOrUpdateDuration(
       planId,
       body.durationMonths,
@@ -185,13 +170,11 @@ export class SubscriptionPlansController {
    * Delete duration option (ADMIN ONLY)
    */
   @Delete(':id/durations/:durationMonths')
-  @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AdminJwtGuard)
   async removeDuration(
-    @Request() req: any,
     @Param('id') planId: string,
     @Param('durationMonths') durationMonths: string,
   ) {
-    this.ensureAdmin(req);
     await this.subscriptionPlansService.removeDuration(
       planId,
       parseInt(durationMonths, 10),

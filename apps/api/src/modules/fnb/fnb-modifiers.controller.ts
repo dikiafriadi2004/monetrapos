@@ -1,9 +1,9 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Request, UseGuards } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { FnbModifiersService } from './fnb-modifiers.service';
 
 @Controller('fnb/modifiers')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(MemberJwtGuard)
 export class FnbModifiersController {
   constructor(private readonly modifiersService: FnbModifiersService) {}
 

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { addOnsService, CompanyAddOn } from '@/services/add-ons.service';
+import { ConfirmModal } from '@/components/ui';
 import { 
   Package, 
   Loader2, 
@@ -54,6 +55,7 @@ export default function MyAddOnsPage() {
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [companyAddOns, setCompanyAddOns] = useState<CompanyAddOn[]>([]);
   const [filter, setFilter] = useState<'all' | 'active' | 'expired'>('all');
+  const [cancelConfirm, setCancelConfirm] = useState<{ open: boolean; addOn: CompanyAddOn | null }>({ open: false, addOn: null });
 
   useEffect(() => {
     loadCompanyAddOns();
@@ -73,14 +75,16 @@ export default function MyAddOnsPage() {
   };
 
   const handleCancel = async (companyAddOn: CompanyAddOn) => {
-    if (!confirm(`Are you sure you want to cancel "${companyAddOn.add_on.name}"? It will remain active until ${formatDate(companyAddOn.expires_at || '')}.`)) {
-      return;
-    }
+    setCancelConfirm({ open: true, addOn: companyAddOn });
+  };
 
+  const confirmCancel = async () => {
+    if (!cancelConfirm.addOn) return;
     try {
-      setCancelling(companyAddOn.id);
-      await addOnsService.cancelAddOn(companyAddOn.id);
+      setCancelling(cancelConfirm.addOn.id);
+      await addOnsService.cancelAddOn(cancelConfirm.addOn.id);
       toast.success('Add-on cancelled successfully');
+      setCancelConfirm({ open: false, addOn: null });
       await loadCompanyAddOns();
     } catch (error: any) {
       console.error('Failed to cancel add-on:', error);
@@ -399,6 +403,16 @@ export default function MyAddOnsPage() {
           })}
         </div>
       )}
+      <ConfirmModal
+        open={cancelConfirm.open}
+        title="Batalkan Add-on"
+        description={`Yakin ingin membatalkan "${cancelConfirm.addOn?.add_on.name}"? Add-on akan tetap aktif hingga ${formatDate(cancelConfirm.addOn?.expires_at || '')}.`}
+        confirmLabel="Ya, Batalkan"
+        variant="warning"
+        loading={!!cancelling}
+        onConfirm={confirmCancel}
+        onClose={() => setCancelConfirm({ open: false, addOn: null })}
+      />
     </div>
   );
 }

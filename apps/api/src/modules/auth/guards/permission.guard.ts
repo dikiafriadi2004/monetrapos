@@ -39,11 +39,6 @@ export class PermissionGuard implements CanActivate {
       throw new ForbiddenException('User not authenticated');
     }
 
-    // company_admin (platform admin) has all permissions
-    if (user.type === 'company_admin') {
-      return true;
-    }
-
     // Owner role always has full access to all features
     if (user.role === 'owner') {
       return true;

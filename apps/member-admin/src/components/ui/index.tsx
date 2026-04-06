@@ -73,6 +73,63 @@ export function DeleteModal({ open, onClose, onConfirm, title = 'Delete Item', d
   );
 }
 
+// ─── Universal Confirm Modal ──────────────────────────────────────────────────
+interface ConfirmModalProps {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title?: string;
+  description?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  variant?: 'danger' | 'warning' | 'info';
+  loading?: boolean;
+}
+
+const variantConfig = {
+  danger:  { bg: 'bg-red-100',    icon: 'text-red-600',    btn: 'btn-danger'   },
+  warning: { bg: 'bg-yellow-100', icon: 'text-yellow-600', btn: 'btn-warning'  },
+  info:    { bg: 'bg-blue-100',   icon: 'text-blue-600',   btn: 'btn-primary'  },
+};
+
+export function ConfirmModal({
+  open, onClose, onConfirm,
+  title = 'Konfirmasi',
+  description = 'Apakah Anda yakin?',
+  confirmLabel = 'Ya, Lanjutkan',
+  cancelLabel = 'Batal',
+  variant = 'danger',
+  loading,
+}: ConfirmModalProps) {
+  if (!open) return null;
+  const cfg = variantConfig[variant];
+  return (
+    <div className="modal-overlay">
+      <div className="modal-backdrop" onClick={onClose} />
+      <div className="modal-panel max-w-sm w-full animate-fade-in">
+        <div className="modal-body pt-6">
+          <div className="flex flex-col items-center text-center gap-3">
+            <div className={`w-12 h-12 rounded-full ${cfg.bg} flex items-center justify-center`}>
+              <AlertTriangle size={24} className={cfg.icon} />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-gray-900">{title}</h3>
+              <p className="text-sm text-gray-500 mt-1">{description}</p>
+            </div>
+          </div>
+        </div>
+        <div className="modal-footer">
+          <button onClick={onClose} className="btn btn-outline" disabled={loading}>{cancelLabel}</button>
+          <button onClick={onConfirm} className={`btn ${cfg.btn}`} disabled={loading}>
+            {loading ? <Loader2 size={16} className="animate-spin mr-1" /> : null}
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Page Header ─────────────────────────────────────────────────────────────
 interface PageHeaderProps {
   title: string;

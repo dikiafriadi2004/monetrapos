@@ -9,14 +9,14 @@ import {
   Request,
   Query,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { StockOpnameService } from './stock-opname.service';
 import { CreateStockOpnameDto } from './dto/create-stock-opname.dto';
 import { UpdateStockOpnameDto } from './dto/update-stock-opname.dto';
 import { StockOpnameStatus } from './stock-opname.entity';
 
 @Controller('stock-opnames')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(MemberJwtGuard)
 export class StockOpnameController {
   constructor(private readonly stockOpnameService: StockOpnameService) {}
 

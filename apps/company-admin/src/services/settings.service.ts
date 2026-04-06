@@ -65,8 +65,17 @@ class SettingsService {
   }
 
   async testEmailSettings(): Promise<{ success: boolean; message: string }> {
-    // Not implemented in backend yet - return mock success
-    return { success: false, message: 'Email testing not configured' };
+    // Delegate to backend email test endpoint using saved config
+    try {
+      const configs = await api.get('/admin/email/config') as any[];
+      const activeConfig = Array.isArray(configs) ? configs.find((c: any) => c.isEnabled) : null;
+      if (!activeConfig) {
+        return { success: false, message: 'Tidak ada konfigurasi email yang aktif. Atur email di halaman Email Settings.' };
+      }
+      return { success: true, message: `Email aktif: ${activeConfig.provider} (${activeConfig.username || activeConfig.fromEmail})` };
+    } catch {
+      return { success: false, message: 'Gagal mengambil konfigurasi email' };
+    }
   }
 }
 

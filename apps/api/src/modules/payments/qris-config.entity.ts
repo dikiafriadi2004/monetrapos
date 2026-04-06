@@ -1,6 +1,7 @@
 import { Entity, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { BaseEntity } from '../../common/entities';
 import { Store } from '../stores/store.entity';
+import { Company } from '../companies/company.entity';
 
 @Entity('qris_configs')
 export class QrisConfig extends BaseEntity {
@@ -19,10 +20,17 @@ export class QrisConfig extends BaseEntity {
   @Column({ default: true })
   isActive: boolean;
 
-  @Column({ name: 'store_id' })
+  @Column({ name: 'store_id', nullable: true })
   storeId: string;
 
-  @ManyToOne(() => Store, (store) => store.qrisConfigs)
+  @ManyToOne(() => Store, { nullable: true })
   @JoinColumn({ name: 'store_id' })
   store: Store;
+
+  @Column({ name: 'company_id', nullable: true })
+  companyId: string;
+
+  @ManyToOne(() => Company, { nullable: true })
+  @JoinColumn({ name: 'company_id' })
+  company: Company;
 }

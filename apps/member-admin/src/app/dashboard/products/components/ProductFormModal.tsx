@@ -59,16 +59,37 @@ export function ProductFormModal({ isOpen, onClose, onSubmit, initialData, categ
       });
       setImagePreview(getImageUrl(initialData.imageUrl) || '');
       setImageFile(null);
-      // Load existing variants
-      const existingVariants: Variant[] = (initialData.variants || []).map((v: any) => ({
-        id: v.id,
-        name: v.name,
-        priceAdjustment: Number(v.priceAdjustment) || 0,
-        sku: v.sku || '',
-        stock: Number(v.stock) || 0,
-      }));
-      setHasVariants(existingVariants.length > 0 || initialData.hasVariants);
-      setVariants(existingVariants.length > 0 ? existingVariants : []);
+
+      const hasExistingVariants = initialData.hasVariants || (initialData.variants && initialData.variants.length > 0);
+      setHasVariants(hasExistingVariants);
+
+      if (hasExistingVariants && initialData.id) {
+        // Fetch fresh variants from API to get latest stock/data
+        apiClient.get(`/products/${initialData.id}/variants`)
+          .then(res => {
+            const list = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+            setVariants(list.map((v: any) => ({
+              id: v.id,
+              name: v.name || '',
+              priceAdjustment: Number(v.priceAdjustment) || 0,
+              sku: v.sku || '',
+              stock: Number(v.stock) ?? 0,
+            })));
+          })
+          .catch(() => {
+            // fallback to initialData.variants
+            const fallback = (initialData.variants || []).map((v: any) => ({
+              id: v.id,
+              name: v.name || '',
+              priceAdjustment: Number(v.priceAdjustment) || 0,
+              sku: v.sku || '',
+              stock: Number(v.stock) ?? 0,
+            }));
+            setVariants(fallback);
+          });
+      } else {
+        setVariants([]);
+      }
     } else {
       setFormData({
         name: '', description: '', sku: '', barcode: '', categoryId: '',
@@ -122,12 +143,17 @@ export function ProductFormModal({ isOpen, onClose, onSubmit, initialData, categ
         categoryId: formData.categoryId || undefined,
         price: Number(formData.price),
         costPrice: formData.costPrice ? Number(formData.costPrice) : 0,
-        stock: hasVariants ? 0 : (Number(formData.stock) || 0),
         lowStockAlert: Number(formData.lowStockThreshold) || 10,
         trackStock: formData.trackInventory,
         isActive: formData.isActive,
         hasVariants,
       };
+
+      // Hanya kirim stock jika tidak pakai varian
+      // Jika pakai varian: stok produk induk dikelola dari stok varian, jangan override ke 0
+      if (!hasVariants) {
+        payload.stock = Number(formData.stock) || 0;
+      }
 
       const result = await onSubmit(payload);
       const productId = initialData?.id || result?.id || result?.data?.id;
@@ -170,6 +196,14 @@ export function ProductFormModal({ isOpen, onClose, onSubmit, initialData, categ
           } catch (err: any) {
             toast.error(`Gagal simpan varian "${v.name}"`);
           }
+        }
+
+        // Sync stok produk induk = total stok semua varian
+        const totalVariantStock = variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
+        try {
+          await apiClient.patch(`/products/${productId}`, { stock: totalVariantStock });
+        } catch {
+          // non-critical, ignore
         }
       }
 

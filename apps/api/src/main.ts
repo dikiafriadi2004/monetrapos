@@ -8,6 +8,10 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import helmet from 'helmet';
 import { LandingService } from './modules/landing/landing.service';
+import { FeaturesService } from './modules/features/features.service';
+import { AddOnsSeeder } from './common/seeders/add-ons.seeder';
+import { PaymentsService } from './modules/payments/payments.service';
+import { PaymentMethodsService } from './modules/payment-methods/payment-methods.service';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -98,7 +102,7 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
 
   const port = process.env.PORT || 4404;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
 
   // Auto-seed landing page default content
   try {
@@ -107,6 +111,55 @@ async function bootstrap() {
     logger.log('✅ Landing page content seeded');
   } catch (e) {
     logger.warn('⚠️  Landing page seed skipped:', e.message);
+  }
+
+  // Auto-seed platform features
+  try {
+    const featuresService = app.get(FeaturesService);
+    await featuresService.seedDefaults();
+    logger.log('✅ Platform features seeded');
+  } catch (e) {
+    logger.warn('⚠️  Features seed skipped:', e.message);
+  }
+
+  // Auto-setup QRIS dinamis dari gambar yang sudah ada
+  try {
+    const paymentsService = app.get(PaymentsService);
+    const pmService = app.get(PaymentMethodsService);
+    const allQrisMethods = await pmService.findAllQrisWithImage();
+    for (const pm of allQrisMethods) {
+      const existing = await paymentsService.findActiveQrisConfigByCompany(pm.companyId);
+      if (existing?.parsedData) continue; // sudah ada, skip
+      if (!pm.iconUrl) continue;
+      try {
+        const filePath = join(process.cwd(), pm.iconUrl);
+        const { Jimp } = require('jimp');
+        const jsQR = require('jsqr');
+        const fs = require('fs');
+        if (!fs.existsSync(filePath)) continue;
+        const image = await Jimp.read(filePath);
+        const { data, width, height } = image.bitmap;
+        const code = jsQR(data, width, height);
+        if (code?.data?.startsWith('000201')) {
+          await paymentsService.upsertQrisConfigByCompany(pm.companyId, {
+            parsedData: code.data,
+            originalImage: code.data,
+          });
+          logger.log(`✅ QRIS auto-decoded for company ${pm.companyId}`);
+        }
+      } catch { /* skip */ }
+    }
+  } catch (e) {
+    logger.warn('⚠️  QRIS auto-setup skipped:', e.message);
+  }
+
+  // Auto-seed add-ons
+  try {
+    const addOnsSeeder = app.get(AddOnsSeeder);
+    await addOnsSeeder.seed();
+    logger.log('✅ Add-ons seeded');
+  } catch (e) {
+    logger.warn('⚠️  Add-ons seed skipped:', e.message);
   }
 
   logger.log(`🚀 MonetraPOS API running on http://localhost:${port}`);

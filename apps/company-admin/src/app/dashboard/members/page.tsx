@@ -38,7 +38,7 @@ export default function MembersPage() {
 
   const fetchMembers = async () => {
     try {
-      const data: any = await api.get('/companies/members?limit=100');
+      const data: any = await api.get('/admin/companies?limit=100');
       setMembers(Array.isArray(data?.data) ? data.data.map((m: any) => ({
         id: m.id,
         name: m.name,
@@ -68,7 +68,7 @@ export default function MembersPage() {
     const newStatus = member.status === 'active' ? 'suspended' : 'active';
     setActionLoading(true);
     try {
-      await api.patch(`/companies/members/${member.id}/status`, { status: newStatus });
+      await api.patch(`/admin/companies/${member.id}/status`, { status: newStatus });
       setMembers(prev => prev.map(m => m.id === member.id ? { ...m, status: newStatus } : m));
       toast.success(`Member ${newStatus === 'suspended' ? 'disuspend' : 'diaktifkan'}`);
       setStatusConfirm({ open: false, member: null });
@@ -83,7 +83,7 @@ export default function MembersPage() {
     if (!deleteConfirm.member) return;
     setActionLoading(true);
     try {
-      await api.delete(`/companies/members/${deleteConfirm.member.id}`);
+      await api.delete(`/admin/companies/${deleteConfirm.member.id}`);
       setMembers(prev => prev.filter(m => m.id !== deleteConfirm.member!.id));
       toast.success('Member dihapus');
       setDeleteConfirm({ open: false, member: null });
@@ -115,9 +115,9 @@ export default function MembersPage() {
     setSubmitting(true);
     try {
       if (editingMember) {
-        await api.patch(`/companies/members/${editingMember.id}`, formData);
+        await api.patch(`/admin/companies/${editingMember.id}`, formData);
       } else {
-        await api.post('/companies/members', { ...formData, password: 'Monetra@123' });
+        await api.post('/admin/companies', { ...formData, password: 'Monetra@123' });
       }
       await fetchMembers();
       setModalOpen(false);

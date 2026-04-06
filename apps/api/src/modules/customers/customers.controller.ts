@@ -16,13 +16,13 @@ import {
   ApiOperation,
   ApiQuery,
 } from '@nestjs/swagger';
-import { AuthGuard } from '@nestjs/passport';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { CustomersService } from './customers.service';
 import { CreateCustomerDto, UpdateCustomerDto, AddPointsDto, RedeemPointsDto } from './dto';
 
 @ApiTags('Customers')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(MemberJwtGuard)
 @Controller('customers')
 export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}

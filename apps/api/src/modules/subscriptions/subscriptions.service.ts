@@ -3,6 +3,8 @@ import {
   NotFoundException,
   BadRequestException,
   Logger,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -17,6 +19,7 @@ import {
   SubscriptionHistory,
   SubscriptionHistoryAction,
 } from './subscription-history.entity';
+import { BillingService } from '../billing/billing.service';
 
 @Injectable()
 export class SubscriptionsService {
@@ -31,6 +34,8 @@ export class SubscriptionsService {
     private readonly companyRepository: Repository<Company>,
     @InjectRepository(SubscriptionHistory)
     private readonly historyRepository: Repository<SubscriptionHistory>,
+    @Inject(forwardRef(() => BillingService))
+    private readonly billingService: BillingService,
   ) {}
 
   /**
@@ -280,7 +285,42 @@ export class SubscriptionsService {
       },
     });
 
-    // TODO: Calculate prorated amount and create invoice
+    // Calculate prorated amount and create invoice for upgrades
+    if (isUpgrade && currentSubscription.endDate) {
+      const now = new Date();
+      const endDate = new Date(currentSubscription.endDate);
+      const totalDays = currentSubscription.billingCycle === BillingCycle.MONTHLY ? 30 : 365;
+      const remainingDays = Math.max(0, Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+
+      if (remainingDays > 0) {
+        const oldDailyRate = Number(oldPrice) / totalDays;
+        const newDailyRate = Number(newPrice) / totalDays;
+        const proratedAmount = Math.round((newDailyRate - oldDailyRate) * remainingDays);
+
+        if (proratedAmount > 0) {
+          const dueDate = new Date();
+          dueDate.setDate(dueDate.getDate() + 3);
+
+          await this.billingService.createInvoice({
+            companyId,
+            subscriptionId: currentSubscription.id,
+            subtotal: proratedAmount,
+            total: proratedAmount,
+            dueDate,
+            lineItems: [
+              {
+                description: `Prorated upgrade: ${oldPlan?.name || 'Old Plan'} → ${newPlan.name} (${remainingDays} hari tersisa)`,
+                quantity: 1,
+                unitPrice: proratedAmount,
+                amount: proratedAmount,
+              },
+            ],
+          });
+
+          this.logger.log(`Prorated invoice created for plan upgrade: Rp ${proratedAmount} (${remainingDays} days remaining)`);
+        }
+      }
+    }
 
     return currentSubscription;
   }

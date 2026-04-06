@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { purchaseOrdersService, PurchaseOrder, PurchaseOrderStatus, ReceivePurchaseOrderDto } from '@/services/purchase-orders.service';
 import { ArrowLeft, Package, Building2, Store, Calendar, CheckCircle, XCircle, Loader2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { ConfirmModal } from '@/components/ui';
 
 const STATUS_COLORS: Record<string, string> = {
   draft: '#6b7280', sent: '#3b82f6', received: 'var(--success)', cancelled: 'var(--danger)',
@@ -28,6 +29,7 @@ export default function PurchaseOrderDetailPage() {
   const [receiving, setReceiving] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [sendingStatus, setSendingStatus] = useState(false);
+  const [actionConfirm, setActionConfirm] = useState<{ open: boolean; type: 'send' | 'cancel' }>({ open: false, type: 'send' });
 
   useEffect(() => { load(); }, [id]);
 
@@ -45,25 +47,32 @@ export default function PurchaseOrderDetailPage() {
   };
 
   const handleSend = async () => {
-    if (!confirm('Mark this PO as sent to supplier?')) return;
-    setSendingStatus(true);
-    try {
-      await purchaseOrdersService.updateStatus(id, PurchaseOrderStatus.SENT);
-      toast.success('PO marked as sent');
-      load();
-    } catch { toast.error('Failed to update status'); }
-    finally { setSendingStatus(false); }
+    setActionConfirm({ open: true, type: 'send' });
   };
 
   const handleCancel = async () => {
-    if (!confirm('Cancel this purchase order? This cannot be undone.')) return;
-    setCancelling(true);
-    try {
-      await purchaseOrdersService.cancel(id);
-      toast.success('Purchase order cancelled');
-      load();
-    } catch { toast.error('Failed to cancel'); }
-    finally { setCancelling(false); }
+    setActionConfirm({ open: true, type: 'cancel' });
+  };
+
+  const confirmAction = async () => {
+    if (actionConfirm.type === 'send') {
+      setSendingStatus(true);
+      try {
+        await purchaseOrdersService.updateStatus(id, PurchaseOrderStatus.SENT);
+        toast.success('PO marked as sent');
+        load();
+      } catch { toast.error('Failed to update status'); }
+      finally { setSendingStatus(false); }
+    } else {
+      setCancelling(true);
+      try {
+        await purchaseOrdersService.cancel(id);
+        toast.success('Purchase order cancelled');
+        load();
+      } catch { toast.error('Failed to cancel'); }
+      finally { setCancelling(false); }
+    }
+    setActionConfirm({ open: false, type: 'send' });
   };
 
   const handleReceive = async () => {
@@ -280,6 +289,19 @@ export default function PurchaseOrderDetailPage() {
         </div>
       )}
       <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { 100% { transform: rotate(360deg); } }` }} />
+      <ConfirmModal
+        open={actionConfirm.open}
+        title={actionConfirm.type === 'send' ? 'Kirim ke Supplier' : 'Batalkan Purchase Order'}
+        description={actionConfirm.type === 'send'
+          ? 'Tandai PO ini sebagai sudah dikirim ke supplier? Status akan berubah menjadi Sent.'
+          : 'Batalkan purchase order ini? Tindakan ini tidak dapat dibatalkan.'
+        }
+        confirmLabel={actionConfirm.type === 'send' ? 'Ya, Kirim' : 'Ya, Batalkan'}
+        variant={actionConfirm.type === 'send' ? 'warning' : 'danger'}
+        loading={sendingStatus || cancelling}
+        onConfirm={confirmAction}
+        onClose={() => setActionConfirm({ open: false, type: 'send' })}
+      />
     </div>
   );
 }

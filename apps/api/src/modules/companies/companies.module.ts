@@ -9,9 +9,13 @@ import { Company } from './company.entity';
 import { User } from '../users/user.entity';
 import { Invoice } from '../billing/invoice.entity';
 import { Subscription } from '../subscriptions/subscription.entity';
+import { AdminAuthModule } from '../admin-auth/admin-auth.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Company, User, Invoice, Subscription])],
+  imports: [
+    TypeOrmModule.forFeature([Company, User, Invoice, Subscription]),
+    AdminAuthModule,
+  ],
   controllers: [CompaniesController, AdminCompaniesController, AdminDashboardController, AdminSettingsController],
   providers: [CompaniesService],
   exports: [CompaniesService],

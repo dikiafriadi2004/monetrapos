@@ -10,14 +10,14 @@ import {
   Request,
   UseGuards,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { DiscountsService } from './discounts.service';
 import { CreateDiscountDto } from './dto/create-discount.dto';
 import { UpdateDiscountDto } from './dto/update-discount.dto';
 import { ValidatePromoCodeDto, GeneratePromoCodeDto } from './dto/validate-promo-code.dto';
 
 @Controller('discounts')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(MemberJwtGuard)
 export class DiscountsController {
   constructor(private readonly discountsService: DiscountsService) {}
 

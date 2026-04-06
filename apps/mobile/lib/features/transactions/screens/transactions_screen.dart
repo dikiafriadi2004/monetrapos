@@ -64,7 +64,7 @@ class TransactionsScreen extends ConsumerWidget {
                 : Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                     child: DropdownButtonFormField<String>(
-                      value: selectedStore,
+                      initialValue: selectedStore,
                       decoration: const InputDecoration(
                           labelText: 'Pilih Toko',
                           prefixIcon: Icon(Icons.store)),
