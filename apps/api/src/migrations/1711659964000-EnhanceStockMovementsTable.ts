@@ -4,67 +4,67 @@ export class EnhanceStockMovementsTable1711659964000
   implements MigrationInterface
 {
   public async up(queryRunner: QueryRunner): Promise<void> {
+    const table = await queryRunner.getTable('stock_movements');
+
     // Add variant_id column
-    await queryRunner.addColumn(
-      'stock_movements',
-      new TableColumn({
-        name: 'variant_id',
-        type: 'varchar',
-        length: '36',
-        isNullable: true,
-      }),
-    );
+    if (!table?.columns.find((c) => c.name === 'variant_id')) {
+      await queryRunner.addColumn(
+        'stock_movements',
+        new TableColumn({
+          name: 'variant_id',
+          type: 'varchar',
+          length: '36',
+          isNullable: true,
+        }),
+      );
+    }
 
     // Add performed_by column
-    await queryRunner.addColumn(
-      'stock_movements',
-      new TableColumn({
-        name: 'performed_by',
-        type: 'varchar',
-        length: '36',
-        isNullable: true,
-      }),
-    );
+    if (!table?.columns.find((c) => c.name === 'performed_by')) {
+      await queryRunner.addColumn(
+        'stock_movements',
+        new TableColumn({
+          name: 'performed_by',
+          type: 'varchar',
+          length: '36',
+          isNullable: true,
+        }),
+      );
+    }
 
-    // Add foreign key for variant_id
-    await queryRunner.createForeignKey(
-      'stock_movements',
-      new TableForeignKey({
-        columnNames: ['variant_id'],
-        referencedTableName: 'product_variants',
-        referencedColumnNames: ['id'],
-        onDelete: 'CASCADE',
-      }),
-    );
+    // Add foreign key for variant_id only if not exists
+    const refreshedTable = await queryRunner.getTable('stock_movements');
+    const hasVariantFk = refreshedTable?.foreignKeys.some((fk) => fk.columnNames.includes('variant_id'));
+    if (!hasVariantFk) {
+      await queryRunner.createForeignKey(
+        'stock_movements',
+        new TableForeignKey({
+          columnNames: ['variant_id'],
+          referencedTableName: 'product_variants',
+          referencedColumnNames: ['id'],
+          onDelete: 'CASCADE',
+        }),
+      );
+    }
 
-    // Add foreign key for performed_by
-    await queryRunner.createForeignKey(
-      'stock_movements',
-      new TableForeignKey({
-        columnNames: ['performed_by'],
-        referencedTableName: 'users',
-        referencedColumnNames: ['id'],
-        onDelete: 'SET NULL',
-      }),
-    );
+    // Add foreign key for performed_by only if not exists
+    const hasPerformedByFk = refreshedTable?.foreignKeys.some((fk) => fk.columnNames.includes('performed_by'));
+    if (!hasPerformedByFk) {
+      await queryRunner.createForeignKey(
+        'stock_movements',
+        new TableForeignKey({
+          columnNames: ['performed_by'],
+          referencedTableName: 'users',
+          referencedColumnNames: ['id'],
+          onDelete: 'SET NULL',
+        }),
+      );
+    }
 
-    // PostgreSQL: Drop and recreate the type column with new enum values
+    // MySQL: Modify type column to include new enum values
     await queryRunner.query(`
       ALTER TABLE stock_movements 
-      ALTER COLUMN type TYPE VARCHAR(20)
-    `);
-    
-    await queryRunner.query(`
-      DO $$ BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'stock_movement_type_enum') THEN
-          CREATE TYPE stock_movement_type_enum AS ENUM('in', 'out', 'adjustment', 'return', 'sale', 'transfer');
-        END IF;
-      END $$;
-    `);
-    
-    await queryRunner.query(`
-      ALTER TABLE stock_movements 
-      ALTER COLUMN type TYPE stock_movement_type_enum USING type::stock_movement_type_enum
+      MODIFY COLUMN type ENUM('in', 'out', 'adjustment', 'return', 'sale', 'transfer') NOT NULL
     `);
   }
 

@@ -80,6 +80,20 @@ export class AdminCompaniesController {
     return this.companiesService.updateMemberStatus(id, dto);
   }
 
+  @Get(':id/subscriptions')
+  @ApiOperation({ summary: 'Get subscription history for a member' })
+  @HttpCode(HttpStatus.OK)
+  async getMemberSubscriptions(@Param('id') id: string) {
+    return this.companiesService.getMemberSubscriptions(id);
+  }
+
+  @Post(':id/extend-subscription')
+  @ApiOperation({ summary: 'Extend subscription for a member (admin manual)' })
+  @HttpCode(HttpStatus.OK)
+  async extendSubscription(@Param('id') id: string, @Body() dto: { months: number }) {
+    return this.companiesService.extendSubscription(id, dto.months || 1);
+  }
+
   @Delete(':id')
   @ApiOperation({ summary: 'Delete member company' })
   @HttpCode(HttpStatus.OK)

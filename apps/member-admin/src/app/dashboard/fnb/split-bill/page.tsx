@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Search, SplitSquareHorizontal, Users, DollarSign, Loader2, Plus, Trash2, Receipt } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import toast from 'react-hot-toast';
+import { formatRupiah } from '@/lib/date';
 
 interface TransactionItem {
   id: string;
@@ -95,7 +96,7 @@ export default function SplitBillPage() {
         setResult((res as any).data?.splits || (res as any).data);
       } else {
         const totalAssigned = splits.reduce((sum, s) => sum + (s.amount || 0), 0);
-        if (Math.abs(totalAssigned - originalTotal) > 1) { toast.error(`Total must equal Rp ${originalTotal.toLocaleString('id-ID')}`); setCalculating(false); return; }
+        if (Math.abs(totalAssigned - originalTotal) > 1) { toast.error(`Total must equal Rp ${formatRupiah(originalTotal)}`); setCalculating(false); return; }
         const res = await apiClient.post(`/fnb/split-bill/transactions/${transactionId}/by-amount`, { splits: splits.map(s => ({ label: s.label, amount: s.amount || 0 })) });
         setResult((res as any).data?.splits || (res as any).data);
       }
@@ -106,7 +107,7 @@ export default function SplitBillPage() {
     }
   };
 
-  const formatCurrency = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
+  const formatCurrency = (n: number) => `Rp ${formatRupiah(n)}`;
 
   return (
     <div>

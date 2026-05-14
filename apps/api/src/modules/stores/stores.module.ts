@@ -4,12 +4,12 @@ import { StoresService } from './stores.service';
 import { StoresController } from './stores.controller';
 import { Store } from './store.entity';
 import { User } from '../users/user.entity';
+import { StorageService } from '../../common/utils/storage.service';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Store, User])],
+  imports: [TypeOrmModule.forFeature([Store, User])],
   controllers: [StoresController],
-  providers: [StoresService],
+  providers: [StoresService, StorageService],
   exports: [StoresService],
 })
 export class StoresModule {}

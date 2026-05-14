@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Upload, X, Image as ImageIcon, Loader2 } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import { getImageUrl } from '@/lib/date';
@@ -29,6 +29,11 @@ export default function ImageUpload({
   // Resolve initial value to full URL so broken image doesn't appear
   const [preview, setPreview] = useState<string>(getImageUrl(value) || '');
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Sync preview when value prop changes (e.g. after data fetch)
+  useEffect(() => {
+    if (value) setPreview(getImageUrl(value) || '');
+  }, [value]);
 
   const handleFile = async (file: File) => {
     if (file.size > maxSizeMB * 1024 * 1024) {

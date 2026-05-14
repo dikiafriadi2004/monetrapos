@@ -7,11 +7,13 @@ import {
   ManyToOne,
   JoinColumn,
   Index,
+  Unique,
 } from 'typeorm';
 import { Company } from '../companies/company.entity';
 
 @Entity('suppliers')
 @Index(['company_id'])
+@Unique('uq_supplier_code_company', ['company_id', 'supplier_code'])
 export class Supplier {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -23,7 +25,7 @@ export class Supplier {
   @JoinColumn({ name: 'company_id' })
   company: Company;
 
-  @Column({ unique: true, length: 50 })
+  @Column({ length: 50 })
   supplier_code: string;
 
   @Column({ length: 200 })

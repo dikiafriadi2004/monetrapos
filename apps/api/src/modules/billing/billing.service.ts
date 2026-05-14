@@ -66,6 +66,7 @@ export class BillingService {
 
   /**
    * Create invoice for add-on purchase
+   * Tax rate is fetched from company settings, fallback to 0%
    */
   async createAddOnInvoice(
     companyId: string,
@@ -73,8 +74,17 @@ export class BillingService {
     companyAddOnId: string,
   ): Promise<Invoice> {
     const subtotal = Number(addOn.price);
-    const taxRate = 11; // PPN 11%
-    const taxAmount = subtotal * (taxRate / 100);
+
+    // Fetch company tax settings
+    let taxRate = 0;
+    try {
+      const company = await this.companyRepository.findOne({ where: { id: companyId } });
+      taxRate = Number(company?.metadata?.taxSettings?.defaultTaxRate || 0);
+    } catch {
+      taxRate = 0;
+    }
+
+    const taxAmount = Math.round(subtotal * (taxRate / 100));
     const total = subtotal + taxAmount;
 
     const dueDate = new Date();
@@ -143,6 +153,31 @@ export class BillingService {
 
     if (!invoice) {
       throw new NotFoundException('Invoice not found');
+    }
+
+    return invoice;
+  }
+
+  /**
+   * Find invoice by UUID id OR by invoice number (INV-YYYYMM-XXXXX)
+   * Supports both formats so checkout page can use either
+   */
+  async findInvoiceByIdOrNumber(idOrNumber: string, companyId: string | null): Promise<Invoice> {
+    // Detect if it looks like an invoice number (starts with INV-)
+    const isInvoiceNumber = idOrNumber.startsWith('INV-');
+
+    const where: any = isInvoiceNumber
+      ? { invoiceNumber: idOrNumber }
+      : { id: idOrNumber };
+
+    if (companyId) {
+      where.companyId = companyId;
+    }
+
+    const invoice = await this.invoiceRepository.findOne({ where });
+
+    if (!invoice) {
+      throw new NotFoundException(`Invoice not found: ${idOrNumber}`);
     }
 
     return invoice;

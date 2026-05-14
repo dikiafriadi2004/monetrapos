@@ -54,6 +54,9 @@ export class Employee extends BaseEntity {
   @Column({ length: 50, unique: true, name: 'employee_number' })
   employeeNumber: string;
 
+  @Column({ length: 50, nullable: true, default: 'cashier' })
+  role: string; // cashier, staff, manager, accountant, admin
+
   @Column({ length: 100, nullable: true })
   position: string; // cashier, cook, waiter, manager
 

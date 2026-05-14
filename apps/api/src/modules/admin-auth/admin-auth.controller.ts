@@ -25,6 +25,17 @@ export class AdminAuthController {
     return this.adminAuthService.getMe(req.user.id);
   }
 
+  @Patch('me')
+  @UseGuards(AdminJwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update current admin profile or password' })
+  async updateMe(
+    @Request() req: any,
+    @Body() dto: { name?: string; currentPassword?: string; newPassword?: string },
+  ) {
+    return this.adminAuthService.updateMe(req.user.id, dto);
+  }
+
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh admin access token' })

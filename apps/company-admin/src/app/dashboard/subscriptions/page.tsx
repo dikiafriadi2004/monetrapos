@@ -132,7 +132,11 @@ export default function SubscriptionsPage() {
   };
 
   const handleSave = async () => {
-    if (!form.name || !form.priceMonthly) return;
+    if (!form.name.trim()) { toast.error('Nama plan wajib diisi'); return; }
+    if (!form.priceMonthly || parseFloat(form.priceMonthly) < 0) { toast.error('Harga bulanan tidak valid'); return; }
+    if (parseInt(form.maxStores) < 1) { toast.error('Max stores minimal 1'); return; }
+    if (parseInt(form.maxProducts) < 1) { toast.error('Max products minimal 1'); return; }
+    if (parseInt(form.maxUsers) < 1) { toast.error('Max users minimal 1'); return; }
     setSubmitting(true);
     try {
       const slug = form.slug || form.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');

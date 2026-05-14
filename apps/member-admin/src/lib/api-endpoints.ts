@@ -6,6 +6,7 @@ export const API_ENDPOINTS = {
     LOGIN: '/auth/login',
     LOGIN_EMPLOYEE: '/auth/login/employee',
     REGISTER: '/auth/register',
+    REGISTER_SIMPLE: '/auth/register/simple',
     LOGOUT: '/auth/logout',
     REFRESH: '/auth/refresh',
     ME: '/auth/me',
@@ -96,15 +97,6 @@ export const API_ENDPOINTS = {
     CUSTOMERS: '/reports/customers',
     INVENTORY: '/reports/inventory',
     DASHBOARD: '/reports/dashboard',
-  },
-
-  // Shifts
-  SHIFTS: {
-    BASE: '/shifts',
-    BY_ID: (id: string) => `/shifts/${id}`,
-    CURRENT: '/shifts/current',
-    OPEN: '/shifts/open',
-    CLOSE: (id: string) => `/shifts/${id}/close`,
   },
 
   // Notifications

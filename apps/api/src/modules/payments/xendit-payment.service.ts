@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import Xendit from 'xendit-node';
 import { PaymentGatewayConfigService } from '../payment-gateway/payment-gateway-config.service';
 
@@ -17,6 +17,7 @@ export interface XenditInvoiceData {
     price: number;
     category?: string;
   }>;
+  paymentMethods?: string[]; // Specify which payment methods to show
 }
 
 export interface XenditInvoiceResponse {
@@ -40,7 +41,7 @@ export class XenditPaymentService {
 
   private async getClient(): Promise<Xendit> {
     const config = await this.configService.getXenditConfig();
-    if (!config) throw new Error('Xendit payment gateway is not configured. Please set up Xendit credentials in Platform Settings.');
+    if (!config) throw new BadRequestException('Xendit payment gateway is not configured. Please set up Xendit credentials in Platform Settings.');
     return new Xendit({ secretKey: config.secretKey });
   }
 
@@ -54,6 +55,22 @@ export class XenditPaymentService {
     try {
       this.logger.log(`Creating Xendit invoice for ${data.externalId}`);
       const { Invoice } = client;
+      
+      // Default payment methods if not specified
+      // Note: E-wallet in Xendit Invoice uses QRIS as the underlying technology
+      // For true e-wallet direct debit, use Xendit E-Wallet API separately
+      const paymentMethods = data.paymentMethods || [
+        'CREDIT_CARD',
+        'BCA',
+        'BNI',
+        'BRI',
+        'MANDIRI',
+        'PERMATA',
+        'QRIS',
+        // E-wallet options (will show as QRIS in invoice)
+        // For direct e-wallet payment, need to use separate E-Wallet API
+      ];
+      
       const invoice = await Invoice.createInvoice({
         data: {
           externalId: data.externalId,
@@ -66,13 +83,14 @@ export class XenditPaymentService {
           currency: data.currency || 'IDR',
           items: data.items,
           shouldSendEmail: true,
+          paymentMethods, // Specify which payment methods to show
         },
       });
       this.logger.log(`Xendit invoice created: ${(invoice as any).id}`);
       return invoice as unknown as XenditInvoiceResponse;
     } catch (error) {
       this.logger.error('Failed to create Xendit invoice', error);
-      throw new Error(`Xendit invoice creation failed: ${error.message}`);
+      throw new BadRequestException(`Xendit invoice creation failed: ${error.message}`);
     }
   }
 

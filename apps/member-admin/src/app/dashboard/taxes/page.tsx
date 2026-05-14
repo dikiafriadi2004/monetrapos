@@ -7,7 +7,9 @@ import { useStore } from '@/hooks/useStore';
 import { useAuth } from '@/contexts/AuthContext';
 import apiClient from '@/lib/api-client';
 import toast from 'react-hot-toast';
-import { Modal, DeleteModal, PageHeader, EmptyState, LoadingSpinner } from '@/components/ui';
+import { Modal, DeleteModal, PageHeader, EmptyState, LoadingSpinner, Pagination } from '@/components/ui';
+import { usePagination } from '@/hooks/usePagination';
+import { formatRupiah } from '@/lib/date';
 
 interface Discount {
   id: string; name: string; type: 'percentage' | 'fixed'; value: number;
@@ -46,6 +48,9 @@ export default function TaxesDiscountsPage() {
 
   useEffect(() => { fetchData(); }, [storeId]);
 
+  const taxPagination = usePagination(taxes);
+  const discountPagination = usePagination(discounts);
+
   const handleSaveTax = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!taxForm.name || !taxForm.rate) return;
@@ -66,7 +71,14 @@ export default function TaxesDiscountsPage() {
     if (!discountForm.name || !discountForm.value) return;
     setSubmitting(true);
     try {
-      const payload = { name: discountForm.name, type: discountForm.type, value: parseFloat(discountForm.value), code: discountForm.code || undefined, minOrder: discountForm.minOrder ? parseFloat(discountForm.minOrder) : undefined, isActive: true };
+      const payload = {
+        name: discountForm.name,
+        type: discountForm.type,
+        value: parseFloat(discountForm.value),
+        promoCode: discountForm.code || undefined,
+        minTransaction: discountForm.minOrder ? parseFloat(discountForm.minOrder) : undefined,
+        isActive: true,
+      };
       if (discountModal.editing) await apiClient.patch(`/discounts/${discountModal.editing.id}`, payload);
       else await apiClient.post('/discounts', payload);
       toast.success(discountModal.editing ? 'Discount updated' : 'Discount created');
@@ -140,61 +152,71 @@ export default function TaxesDiscountsPage() {
         <div className="card">
           {activeTab === 'taxes' && (
             taxes.length === 0 ? <EmptyState icon={Percent} title="No tax rates configured" action={<button onClick={() => openTaxModal()} className="btn btn-outline btn-sm">Add First Tax</button>} /> : (
-              <div className="table-container border-0">
-                <table className="table">
-                  <thead><tr><th>Tax Name</th><th>Rate</th><th>Type</th><th>Status</th><th className="text-right">Actions</th></tr></thead>
-                  <tbody>
-                    {taxes.map(tax => (
-                      <tr key={tax.id}>
-                        <td className="font-medium">{tax.name}</td>
-                        <td><span className="font-bold text-amber-600">{tax.rate}%</span></td>
-                        <td><span className="badge badge-gray capitalize">{tax.type || 'Percentage'}</span></td>
-                        <td>
-                          <button onClick={() => handleToggleTax(tax)} className={`text-sm ${tax.isActive ? 'text-emerald-600' : 'text-gray-400'}`}>
-                            {tax.isActive ? <ToggleRight size={22} /> : <ToggleLeft size={22} />}
-                          </button>
-                        </td>
-                        <td>
-                          <div className="flex justify-end gap-1">
-                            <button onClick={() => openTaxModal(tax)} className="btn btn-ghost btn-icon btn-sm"><Edit size={14} /></button>
-                            <button onClick={() => setDeleteModal({ open: true, type: 'tax', id: tax.id, name: tax.name })} className="btn btn-ghost btn-icon btn-sm text-red-500"><Trash2 size={14} /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                <div className="table-container border-0">
+                  <table className="table">
+                    <thead><tr><th>Tax Name</th><th>Rate</th><th>Type</th><th>Status</th><th className="text-right">Actions</th></tr></thead>
+                    <tbody>
+                      {taxPagination.paginated.map(tax => (
+                        <tr key={tax.id}>
+                          <td className="font-medium">{tax.name}</td>
+                          <td><span className="font-bold text-amber-600">{tax.rate}%</span></td>
+                          <td><span className="badge badge-gray capitalize">{tax.type || 'Percentage'}</span></td>
+                          <td>
+                            <button onClick={() => handleToggleTax(tax)} className={`text-sm ${tax.isActive ? 'text-emerald-600' : 'text-gray-400'}`}>
+                              {tax.isActive ? <ToggleRight size={22} /> : <ToggleLeft size={22} />}
+                            </button>
+                          </td>
+                          <td>
+                            <div className="flex justify-end gap-1">
+                              <button onClick={() => openTaxModal(tax)} className="btn btn-ghost btn-icon btn-sm"><Edit size={14} /></button>
+                              <button onClick={() => setDeleteModal({ open: true, type: 'tax', id: tax.id, name: tax.name })} className="btn btn-ghost btn-icon btn-sm text-red-500"><Trash2 size={14} /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="px-4 pb-3">
+                  <Pagination page={taxPagination.page} totalPages={taxPagination.totalPages} onPageChange={taxPagination.setPage} totalItems={taxPagination.totalItems} />
+                </div>
+              </>
             )
           )}
 
           {activeTab === 'discounts' && (
             discounts.length === 0 ? <EmptyState icon={Tag} title="No discounts configured" action={<button onClick={() => openDiscountModal()} className="btn btn-outline btn-sm">Create First Discount</button>} /> : (
-              <div className="table-container border-0">
-                <table className="table">
-                  <thead><tr><th>Discount Name</th><th>Value</th><th>Code</th><th>Status</th><th className="text-right">Actions</th></tr></thead>
-                  <tbody>
-                    {discounts.map(d => (
-                      <tr key={d.id}>
-                        <td className="font-medium">{d.name}</td>
-                        <td><span className="font-bold text-emerald-600">{d.type === 'percentage' ? `${d.value}%` : `Rp ${(d.value||0).toLocaleString('id-ID')}`}</span></td>
-                        <td>{d.code ? <span className="font-mono text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded">{d.code}</span> : <span className="text-gray-400">—</span>}</td>
-                        <td>
-                          <button onClick={() => handleToggleDiscount(d)} className={`text-sm ${d.isActive ? 'text-emerald-600' : 'text-gray-400'}`}>
-                            {d.isActive ? <ToggleRight size={22} /> : <ToggleLeft size={22} />}
-                          </button>
-                        </td>
-                        <td>
-                          <div className="flex justify-end gap-1">
-                            <button onClick={() => openDiscountModal(d)} className="btn btn-ghost btn-icon btn-sm"><Edit size={14} /></button>
-                            <button onClick={() => setDeleteModal({ open: true, type: 'discount', id: d.id, name: d.name })} className="btn btn-ghost btn-icon btn-sm text-red-500"><Trash2 size={14} /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                <div className="table-container border-0">
+                  <table className="table">
+                    <thead><tr><th>Discount Name</th><th>Value</th><th>Code</th><th>Status</th><th className="text-right">Actions</th></tr></thead>
+                    <tbody>
+                      {discountPagination.paginated.map(d => (
+                        <tr key={d.id}>
+                          <td className="font-medium">{d.name}</td>
+                          <td><span className="font-bold text-emerald-600">{d.type === 'percentage' ? `${d.value}%` : `Rp ${formatRupiah(d.value || 0)}`}</span></td>
+                          <td>{d.code ? <span className="font-mono text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded">{d.code}</span> : <span className="text-gray-400">—</span>}</td>
+                          <td>
+                            <button onClick={() => handleToggleDiscount(d)} className={`text-sm ${d.isActive ? 'text-emerald-600' : 'text-gray-400'}`}>
+                              {d.isActive ? <ToggleRight size={22} /> : <ToggleLeft size={22} />}
+                            </button>
+                          </td>
+                          <td>
+                            <div className="flex justify-end gap-1">
+                              <button onClick={() => openDiscountModal(d)} className="btn btn-ghost btn-icon btn-sm"><Edit size={14} /></button>
+                              <button onClick={() => setDeleteModal({ open: true, type: 'discount', id: d.id, name: d.name })} className="btn btn-ghost btn-icon btn-sm text-red-500"><Trash2 size={14} /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="px-4 pb-3">
+                  <Pagination page={discountPagination.page} totalPages={discountPagination.totalPages} onPageChange={discountPagination.setPage} totalItems={discountPagination.totalItems} />
+                </div>
+              </>
             )
           )}
         </div>

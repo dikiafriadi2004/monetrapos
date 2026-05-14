@@ -183,11 +183,57 @@ export class UsageService {
   }
 
   /**
-   * Reset usage for new period (called by cron job)
+   * Reset usage for new period (called by cron job at start of each month)
+   * Creates fresh zero-count records for the new period for all active companies.
+   * Old records are kept for historical data.
    */
   async resetMonthlyUsage(): Promise<void> {
-    // This would be called by a cron job at the start of each month
-    // For now, we just create new records for the new period
-    // Old records are kept for historical data
+    const { periodStart, periodEnd } = this.getCurrentPeriod();
+
+    // Get all active companies
+    const companies = await this.companyRepository.find({
+      where: { status: 'active' as any },
+      select: ['id'],
+    });
+
+    for (const company of companies) {
+      for (const metric of Object.values(UsageMetric)) {
+        // Only reset transaction-based metrics (not cumulative ones like products/customers)
+        if (metric !== UsageMetric.TRANSACTIONS) continue;
+
+        const existing = await this.usageRepository.findOne({
+          where: { companyId: company.id, metric, periodStart },
+        });
+
+        if (!existing) {
+          // Create new period record starting at 0
+          const newRecord = this.usageRepository.create({
+            companyId: company.id,
+            metric,
+            count: 0,
+            periodStart,
+            periodEnd,
+          });
+          await this.usageRepository.save(newRecord);
+        }
+      }
+    }
+  }
+
+  /**
+   * Sync cumulative metrics (products, customers, users, employees, stores)
+   * from actual DB counts — called periodically to keep usage accurate
+   */
+  async syncCumulativeUsage(companyId: string): Promise<void> {
+    const { periodStart, periodEnd } = this.getCurrentPeriod();
+
+    const company = await this.companyRepository.findOne({
+      where: { id: companyId },
+    });
+    if (!company) return;
+
+    // For cumulative metrics, count is derived from actual records
+    // This is a no-op for now — actual counts are checked directly in checkLimit
+    // Future: sync from DB counts for performance
   }
 }

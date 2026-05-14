@@ -10,6 +10,9 @@ import {
   HttpCode,
   Param,
   Query,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { SubscriptionsService } from './subscriptions.service';
@@ -61,7 +64,7 @@ export class SubscriptionsController {
       await this.subscriptionsService.findActiveByCompany(companyId);
 
     if (!subscription) {
-      throw new Error('No active subscription found');
+      throw new NotFoundException('No active subscription found');
     }
 
     return this.subscriptionsService.cancelSubscription(
@@ -85,7 +88,7 @@ export class SubscriptionsController {
       await this.subscriptionsService.findActiveByCompany(companyId);
 
     if (!subscription) {
-      throw new Error('No subscription found');
+      throw new NotFoundException('No subscription found');
     }
 
     return this.subscriptionsService.reactivateSubscription(
@@ -115,6 +118,16 @@ export class SubscriptionsController {
     @Body() dto: RenewSubscriptionDto,
   ) {
     const companyId = req.user.companyId;
+
+    // If planId provided, change plan first then renew
+    if (dto.planId) {
+      try {
+        await this.subscriptionsService.changePlan(companyId, dto.planId);
+      } catch {
+        // Plan might already be the same, continue with renewal
+      }
+    }
+
     return this.subscriptionsService.renewSubscription(
       companyId,
       dto.durationMonths,
@@ -162,12 +175,12 @@ export class SubscriptionsController {
     const subscription = await this.subscriptionsService.findOne(id);
     
     if (!subscription) {
-      throw new Error('Subscription not found');
+      throw new NotFoundException('Subscription not found');
     }
 
     // Verify ownership
     if (subscription.companyId !== req.user.companyId) {
-      throw new Error('Unauthorized');
+      throw new ForbiddenException('Access denied');
     }
 
     return subscription;

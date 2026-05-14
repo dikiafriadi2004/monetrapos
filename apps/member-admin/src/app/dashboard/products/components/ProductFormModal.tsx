@@ -128,7 +128,8 @@ export function ProductFormModal({ isOpen, onClose, onSubmit, initialData, categ
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name) { toast.error('Nama produk wajib diisi'); return; }
-    if (!formData.price || Number(formData.price) < 0) { toast.error('Harga wajib diisi'); return; }
+    if (!formData.price || Number(formData.price) < 0) { toast.error('Harga wajib diisi dan tidak boleh negatif'); return; }
+    if (Number(formData.price) === 0) { toast.error('Harga tidak boleh 0'); return; }
     if (hasVariants && variants.some(v => !v.name.trim())) {
       toast.error('Nama varian tidak boleh kosong'); return;
     }

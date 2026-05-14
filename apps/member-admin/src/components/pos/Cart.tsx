@@ -11,10 +11,11 @@ interface CartProps {
   subtotal: number;
   tax: number;
   discount: number;
+  redeemDiscount?: number;
   total: number;
 }
 
-export default function Cart({ items, onUpdateQuantity, onRemoveItem, onItemDiscount, subtotal, tax, discount, total }: CartProps) {
+export default function Cart({ items, onUpdateQuantity, onRemoveItem, onItemDiscount, subtotal, tax, discount, redeemDiscount = 0, total }: CartProps) {
   const fmt = (n: number) => `Rp ${Number(n || 0).toLocaleString('id-ID')}`;
 
   return (
@@ -82,6 +83,7 @@ export default function Cart({ items, onUpdateQuantity, onRemoveItem, onItemDisc
           { label: 'Subtotal', value: fmt(subtotal), show: true },
           { label: 'Tax', value: fmt(tax), show: tax > 0 },
           { label: 'Discount', value: `-${fmt(discount)}`, show: discount > 0, color: 'var(--success)' },
+          { label: '⭐ Tukar Poin', value: `-${fmt(redeemDiscount)}`, show: redeemDiscount > 0, color: 'var(--warning)' },
         ].filter(r => r.show).map(row => (
           <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: row.color || 'var(--text-secondary)' }}>
             <span>{row.label}</span>

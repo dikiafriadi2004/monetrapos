@@ -155,4 +155,21 @@ export class AdminAuthService {
     await this.adminUserRepo.delete(id);
     return { message: 'Admin user deleted' };
   }
+
+  async updateMe(id: string, dto: { name?: string; currentPassword?: string; newPassword?: string }) {
+    const admin = await this.adminUserRepo.findOne({ where: { id } });
+    if (!admin) throw new BadRequestException('Admin not found');
+
+    if (dto.name) admin.name = dto.name;
+
+    if (dto.newPassword) {
+      if (!dto.currentPassword) throw new BadRequestException('Current password is required');
+      const valid = await bcrypt.compare(dto.currentPassword, admin.passwordHash);
+      if (!valid) throw new BadRequestException('Current password is incorrect');
+      admin.passwordHash = await this.hashPassword(dto.newPassword);
+    }
+
+    await this.adminUserRepo.save(admin);
+    return { id: admin.id, name: admin.name, email: admin.email, role: admin.role };
+  }
 }

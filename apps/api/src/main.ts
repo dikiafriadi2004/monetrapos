@@ -7,11 +7,18 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import helmet from 'helmet';
+import { initializeSentry } from './config/sentry.config';
 import { LandingService } from './modules/landing/landing.service';
 import { FeaturesService } from './modules/features/features.service';
 import { AddOnsSeeder } from './common/seeders/add-ons.seeder';
+import { SubscriptionPlansSeeder } from './common/seeders/subscription-plans.seeder';
+import { AdminUsersSeeder } from './common/seeders/admin-users.seeder';
+import { PermissionSeeder } from './common/seeders/permission.seeder';
 import { PaymentsService } from './modules/payments/payments.service';
 import { PaymentMethodsService } from './modules/payment-methods/payment-methods.service';
+
+// Initialize Sentry FIRST before anything else
+initializeSentry();
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -21,9 +28,14 @@ async function bootstrap() {
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // Serve static files (for invoice PDFs)
+  // Serve static files (for invoice PDFs and uploaded images)
   app.useStaticAssets(join(process.cwd(), 'uploads'), {
     prefix: '/uploads/',
+    setHeaders: (res) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET');
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    },
   });
 
   // Security headers
@@ -153,6 +165,15 @@ async function bootstrap() {
     logger.warn('⚠️  QRIS auto-setup skipped:', e.message);
   }
 
+  // Auto-seed permissions
+  try {
+    const permissionSeeder = app.get(PermissionSeeder);
+    await permissionSeeder.seed();
+    logger.log('✅ Permissions seeded');
+  } catch (e) {
+    logger.warn('⚠️  Permissions seed skipped:', e.message);
+  }
+
   // Auto-seed add-ons
   try {
     const addOnsSeeder = app.get(AddOnsSeeder);
@@ -160,6 +181,24 @@ async function bootstrap() {
     logger.log('✅ Add-ons seeded');
   } catch (e) {
     logger.warn('⚠️  Add-ons seed skipped:', e.message);
+  }
+
+  // Auto-seed subscription plans
+  try {
+    const plansSeeder = app.get(SubscriptionPlansSeeder);
+    await plansSeeder.seed();
+    logger.log('✅ Subscription plans seeded');
+  } catch (e) {
+    logger.warn('⚠️  Subscription plans seed skipped:', e.message);
+  }
+
+  // Auto-seed admin users
+  try {
+    const adminSeeder = app.get(AdminUsersSeeder);
+    await adminSeeder.seed();
+    logger.log('✅ Admin users seeded');
+  } catch (e) {
+    logger.warn('⚠️  Admin users seed skipped:', e.message);
   }
 
   logger.log(`🚀 MonetraPOS API running on http://localhost:${port}`);

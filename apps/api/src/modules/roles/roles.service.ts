@@ -41,6 +41,23 @@ export class RolesService {
     });
   }
 
+  async findAllByCompany(companyId: string, storeId?: string): Promise<Role[]> {
+    // Ambil semua role yang storeId-nya milik company ini
+    // Karena Role tidak punya companyId langsung, kita join ke Store
+    const query = this.roleRepo
+      .createQueryBuilder('role')
+      .leftJoinAndSelect('role.permissions', 'permissions')
+      .leftJoin('stores', 'store', 'store.id = role.store_id')
+      .where('store.company_id = :companyId', { companyId })
+      .orderBy('role.created_at', 'ASC');
+
+    if (storeId) {
+      query.andWhere('role.store_id = :storeId', { storeId });
+    }
+
+    return query.getMany();
+  }
+
   async findOne(id: string): Promise<Role> {
     const role = await this.roleRepo.findOne({
       where: { id },

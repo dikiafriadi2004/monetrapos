@@ -13,10 +13,11 @@ import { SplitBillService } from './split-bill.service';
 import { SplitBillController } from './split-bill.controller';
 import { Transaction } from '../transactions/transaction.entity';
 import { TransactionItem } from '../transactions/transaction-item.entity';
+import { Product } from '../products/product.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Table, FnbOrder, FnbModifierGroup, FnbModifierOption, Transaction, TransactionItem])],
+    TypeOrmModule.forFeature([Table, FnbOrder, FnbModifierGroup, FnbModifierOption, Transaction, TransactionItem, Product])],
   controllers: [TablesController, FnbOrdersController, FnbModifiersController, SplitBillController],
   providers: [TablesService, FnbOrdersService, FnbModifiersService, SplitBillService],
   exports: [TablesService, FnbOrdersService, FnbModifiersService, SplitBillService],

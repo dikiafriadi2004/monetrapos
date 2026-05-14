@@ -138,8 +138,10 @@ class LaundryService {
     return mapOrder(res.data);
   }
 
-  async updateOrderStatus(id: string, status: LaundryOrderStatus): Promise<LaundryOrder> {
-    const res = await apiClient.patch(`/laundry/orders/${id}/status`, { status });
+  async updateOrderStatus(id: string, status: LaundryOrderStatus, paymentMethod?: string): Promise<LaundryOrder> {
+    const body: any = { status };
+    if (paymentMethod) body.payment_method = paymentMethod;
+    const res = await apiClient.patch(`/laundry/orders/${id}/status`, body);
     return mapOrder(res.data);
   }
 

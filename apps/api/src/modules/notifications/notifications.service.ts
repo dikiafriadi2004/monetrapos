@@ -262,6 +262,41 @@ export class NotificationsService {
   }
 
   /**
+   * Create in-app notification record
+   */
+  async createInAppNotification(data: {
+    companyId: string;
+    type: string;
+    title: string;
+    message: string;
+    data?: Record<string, any>;
+  }): Promise<void> {
+    try {
+      const typeMap: Record<string, NotificationType> = {
+        low_stock: NotificationType.LOW_STOCK,
+        new_order: NotificationType.NEW_ORDER,
+        payment: NotificationType.PAYMENT,
+        subscription: NotificationType.SUBSCRIPTION,
+        system: NotificationType.SYSTEM,
+        alert: NotificationType.ALERT,
+      };
+      const notification = this.notificationRepository.create({
+        companyId: data.companyId,
+        type: typeMap[data.type] || NotificationType.ALERT,
+        title: data.title,
+        message: data.message,
+        channel: NotificationChannel.IN_APP,
+        data: data.data,
+        sentAt: new Date(),
+        isRead: false,
+      });
+      await this.notificationRepository.save(notification);
+    } catch (e: any) {
+      this.logger.warn(`createInAppNotification failed: ${e.message}`);
+    }
+  }
+
+  /**
    * Generate low stock alert email HTML body
    */
   private generateLowStockEmailBody(
@@ -316,14 +351,6 @@ export class NotificationsService {
         </body>
       </html>
     `;
-  }
-
-  async sendShiftReport(email: string, shiftId: string): Promise<any> {
-    return this.sendEmail({
-      to: email,
-      subject: 'Shift Report',
-      body: `Your shift report is ready. Shift ID: ${shiftId}`,
-    });
   }
 
   /**

@@ -119,11 +119,6 @@ export class CreateTransactionDto {
   @IsString()
   employeeId?: string;
 
-  @ApiPropertyOptional({ example: 'shift-uuid' })
-  @IsOptional()
-  @IsString()
-  shiftId?: string;
-
   @ApiPropertyOptional({ example: 'Jane Kasir' })
   @IsOptional()
   @IsString()
@@ -138,6 +133,11 @@ export class CreateTransactionDto {
   @IsOptional()
   @IsString()
   tableId?: string;
+
+  @ApiPropertyOptional({ example: 'fnb-order-uuid', description: 'FnB order ID to complete on checkout' })
+  @IsOptional()
+  @IsString()
+  fnbOrderId?: string;
 
   @ApiPropertyOptional({
     description: 'Split payment methods',

@@ -30,7 +30,8 @@ function LoginForm() {
       toast.success('Silakan cek email Anda untuk verifikasi akun');
     }
     if (isAuthenticated) {
-      router.push('/dashboard');
+      const redirect = searchParams.get('redirect');
+      router.push(redirect || '/dashboard');
     }
   }, [isAuthenticated, router, searchParams]);
 
@@ -50,11 +51,12 @@ function LoginForm() {
     e.preventDefault();
     if (!validate()) return;
     setIsLoading(true);
+    const redirect = searchParams.get('redirect') || '/dashboard';
 
     try {
       // Coba login sebagai owner/admin dulu
       await login({ email, password });
-      router.push('/dashboard');
+      router.push(redirect);
     } catch (ownerError: any) {
       // Kalau gagal, coba login sebagai employee
       try {
@@ -65,13 +67,32 @@ function LoginForm() {
           localStorage.setItem('refresh_token', (empResponse as any).refreshToken);
         }
         toast.success('Login berhasil!');
-        router.push('/dashboard');
+        router.push(redirect);
       } catch (empError: any) {
         // Kedua login gagal — tampilkan error dari owner login
         const msg = ownerError?.response?.data?.message
           || ownerError?.message
           || 'Email atau password salah';
-        toast.error(msg, { duration: 6000 });
+
+        // Jika error karena belum bayar, redirect ke checkout/billing
+        if (msg.includes('Pembayaran belum dikonfirmasi') || msg.includes('belum bayar')) {
+          toast.error(msg, { duration: 6000 });
+          // Coba ambil invoice dari API untuk redirect ke checkout
+          try {
+            const apiClient = (await import('@/lib/api-client')).default;
+            const invoiceRes = await apiClient.get(`/billing/invoices/by-email?email=${encodeURIComponent(email)}`);
+            const latestInvoice = invoiceRes.data?.[0];
+            if (latestInvoice?.invoiceNumber) {
+              setTimeout(() => {
+                router.push(`/checkout?invoice=${latestInvoice.invoiceNumber}&amount=${latestInvoice.total}`);
+              }, 2000);
+            }
+          } catch {
+            // Tidak bisa ambil invoice, biarkan user di halaman login
+          }
+        } else {
+          toast.error(msg, { duration: 6000 });
+        }
       }
     } finally {
       setIsLoading(false);
@@ -183,8 +204,12 @@ function LoginForm() {
 
         <p style={{ textAlign: 'center', marginTop: '1.25rem', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
           Belum punya akun?{' '}
-          <Link href="/register" style={{ color: 'var(--accent-base)', fontWeight: 500 }}>
-            Daftar sekarang
+          <Link href="/register-trial" style={{ color: 'var(--accent-base)', fontWeight: 600 }}>
+            Coba gratis 14 hari
+          </Link>
+          {' '}atau{' '}
+          <Link href="/register" style={{ color: 'var(--text-tertiary)', fontWeight: 500 }}>
+            daftar dengan paket
           </Link>
         </p>
       </div>

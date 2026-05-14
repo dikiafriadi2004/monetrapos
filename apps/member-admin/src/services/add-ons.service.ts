@@ -16,6 +16,9 @@ export interface AddOn {
   metadata?: Record<string, any>;
   created_at: string;
   updated_at: string;
+  // Dari backend — apakah sudah include di plan aktif
+  includedInPlan?: boolean;
+  planSlug?: string;
 }
 
 export interface CompanyAddOn {

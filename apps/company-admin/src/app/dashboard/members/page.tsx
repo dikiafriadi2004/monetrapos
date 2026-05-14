@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Users, Plus, Search, Edit, Trash2, ShieldCheck, ShieldOff, Mail, Building2, X } from 'lucide-react';
 import { api } from '../../../lib/api';
 import toast from 'react-hot-toast';
@@ -20,6 +21,7 @@ interface Member {
 }
 
 export default function MembersPage() {
+  const router = useRouter();
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -28,7 +30,7 @@ export default function MembersPage() {
   // Form modal
   const [isModalOpen, setModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
-  const [formData, setFormData] = useState({ name: '', email: '', phone: '', businessName: '' });
+  const [formData, setFormData] = useState({ name: '', email: '', phone: '', businessName: '', password: '' });
   const [submitting, setSubmitting] = useState(false);
 
   // Confirm modals
@@ -105,19 +107,22 @@ export default function MembersPage() {
       name: member.name || '',
       email: member.email || '',
       phone: member.phone || '',
-      businessName: member.businessName || ''
+      businessName: member.businessName || '',
+      password: '',
     });
     setModalOpen(true);
   };
 
   const handleSubmit = async () => {
     if (!formData.name || !formData.email) return;
+    if (!editingMember && !formData.password) { toast.error('Password wajib diisi untuk member baru'); return; }
+    if (!editingMember && formData.password.length < 8) { toast.error('Password minimal 8 karakter'); return; }
     setSubmitting(true);
     try {
       if (editingMember) {
         await api.patch(`/admin/companies/${editingMember.id}`, formData);
       } else {
-        await api.post('/admin/companies', { ...formData, password: 'Monetra@123' });
+        await api.post('/admin/companies', { ...formData });
       }
       await fetchMembers();
       setModalOpen(false);
@@ -290,6 +295,9 @@ export default function MembersPage() {
                   {statusBadge(member.status || 'active')}
                 </div>
                 <div style={{ display: 'flex', width: '120px', gap: '6px' }}>
+                  <button onClick={() => router.push(`/dashboard/members/${member.id}`)} className="btn btn-outline" style={{ padding: '6px' }} title="Detail">
+                    <Users size={14} />
+                  </button>
                   <button onClick={() => openEditModal(member)} className="btn btn-outline" style={{ padding: '6px' }} title="Edit">
                     <Edit size={14} />
                   </button>
@@ -334,6 +342,14 @@ export default function MembersPage() {
               <label className="form-label">Business Name</label>
               <input className="form-input" placeholder="My Restaurant" value={formData.businessName} onChange={(e) => setFormData(p => ({ ...p, businessName: e.target.value }))} />
             </div>
+
+            {!editingMember && (
+              <div className="form-group">
+                <label className="form-label">Password *</label>
+                <input className="form-input" type="password" placeholder="Minimal 8 karakter" value={formData.password} onChange={(e) => setFormData(p => ({ ...p, password: e.target.value }))} minLength={8} />
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', marginTop: 4 }}>Password untuk login pertama kali</p>
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: 'var(--space-md)', justifyContent: 'flex-end', marginTop: 'var(--space-lg)' }}>
               <button onClick={() => setModalOpen(false)} className="btn btn-outline">Cancel</button>

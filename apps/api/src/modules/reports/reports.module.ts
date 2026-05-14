@@ -9,7 +9,6 @@ import { TransactionItem } from '../transactions/transaction-item.entity';
 import { Product } from '../products/product.entity';
 import { Customer } from '../customers/customer.entity';
 import { Employee } from '../employees/employee.entity';
-import { Shift } from '../shifts/shift.entity';
 
 @Module({
   imports: [
@@ -19,7 +18,6 @@ import { Shift } from '../shifts/shift.entity';
       Product,
       Customer,
       Employee,
-      Shift,
     ]),
   ],
   controllers: [ReportsController, AdvancedReportsController],

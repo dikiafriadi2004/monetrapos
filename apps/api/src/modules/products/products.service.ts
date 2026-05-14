@@ -17,7 +17,7 @@ import {
   CreateVariantDto,
   UpdateVariantDto,
 } from './dto';
-import { deleteOldFile } from '../../common/utils/file.utils';
+import { StorageService } from '../../common/utils/storage.service';
 
 @Injectable()
 export class ProductsService {
@@ -26,6 +26,7 @@ export class ProductsService {
     @InjectRepository(Category) private categoryRepo: Repository<Category>,
     @InjectRepository(ProductVariant)
     private variantRepo: Repository<ProductVariant>,
+    private readonly storageService: StorageService,
   ) {}
 
   /**
@@ -225,7 +226,7 @@ export class ProductsService {
     const product = await this.findOneProduct(id);
     // Delete image file if exists
     if (product.imageUrl) {
-      deleteOldFile(product.imageUrl);
+      await this.storageService.deleteFile(product.imageUrl);
     }
     await this.productRepo.remove(product);
   }
@@ -441,7 +442,7 @@ export class ProductsService {
 
     // Delete image file if exists
     if (category.imageUrl) {
-      deleteOldFile(category.imageUrl);
+      await this.storageService.deleteFile(category.imageUrl);
     }
 
     await this.categoryRepo.remove(category);

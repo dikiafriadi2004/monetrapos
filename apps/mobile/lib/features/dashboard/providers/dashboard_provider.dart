@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/network/api_client.dart';
-import '../../../core/network/api_exception.dart';
+import '../../../core/providers/auth_provider.dart';
+import '../../pos/providers/pos_provider.dart';
 
 class DashboardData {
   final double todaySales;
@@ -20,70 +22,56 @@ class DashboardData {
 
 final dashboardProvider = FutureProvider<DashboardData>((ref) async {
   final api = ApiClient();
+  if (!api.hasToken) return const DashboardData();
+
+  // Ambil storeId dari user atau selectedStore
+  final user = ref.read(authProvider).user;
+  final selectedStore = ref.read(selectedStoreProvider);
+  final storeId = user?.storeId ?? selectedStore?.id;
+
+  final today = DateTime.now();
+  final startOfDay = DateTime(today.year, today.month, today.day).toIso8601String();
+  final endOfDay = DateTime(today.year, today.month, today.day, 23, 59, 59).toIso8601String();
+
+  double todaySales = 0;
+  int todayTx = 0;
+  int totalProducts = 0;
+  int totalCustomers = 0;
+  List<Map<String, dynamic>> recentTx = [];
+
   try {
-    // Fetch stores first to get a valid storeId
-    final storesRes = await api.dio.get('/stores');
-    final stores = List<Map<String, dynamic>>.from(storesRes.data['data'] ?? []);
-    final storeId = stores.isNotEmpty ? stores.first['id'] as String? : null;
-
-    final txParams = <String, dynamic>{
-      'page': 1,
-      'limit': 5,
+    final params = <String, dynamic>{
+      'startDate': startOfDay, 'endDate': endOfDay, 'limit': 50,
     };
-    if (storeId != null) txParams['storeId'] = storeId;
+    if (storeId != null) params['storeId'] = storeId;
+    final r = await api.dio.get('/transactions', queryParameters: params);
+    final list = r.data is List ? r.data : (r.data['data'] ?? []);
+    final txList = List<Map<String, dynamic>>.from(list);
+    todaySales = txList.where((tx) => tx['status'] == 'completed')
+        .fold(0.0, (sum, tx) => sum + (double.tryParse(tx['total']?.toString() ?? '0') ?? 0));
+    todayTx = txList.where((tx) => tx['status'] == 'completed').length;
+    recentTx = txList.take(5).toList();
+  } catch (e) { debugPrint('Dashboard tx error: $e'); }
 
-    final results = await Future.wait([
-      api.dio
-          .get('/transactions', queryParameters: txParams)
-          .then((r) => r)
-          .catchError((_) => null as dynamic),
-      api.dio
-          .get('/customers', queryParameters: {'page': 1, 'limit': 1})
-          .then((r) => r)
-          .catchError((_) => null as dynamic),
-      api.dio
-          .get('/products', queryParameters: {
-            'page': 1,
-            'limit': 1,
-            'storeId': ?storeId,
-          })
-          .then((r) => r)
-          .catchError((_) => null as dynamic),
-    ]);
+  try {
+    final params = <String, dynamic>{'limit': 1};
+    if (storeId != null) params['storeId'] = storeId;
+    final r = await api.dio.get('/products', queryParameters: params);
+    final data = r.data;
+    totalProducts = data is Map ? (int.tryParse(data['total']?.toString() ?? '0') ?? 0) : 0;
+  } catch (e) { debugPrint('Dashboard products error: $e'); }
 
-    final txData = (results[0] as dynamic)?.data;
-    final custData = (results[1] as dynamic)?.data;
-    final prodData = (results[2] as dynamic)?.data;
+  try {
+    final r = await api.dio.get('/customers', queryParameters: {'limit': 1});
+    final data = r.data;
+    totalCustomers = data is Map ? (int.tryParse(data['total']?.toString() ?? '0') ?? 0) : 0;
+  } catch (e) { debugPrint('Dashboard customers error: $e'); }
 
-    final recentTx = (txData?['data'] as List?)
-            ?.map((e) => Map<String, dynamic>.from(e))
-            .toList() ??
-        [];
-
-    // Calculate today's sales from recent transactions
-    final today = DateTime.now();
-    double todaySales = 0;
-    int todayCount = 0;
-    for (final tx in recentTx) {
-      final createdAt = DateTime.tryParse(tx['createdAt'] ?? '');
-      if (createdAt != null &&
-          createdAt.year == today.year &&
-          createdAt.month == today.month &&
-          createdAt.day == today.day &&
-          tx['status'] == 'completed') {
-        todaySales += double.tryParse(tx['total']?.toString() ?? '0') ?? 0;
-        todayCount++;
-      }
-    }
-
-    return DashboardData(
-      todaySales: todaySales,
-      todayTransactions: todayCount,
-      totalProducts: prodData?['total'] ?? 0,
-      totalCustomers: custData?['total'] ?? 0,
-      recentTransactions: recentTx.take(5).toList(),
-    );
-  } catch (e) {
-    throw ApiException('Gagal memuat data dashboard');
-  }
+  return DashboardData(
+    todaySales: todaySales,
+    todayTransactions: todayTx,
+    totalProducts: totalProducts,
+    totalCustomers: totalCustomers,
+    recentTransactions: recentTx,
+  );
 });

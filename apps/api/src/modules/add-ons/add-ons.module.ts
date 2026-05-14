@@ -6,6 +6,8 @@ import { AddOnsController, AdminAddOnsController } from './add-ons.controller';
 import { AddOn } from './add-on.entity';
 import { CompanyAddOn } from './company-add-on.entity';
 import { Company } from '../companies/company.entity';
+import { Subscription } from '../subscriptions/subscription.entity';
+import { SubscriptionPlan } from '../subscriptions/subscription-plan.entity';
 import { PaymentGatewayModule } from '../payment-gateway/payment-gateway.module';
 import { BillingModule } from '../billing/billing.module';
 import { AdminAuthModule } from '../admin-auth/admin-auth.module';
@@ -13,7 +15,7 @@ import { AddOnsSeeder } from '../../common/seeders/add-ons.seeder';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([AddOn, CompanyAddOn, Company]),
+    TypeOrmModule.forFeature([AddOn, CompanyAddOn, Company, Subscription, SubscriptionPlan]),
     PaymentGatewayModule,
     BillingModule,
     AdminAuthModule,

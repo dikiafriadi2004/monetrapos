@@ -214,20 +214,24 @@ export class PaymentsController {
     if (!body.iconUrl) return { success: false, message: 'iconUrl required' };
 
     try {
-      // Resolve path dari iconUrl (misal: /uploads/qris/qris-xxx.jpg)
-      const filePath = require('path').join(process.cwd(), body.iconUrl);
+      const { Jimp } = require('jimp');
+      const jsQR = require('jsqr');
+      let image: any;
 
-      if (!require('fs').existsSync(filePath)) {
-        return { success: false, message: `File tidak ditemukan: ${body.iconUrl}` };
+      // Support both S3 URLs and local file paths
+      if (body.iconUrl.startsWith('http://') || body.iconUrl.startsWith('https://')) {
+        // S3 or external URL — read directly
+        image = await Jimp.read(body.iconUrl);
+      } else {
+        // Local file path
+        const filePath = require('path').join(process.cwd(), body.iconUrl);
+        if (!require('fs').existsSync(filePath)) {
+          return { success: false, message: `File tidak ditemukan: ${body.iconUrl}` };
+        }
+        image = await Jimp.read(filePath);
       }
 
-      // Baca gambar dengan jimp
-      const { Jimp } = require('jimp');
-      const image = await Jimp.read(filePath);
       const { data, width, height } = image.bitmap;
-
-      // Decode QR dengan jsqr
-      const jsQR = require('jsqr');
       const code = jsQR(data, width, height);
 
       if (!code || !code.data) {
@@ -239,7 +243,6 @@ export class PaymentsController {
 
       const qrisString = code.data;
 
-      // Validasi format QRIS
       if (!qrisString.startsWith('000201')) {
         return {
           success: false,
@@ -247,7 +250,6 @@ export class PaymentsController {
         };
       }
 
-      // Simpan ke qris_configs
       await this.paymentsService.upsertQrisConfigByCompany(companyId, {
         parsedData: qrisString,
         originalImage: qrisString,

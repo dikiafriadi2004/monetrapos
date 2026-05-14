@@ -6,13 +6,14 @@ import { purchaseOrdersService, PurchaseOrder, PurchaseOrderStatus, ReceivePurch
 import { ArrowLeft, Package, Building2, Store, Calendar, CheckCircle, XCircle, Loader2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { ConfirmModal } from '@/components/ui';
+import { formatRupiah } from '@/lib/date';
 
 const STATUS_COLORS: Record<string, string> = {
   draft: '#6b7280', sent: '#3b82f6', received: 'var(--success)', cancelled: 'var(--danger)',
 };
 
-const fmt = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n || 0);
-const fmtDate = (d: string) => new Date(d).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
+const fmt = (n: number) => `Rp ${formatRupiah(n)}`;
+const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Jakarta' }) : '—';
 
 export default function PurchaseOrderDetailPage() {
   const router = useRouter();
@@ -22,7 +23,7 @@ export default function PurchaseOrderDetailPage() {
   const [po, setPo] = useState<PurchaseOrder | null>(null);
   const [loading, setLoading] = useState(true);
   const [showReceiveModal, setShowReceiveModal] = useState(false);
-  const [receiveForm, setReceiveForm] = useState<{ receivedDate: string; items: { productId: string; receivedQuantity: number }[] }>({
+  const [receiveForm, setReceiveForm] = useState<{ receivedDate: string; items: { itemId: string; receivedQuantity: number }[] }>({
     receivedDate: new Date().toISOString().split('T')[0],
     items: [],
   });
@@ -40,7 +41,7 @@ export default function PurchaseOrderDetailPage() {
       setPo(data);
       setReceiveForm({
         receivedDate: new Date().toISOString().split('T')[0],
-        items: data.items.map(i => ({ productId: i.productId, receivedQuantity: i.quantity })),
+        items: data.items.map(i => ({ itemId: i.id, receivedQuantity: i.quantity })),
       });
     } catch { toast.error('Failed to load purchase order'); router.back(); }
     finally { setLoading(false); }

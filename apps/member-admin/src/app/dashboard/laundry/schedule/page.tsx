@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { laundryService } from '@/services/laundry.service';
 import { Calendar, Loader2, ChevronLeft, ChevronRight, Truck, Package } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { formatRupiah } from '@/lib/date';
 
 export default function LaundrySchedulePage() {
   const [schedule, setSchedule] = useState<any>(null);
@@ -30,7 +31,7 @@ export default function LaundrySchedulePage() {
     setSelectedDate(d.toISOString().split('T')[0]);
   };
 
-  const fmt = (n: number) => `Rp ${n?.toLocaleString('id-ID') || 0}`;
+  const fmt = (n: number) => `Rp ${formatRupiah(n)}`;
 
   return (
     <div>

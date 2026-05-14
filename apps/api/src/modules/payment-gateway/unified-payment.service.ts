@@ -52,7 +52,7 @@ export class UnifiedPaymentService {
 
     return {
       gateway: 'xendit',
-      redirectUrl: invoice.invoice_url,
+      redirectUrl: (invoice as any).invoiceUrl || (invoice as any).invoice_url,
       orderId: request.orderId,
       invoiceId: invoice.id,
     };

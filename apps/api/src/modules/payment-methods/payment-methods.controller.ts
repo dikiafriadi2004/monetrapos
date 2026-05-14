@@ -15,13 +15,12 @@ import {
 } from '@nestjs/common';
 import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { memoryStorage } from 'multer';
 import * as path from 'path';
-import * as fs from 'fs';
 import { PaymentMethodsService } from './payment-methods.service';
 import { PaymentsService } from '../payments/payments.service';
 import { CreatePaymentMethodDto, UpdatePaymentMethodDto } from './dto';
-import { deleteOldFile } from '../../common/utils/file.utils';
+import { StorageService } from '../../common/utils/storage.service';
 
 @Controller('payment-methods')
 @UseGuards(MemberJwtGuard)
@@ -31,6 +30,7 @@ export class PaymentMethodsController {
   constructor(
     private readonly paymentMethodsService: PaymentMethodsService,
     private readonly paymentsService: PaymentsService,
+    private readonly storageService: StorageService,
   ) {}
 
   /**
@@ -96,17 +96,7 @@ export class PaymentMethodsController {
   @Post(':id/qris-image')
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: diskStorage({
-        destination: (req, file, cb) => {
-          const dir = path.join(process.cwd(), 'uploads', 'qris');
-          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-          cb(null, dir);
-        },
-        filename: (req, file, cb) => {
-          const ext = path.extname(file.originalname).toLowerCase();
-          cb(null, `qris-${Date.now()}${ext}`);
-        },
-      }),
+      storage: memoryStorage(),
       fileFilter: (req, file, cb) => {
         const allowed = ['.jpg', '.jpeg', '.png', '.webp'];
         const ext = path.extname(file.originalname).toLowerCase();
@@ -125,24 +115,27 @@ export class PaymentMethodsController {
   ) {
     if (!file) throw new BadRequestException('No file uploaded');
     const companyId = req.user.companyId;
-    const qrisImageUrl = `/uploads/qris/${file.filename}`;
+    const ext = path.extname(file.originalname).toLowerCase();
+    const filename = `qris-${Date.now()}${ext}`;
 
     // Delete old QRIS image if exists
     const method = await this.paymentMethodsService.findById(id, companyId);
-    if (method?.iconUrl) deleteOldFile(method.iconUrl);
+    if (method?.iconUrl) await this.storageService.deleteFile(method.iconUrl);
+
+    // Upload via StorageService (local or S3)
+    const qrisImageUrl = await this.storageService.uploadFile(file.buffer, filename, 'qris', file.mimetype);
 
     // Update payment method with new QRIS image URL
     const updated = await this.paymentMethodsService.update(id, companyId, {
       iconUrl: qrisImageUrl,
     } as any);
 
-    // Auto-decode QR string dari gambar yang baru diupload
+    // Auto-decode QR string dari buffer yang baru diupload
     let qrisDecoded = false;
     let qrisMessage = 'Gambar QRIS berhasil diupload.';
     try {
-      const filePath = path.join(process.cwd(), qrisImageUrl);
       const { Jimp } = require('jimp');
-      const image = await Jimp.read(filePath);
+      const image = await Jimp.read(file.buffer);
       const { data, width, height } = image.bitmap;
       const jsQR = require('jsqr');
       const code = jsQR(data, width, height);

@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { Users, Plus, Edit2, Trash2, Loader2, Key, Shield, ToggleLeft, ToggleRight } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import toast from 'react-hot-toast';
-import { Modal, DeleteModal, PageHeader, SearchInput, StatusBadge, EmptyState, LoadingSpinner } from '@/components/ui';
+import { Modal, DeleteModal, PageHeader, SearchInput, StatusBadge, EmptyState, LoadingSpinner, Pagination } from '@/components/ui';
+import { usePagination } from '@/hooks/usePagination';
 
 interface User {
   id: string;
@@ -124,6 +125,8 @@ export default function UsersPage() {
     (u.phone || '').includes(search)
   );
 
+  const { page, setPage, totalPages, totalItems, paginated } = usePagination(filtered);
+
   const fmtDate = (d: string) => new Date(d).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Asia/Jakarta' });
 
   return (
@@ -157,7 +160,7 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(u => (
+                {paginated.map(u => (
                   <tr key={u.id}>
                     <td>
                       <div className="flex items-center gap-3">
@@ -188,6 +191,21 @@ export default function UsersPage() {
                       <span className={`badge ${u.emailVerified ? 'badge-success' : 'badge-warning'}`}>
                         {u.emailVerified ? 'Verified' : 'Pending'}
                       </span>
+                      {!u.emailVerified && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              await apiClient.post(`/users/${u.id}/verify-email`);
+                              toast.success('Email verified');
+                              setUsers(prev => prev.map(x => x.id === u.id ? { ...x, emailVerified: true } : x));
+                            } catch { toast.error('Failed to verify email'); }
+                          }}
+                          className="btn btn-ghost btn-sm text-xs text-amber-600 ml-1"
+                          title="Verify email manually"
+                        >
+                          Verify
+                        </button>
+                      )}
                     </td>
                     <td className="text-gray-500 text-sm">{u.lastLoginAt ? fmtDate(u.lastLoginAt) : '—'}</td>
                     <td className="text-gray-500 text-sm">{fmtDate(u.createdAt)}</td>
@@ -205,6 +223,7 @@ export default function UsersPage() {
               </tbody>
             </table>
           </div>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalItems={totalItems} />
         </div>
       )}
 

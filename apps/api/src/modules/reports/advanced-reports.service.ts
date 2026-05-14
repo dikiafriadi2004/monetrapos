@@ -1,10 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Transaction } from '../transactions/transaction.entity';
 import { Employee } from '../employees/employee.entity';
 import { Customer } from '../customers/customer.entity';
-import { Shift } from '../shifts/shift.entity';
 
 export interface EmployeePerformanceReport {
   employeeId: string;
@@ -14,7 +13,7 @@ export interface EmployeePerformanceReport {
   totalTransactions: number;
   averageTransactionValue: number;
   totalWorkHours: number;
-  totalShifts: number;
+  totalDaysWorked: number;
   salesPerHour: number;
   topSellingProducts: Array<{
     productName: string;
@@ -79,6 +78,24 @@ export interface ProfitLossReport {
   };
 }
 
+export interface MonthlyFinanceData {
+  bulan: number;
+  namaBulan: string;
+  tahun: number;
+  periode: string;
+  totalTransaksi: number;
+  pendapatanKotor: number;
+  totalDiskon: number;
+  totalPajak: number;
+  pendapatanBersih: number;
+  hpp: number;
+  labaKotor: number;
+  biayaOperasional: number;
+  labaBersih: number;
+  marginLabaKotor: number;
+  marginLabaBersih: number;
+}
+
 @Injectable()
 export class AdvancedReportsService {
   private readonly logger = new Logger(AdvancedReportsService.name);
@@ -90,8 +107,6 @@ export class AdvancedReportsService {
     private readonly employeeRepository: Repository<Employee>,
     @InjectRepository(Customer)
     private readonly customerRepository: Repository<Customer>,
-    @InjectRepository(Shift)
-    private readonly shiftRepository: Repository<Shift>,
   ) {}
 
   /**
@@ -107,60 +122,65 @@ export class AdvancedReportsService {
       `Generating employee performance report for company ${companyId}`,
     );
 
-    // Build query for transactions
+    // endDate harus include seluruh hari terakhir
+    const endOfDay = new Date(endDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // Build query for transactions — include semua transaksi, employee bisa dari relasi atau metadata
     const transactionQuery = this.transactionRepository
       .createQueryBuilder('transaction')
       .leftJoinAndSelect('transaction.items', 'items')
       .leftJoinAndSelect('transaction.employee', 'employee')
-      .where('transaction.company_id = :companyId', { companyId })
-      .andWhere('transaction.created_at BETWEEN :startDate AND :endDate', {
+      .where('transaction.companyId = :companyId', { companyId })
+      .andWhere('transaction.createdAt BETWEEN :startDate AND :endDate', {
         startDate,
-        endDate,
+        endDate: endOfDay,
       })
       .andWhere('transaction.status = :status', { status: 'completed' });
 
     if (employeeId) {
-      transactionQuery.andWhere('transaction.employee_id = :employeeId', {
+      transactionQuery.andWhere('transaction.employeeId = :employeeId', {
         employeeId,
       });
     }
 
     const transactions = await transactionQuery.getMany();
 
-    // Get shifts for work hours calculation
-    const shiftQuery = this.shiftRepository
-      .createQueryBuilder('shift')
-      .leftJoinAndSelect('shift.employee', 'employee')
-      .where('shift.companyId = :companyId', { companyId })
-      .andWhere('shift.openedAt BETWEEN :startDate AND :endDate', {
-        startDate,
-        endDate,
-      });
+    // Kumpulkan semua employee IDs yang valid (ada di tabel employees)
+    const allEmployeeIds = new Set(
+      (await this.employeeRepository.find({
+        where: { companyId },
+        select: ['id', 'userId'],
+      })).flatMap(e => [e.id, e.userId].filter(Boolean))
+    );
 
-    if (employeeId) {
-      shiftQuery.andWhere('shift.employeeId = :employeeId', { employeeId });
-    }
-
-    const shifts = await shiftQuery.getMany();
-
-    // Group by employee
+    // Group by employee — gunakan relasi employee atau fallback ke metadata
     const employeeMap = new Map<string, EmployeePerformanceReport>();
 
     for (const transaction of transactions) {
-      if (!transaction.employee) continue;
+      const emp = transaction.employee;
+      const metaEmpId = (transaction as any).metadata?.employeeId;
+      const metaEmpName = (transaction as any).metadata?.employeeName;
 
-      const empId = transaction.employee.id;
+      if (!emp && !metaEmpId) continue;
+
+      const empId = emp?.id || metaEmpId;
+
+      if (!emp && metaEmpId && !allEmployeeIds.has(metaEmpId)) continue;
+
+      const empName = emp?.name || metaEmpName || 'Unknown';
+      const empNumber = emp?.employeeNumber || '';
 
       if (!employeeMap.has(empId)) {
         employeeMap.set(empId, {
           employeeId: empId,
-          employeeNumber: transaction.employee.employeeNumber,
-          employeeName: transaction.employee.name,
+          employeeNumber: empNumber,
+          employeeName: empName,
           totalSales: 0,
           totalTransactions: 0,
           averageTransactionValue: 0,
           totalWorkHours: 0,
-          totalShifts: 0,
+          totalDaysWorked: 0,
           salesPerHour: 0,
           topSellingProducts: [],
         });
@@ -171,24 +191,17 @@ export class AdvancedReportsService {
       report.totalTransactions += 1;
     }
 
-    // Calculate work hours from shifts
-    for (const shift of shifts) {
-      if (!shift.employee) continue;
-
-      const empId = shift.employee.id;
-      const report = employeeMap.get(empId);
-
-      if (report) {
-        report.totalShifts += 1;
-
-        if (shift.openedAt && shift.closedAt) {
-          const hours =
-            (new Date(shift.closedAt).getTime() -
-              new Date(shift.openedAt).getTime()) /
-            (1000 * 60 * 60);
-          report.totalWorkHours += hours;
-        }
-      }
+    // Estimate work hours: count unique days with transactions (assume 8h/day)
+    for (const [empId, report] of employeeMap.entries()) {
+      const empTransactions = transactions.filter(t => {
+        const tEmpId = t.employee?.id || (t as any).metadata?.employeeId;
+        return tEmpId === empId;
+      });
+      const uniqueDays = new Set(
+        empTransactions.map(t => new Date(t.createdAt).toDateString())
+      );
+      report.totalDaysWorked = uniqueDays.size;
+      report.totalWorkHours = uniqueDays.size * 8; // estimate 8h/day
     }
 
     // Calculate averages and sales per hour
@@ -220,6 +233,9 @@ export class AdvancedReportsService {
   ): Promise<CustomerReport> {
     this.logger.log(`Generating customer report for company ${companyId}`);
 
+    const endOfDay = new Date(endDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
     // Get all active customers
     const allCustomers = await this.customerRepository.find({
       where: { companyId, isActive: true },
@@ -228,24 +244,25 @@ export class AdvancedReportsService {
     // Get new customers in period
     const newCustomers = await this.customerRepository
       .createQueryBuilder('customer')
-      .where('customer.company_id = :companyId', { companyId })
-      .andWhere('customer.is_active = :isActive', { isActive: true })
-      .andWhere('customer.created_at BETWEEN :startDate AND :endDate', {
+      .where('customer.companyId = :companyId', { companyId })
+      .andWhere('customer.isActive = :isActive', { isActive: true })
+      .andWhere('customer.createdAt BETWEEN :startDate AND :endDate', {
         startDate,
-        endDate,
+        endDate: endOfDay,
       })
       .getCount();
 
     // Get customers who made purchases in period
     const customersWithPurchases = await this.transactionRepository
       .createQueryBuilder('transaction')
-      .select('DISTINCT transaction.customer_id', 'customer_id')
-      .where('transaction.company_id = :companyId', { companyId })
-      .andWhere('transaction.created_at BETWEEN :startDate AND :endDate', {
+      .select('DISTINCT transaction.customerId', 'customer_id')
+      .where('transaction.companyId = :companyId', { companyId })
+      .andWhere('transaction.createdAt BETWEEN :startDate AND :endDate', {
         startDate,
-        endDate,
+        endDate: endOfDay,
       })
       .andWhere('transaction.status = :status', { status: 'completed' })
+      .andWhere('transaction.customerId IS NOT NULL')
       .getRawMany();
 
     const returningCustomers = customersWithPurchases.filter((c) => {
@@ -253,27 +270,51 @@ export class AdvancedReportsService {
       return customer && new Date(customer.createdAt) < startDate;
     }).length;
 
-    // Calculate average lifetime value
-    const totalLifetimeValue = allCustomers.reduce(
-      (sum, c) => sum + Number(c.totalSpent),
-      0,
-    );
-    const averageLifetimeValue =
-      allCustomers.length > 0 ? totalLifetimeValue / allCustomers.length : 0;
+    // Calculate average lifetime value dari actual transactions (bukan cached total_spent)
+    const lifetimeResult = await this.transactionRepository
+      .createQueryBuilder('transaction')
+      .select('transaction.customerId', 'customerId')
+      .addSelect('SUM(transaction.total)', 'lifetimeTotal')
+      .where('transaction.companyId = :companyId', { companyId })
+      .andWhere('transaction.status = :status', { status: 'completed' })
+      .andWhere('transaction.customerId IS NOT NULL')
+      .groupBy('transaction.customerId')
+      .getRawMany();
 
-    // Get top customers
-    const topCustomers = allCustomers
-      .sort((a, b) => Number(b.totalSpent) - Number(a.totalSpent))
-      .slice(0, 10)
-      .map((c) => ({
-        customerId: c.id,
-        customerNumber: c.customerNumber,
-        customerName: c.name,
-        totalSpent: Number(c.totalSpent),
-        totalOrders: c.totalOrders,
-        loyaltyTier: c.loyaltyTier,
-        lastPurchaseAt: c.lastPurchaseAt,
-      }));
+    const totalLifetimeValue = lifetimeResult.reduce((sum, r) => sum + Number(r.lifetimeTotal), 0);
+    const averageLifetimeValue =
+      lifetimeResult.length > 0 ? totalLifetimeValue / lifetimeResult.length : 0;
+
+    // Top customers by spending in the selected period
+    const topCustomersByPeriod = await this.transactionRepository
+      .createQueryBuilder('transaction')
+      .select('transaction.customerId', 'customerId')
+      .addSelect('SUM(transaction.total)', 'periodSpent')
+      .addSelect('COUNT(transaction.id)', 'periodOrders')
+      .where('transaction.companyId = :companyId', { companyId })
+      .andWhere('transaction.createdAt BETWEEN :startDate AND :endDate', {
+        startDate,
+        endDate: endOfDay,
+      })
+      .andWhere('transaction.status = :status', { status: 'completed' })
+      .andWhere('transaction.customerId IS NOT NULL')
+      .groupBy('transaction.customerId')
+      .orderBy('periodSpent', 'DESC')
+      .limit(10)
+      .getRawMany();
+
+    const topCustomers = topCustomersByPeriod.map((row) => {
+      const customer = allCustomers.find((c) => c.id === row.customerId);
+      return {
+        customerId: row.customerId,
+        customerNumber: customer?.customerNumber || '',
+        customerName: customer?.name || 'Unknown',
+        totalSpent: Number(row.periodSpent),
+        totalOrders: Number(row.periodOrders),
+        loyaltyTier: customer?.loyaltyTier || 'regular',
+        lastPurchaseAt: customer?.lastPurchaseAt || new Date(),
+      };
+    });
 
     // Count customers by tier
     const customersByTier = allCustomers.reduce((acc, c) => {
@@ -281,7 +322,7 @@ export class AdvancedReportsService {
       return acc;
     }, {} as Record<string, number>);
 
-    // Calculate retention rate (customers who purchased in period / total customers)
+    // Calculate retention rate
     const retentionRate =
       allCustomers.length > 0
         ? (customersWithPurchases.length / allCustomers.length) * 100
@@ -308,17 +349,18 @@ export class AdvancedReportsService {
   ): Promise<ProfitLossReport> {
     this.logger.log(`Generating P&L report for company ${companyId}`);
 
+    const endOfDay = new Date(endDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
     // Get all completed transactions in period
     const transactions = await this.transactionRepository
       .createQueryBuilder('transaction')
       .leftJoinAndSelect('transaction.items', 'items')
-      .leftJoinAndSelect('items.product', 'product')
-      .leftJoinAndSelect('product.category', 'category')
       .leftJoinAndSelect('transaction.store', 'store')
-      .where('transaction.company_id = :companyId', { companyId })
-      .andWhere('transaction.created_at BETWEEN :startDate AND :endDate', {
+      .where('transaction.companyId = :companyId', { companyId })
+      .andWhere('transaction.createdAt BETWEEN :startDate AND :endDate', {
         startDate,
-        endDate,
+        endDate: endOfDay,
       })
       .andWhere('transaction.status = :status', { status: 'completed' })
       .getMany();
@@ -359,10 +401,10 @@ export class AdvancedReportsService {
 
       // Category breakdown and COGS
       for (const item of transaction.items) {
-        // Note: costPrice not available in TransactionItem, would need to join with Product
-        // For now, estimate cost as 60% of unit price
-        const cost = Number(item.unitPrice || 0) * item.quantity * 0.6;
-        costOfGoodsSold += cost;
+        // Use actual cost from product if available (stored in item metadata or product join)
+        // TransactionItem stores unitPrice at time of sale; cost is estimated as 60% if not available
+        const itemCost = Number((item as any).costPrice || 0) || Number(item.unitPrice || 0) * item.quantity * 0.6;
+        costOfGoodsSold += itemCost;
 
         const categoryName = item.productName || 'Uncategorized';
         if (!categoryMap.has(categoryName)) {
@@ -371,7 +413,7 @@ export class AdvancedReportsService {
 
         const categoryData = categoryMap.get(categoryName)!;
         categoryData.revenue += Number(item.subtotal);
-        categoryData.cost += cost;
+        categoryData.cost += itemCost;
         categoryData.profit = categoryData.revenue - categoryData.cost;
       }
     }
@@ -384,12 +426,11 @@ export class AdvancedReportsService {
         .select('SUM(po.total_amount)', 'total')
         .from('purchase_orders', 'po')
         .where('po.company_id = :companyId', { companyId })
-        .andWhere('po.created_at BETWEEN :startDate AND :endDate', { startDate, endDate })
+        .andWhere('po.created_at BETWEEN :startDate AND :endDate', { startDate, endDate: endOfDay })
         .andWhere('po.status IN (:...statuses)', { statuses: ['received', 'completed'] })
         .getRawOne();
       operatingExpenses = Number(purchaseResult?.total || 0);
     } catch {
-      // purchase_orders table may not exist in all deployments
       operatingExpenses = 0;
     }
 
@@ -447,6 +488,159 @@ export class AdvancedReportsService {
         salesByCategory: salesByCategory.sort((a, b) => b.revenue - a.revenue),
         salesByStore: salesByStore.sort((a, b) => b.revenue - a.revenue),
       },
+    };
+  }
+
+  /**
+   * Laporan Keuangan Bulanan
+   * Menampilkan pendapatan kotor, bersih, HPP, dan keuntungan per bulan dalam satu tahun
+   */
+  async getMonthlyFinanceReport(companyId: string, year: number) {
+    const months: MonthlyFinanceData[] = [];
+
+    const MONTH_NAMES = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+    ];
+
+    for (let month = 1; month <= 12; month++) {
+      // Use UTC to avoid timezone issues (server may not be in WIB)
+      const startDate = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0));
+      const endDate = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+
+      // Query transaksi bulan ini
+      const txResult = await this.transactionRepository
+        .createQueryBuilder('tx')
+        .select([
+          'COUNT(tx.id) as totalTransactions',
+          'COALESCE(SUM(tx.total), 0) as pendapatanKotor',
+          'COALESCE(SUM(tx.discount_amount), 0) as totalDiskon',
+          'COALESCE(SUM(tx.tax_amount), 0) as totalPajak',
+          'COALESCE(SUM(tx.subtotal), 0) as subtotal',
+        ])
+        .where('tx.companyId = :companyId', { companyId })
+        .andWhere('tx.status = :status', { status: 'completed' })
+        .andWhere('tx.createdAt BETWEEN :start AND :end', {
+          start: startDate,
+          end: endDate,
+        })
+        .getRawOne();
+
+      // Query HPP (Harga Pokok Penjualan) dari transaction items
+      const cogResult = await this.transactionRepository.manager.query(`
+        SELECT 
+          COALESCE(SUM(ti.quantity * COALESCE(p.cost, p.price * 0.6)), 0) as hpp
+        FROM transactions tx
+        JOIN transaction_items ti ON ti.transaction_id = tx.id
+        LEFT JOIN products p ON p.id = ti.\`productId\`
+        WHERE tx.company_id = ?
+          AND tx.status = 'completed'
+          AND tx.created_at BETWEEN ? AND ?
+      `, [companyId, startDate, endDate]);
+
+      const pendapatanKotor = parseFloat(txResult?.pendapatanKotor || '0');
+      const totalDiskon = parseFloat(txResult?.totalDiskon || '0');
+      const totalPajak = parseFloat(txResult?.totalPajak || '0');
+      const hpp = parseFloat(cogResult?.[0]?.hpp || '0');
+
+      // Pendapatan bersih = pendapatan kotor - diskon
+      const pendapatanBersih = pendapatanKotor - totalDiskon;
+
+      // Laba kotor = pendapatan bersih - HPP
+      const labaKotor = pendapatanBersih - hpp;
+
+      // Estimasi biaya operasional - gunakan data expenses nyata jika ada, fallback 10%
+      let biayaOperasional = 0;
+      try {
+        const expenseResult = await this.transactionRepository.manager.query(`
+          SELECT COALESCE(SUM(amount), 0) as total
+          FROM expenses
+          WHERE company_id = ?
+            AND expense_date BETWEEN ? AND ?
+            AND deleted_at IS NULL
+        `, [companyId, startDate, endDate]);
+        biayaOperasional = parseFloat(expenseResult?.[0]?.total || '0');
+      } catch {
+        // Tabel expenses belum ada atau kosong - gunakan estimasi 10%
+        biayaOperasional = pendapatanBersih * 0.1;
+      }
+      // Jika tidak ada data expenses, estimasi 10%
+      if (biayaOperasional === 0 && pendapatanBersih > 0) {
+        biayaOperasional = pendapatanBersih * 0.1;
+      }
+
+      // Laba bersih = laba kotor - biaya operasional
+      const labaBersih = labaKotor - biayaOperasional;
+
+      // Margin laba bersih
+      const marginLabaBersih = pendapatanBersih > 0
+        ? (labaBersih / pendapatanBersih) * 100
+        : 0;
+
+      // Margin laba kotor
+      const marginLabaKotor = pendapatanBersih > 0
+        ? (labaKotor / pendapatanBersih) * 100
+        : 0;
+
+      months.push({
+        bulan: month,
+        namaBulan: MONTH_NAMES[month - 1],
+        tahun: year,
+        periode: `${MONTH_NAMES[month - 1]} ${year}`,
+        totalTransaksi: parseInt(txResult?.totalTransactions || '0'),
+        pendapatanKotor: Math.round(pendapatanKotor),
+        totalDiskon: Math.round(totalDiskon),
+        totalPajak: Math.round(totalPajak),
+        pendapatanBersih: Math.round(pendapatanBersih),
+        hpp: Math.round(hpp),
+        labaKotor: Math.round(labaKotor),
+        biayaOperasional: Math.round(biayaOperasional),
+        labaBersih: Math.round(labaBersih),
+        marginLabaKotor: Math.round(marginLabaKotor * 100) / 100,
+        marginLabaBersih: Math.round(marginLabaBersih * 100) / 100,
+      });
+    }
+
+    // Hitung total tahunan
+    const totalTahunan = months.reduce(
+      (acc, m) => ({
+        totalTransaksi: acc.totalTransaksi + m.totalTransaksi,
+        pendapatanKotor: acc.pendapatanKotor + m.pendapatanKotor,
+        totalDiskon: acc.totalDiskon + m.totalDiskon,
+        totalPajak: acc.totalPajak + m.totalPajak,
+        pendapatanBersih: acc.pendapatanBersih + m.pendapatanBersih,
+        hpp: acc.hpp + m.hpp,
+        labaKotor: acc.labaKotor + m.labaKotor,
+        biayaOperasional: acc.biayaOperasional + m.biayaOperasional,
+        labaBersih: acc.labaBersih + m.labaBersih,
+      }),
+      {
+        totalTransaksi: 0, pendapatanKotor: 0, totalDiskon: 0,
+        totalPajak: 0, pendapatanBersih: 0, hpp: 0,
+        labaKotor: 0, biayaOperasional: 0, labaBersih: 0,
+      },
+    );
+
+    const marginLabaKotorTahunan = totalTahunan.pendapatanBersih > 0
+      ? (totalTahunan.labaKotor / totalTahunan.pendapatanBersih) * 100
+      : 0;
+
+    const marginLabaBersihTahunan = totalTahunan.pendapatanBersih > 0
+      ? (totalTahunan.labaBersih / totalTahunan.pendapatanBersih) * 100
+      : 0;
+
+    return {
+      tahun: year,
+      bulanTerbaik: months.reduce((best: MonthlyFinanceData | null, m: MonthlyFinanceData) =>
+        m.labaBersih > (best?.labaBersih ?? -Infinity) ? m : best,
+        null
+      ),
+      ringkasanTahunan: {
+        ...totalTahunan,
+        marginLabaKotor: Math.round(marginLabaKotorTahunan * 100) / 100,
+        marginLabaBersih: Math.round(marginLabaBersihTahunan * 100) / 100,
+      },
+      perBulan: months,
     };
   }
 }

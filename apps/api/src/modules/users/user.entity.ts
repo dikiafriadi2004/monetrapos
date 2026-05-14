@@ -13,6 +13,8 @@ export enum UserRole {
   ADMIN = 'admin',
   MANAGER = 'manager',
   ACCOUNTANT = 'accountant',
+  CASHIER = 'cashier',
+  STAFF = 'staff',
 }
 
 @Entity('users')
@@ -45,7 +47,7 @@ export class User extends BaseEntity {
   emailVerifiedAt: Date;
 
   // Role
-  @Column({ type: 'enum', enum: UserRole, default: UserRole.ADMIN })
+  @Column({ type: 'enum', enum: UserRole, default: UserRole.CASHIER })
   role: UserRole;
 
   @Column({ type: 'json', default: '[]' })

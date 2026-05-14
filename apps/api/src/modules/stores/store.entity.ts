@@ -22,8 +22,12 @@ import { QrisConfig } from '../payments/qris-config.entity';
 export enum StoreType {
   RETAIL = 'retail',
   FNB = 'fnb',
+  RESTAURANT = 'restaurant',
+  CAFE = 'cafe',
+  LAUNDRY = 'laundry',
   WAREHOUSE = 'warehouse',
   SERVICE = 'service',
+  OTHER = 'other',
 }
 
 @Entity('stores')

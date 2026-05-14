@@ -18,17 +18,17 @@ export class EnhanceCategoriesTable1711659962000
         'categories',
         new TableColumn({
           name: 'company_id',
-          type: 'uuid',
+          type: 'varchar',
+          length: '36',
           isNullable: true, // Temporarily nullable for migration
         }),
       );
 
-      // Set company_id from store's company_id
+      // Set company_id from store's company_id (MySQL syntax)
       await queryRunner.query(`
         UPDATE categories c
-        SET company_id = s.company_id
-        FROM stores s
-        WHERE c.store_id = s.id
+        JOIN stores s ON c.store_id = s.id
+        SET c.company_id = s.company_id
       `);
 
       // Make it non-nullable after data migration
@@ -37,14 +37,15 @@ export class EnhanceCategoriesTable1711659962000
         'company_id',
         new TableColumn({
           name: 'company_id',
-          type: 'uuid',
+          type: 'varchar',
+          length: '36',
           isNullable: false,
         }),
       );
 
       // Add index
       await queryRunner.query(`
-        CREATE INDEX "idx_categories_company_id" ON "categories" ("company_id")
+        CREATE INDEX idx_categories_company_id ON categories (company_id)
       `);
     }
 
@@ -61,10 +62,10 @@ export class EnhanceCategoriesTable1711659962000
         }),
       );
 
-      // Generate slugs from names
+      // Generate slugs from names (MySQL syntax)
       await queryRunner.query(`
         UPDATE categories
-        SET slug = LOWER(REGEXP_REPLACE(name, '[^a-zA-Z0-9]+', '-', 'g'))
+        SET slug = LOWER(REGEXP_REPLACE(name, '[^a-zA-Z0-9]+', '-'))
       `);
 
       // Make it non-nullable
@@ -87,22 +88,23 @@ export class EnhanceCategoriesTable1711659962000
         'categories',
         new TableColumn({
           name: 'parent_id',
-          type: 'uuid',
+          type: 'varchar',
+          length: '36',
           isNullable: true,
         }),
       );
 
       // Add foreign key
       await queryRunner.query(`
-        ALTER TABLE "categories"
-        ADD CONSTRAINT "fk_categories_parent"
-        FOREIGN KEY ("parent_id") REFERENCES "categories"("id")
+        ALTER TABLE categories
+        ADD CONSTRAINT fk_categories_parent
+        FOREIGN KEY (parent_id) REFERENCES categories(id)
         ON DELETE SET NULL
       `);
 
       // Add index
       await queryRunner.query(`
-        CREATE INDEX "idx_categories_parent_id" ON "categories" ("parent_id")
+        CREATE INDEX idx_categories_parent_id ON categories (parent_id)
       `);
     }
 
@@ -141,8 +143,8 @@ export class EnhanceCategoriesTable1711659962000
 
     // Add composite index for company_id + slug uniqueness
     await queryRunner.query(`
-      CREATE UNIQUE INDEX "idx_categories_company_slug" 
-      ON "categories" ("company_id", "slug")
+      CREATE UNIQUE INDEX idx_categories_company_slug 
+      ON categories (company_id, slug)
     `);
   }
 
@@ -152,14 +154,14 @@ export class EnhanceCategoriesTable1711659962000
       return;
     }
 
-    // Drop indexes
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_categories_company_slug"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_categories_parent_id"`);
-    await queryRunner.query(`DROP INDEX IF EXISTS "idx_categories_company_id"`);
+    // Drop indexes (MySQL syntax)
+    await queryRunner.query(`DROP INDEX idx_categories_company_slug ON categories`);
+    await queryRunner.query(`DROP INDEX idx_categories_parent_id ON categories`);
+    await queryRunner.query(`DROP INDEX idx_categories_company_id ON categories`);
 
-    // Drop foreign key
+    // Drop foreign key (MySQL syntax)
     await queryRunner.query(`
-      ALTER TABLE "categories" DROP CONSTRAINT IF EXISTS "fk_categories_parent"
+      ALTER TABLE categories DROP FOREIGN KEY fk_categories_parent
     `);
 
     // Drop columns

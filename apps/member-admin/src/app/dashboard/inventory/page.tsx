@@ -5,7 +5,8 @@ import { Warehouse, Plus, ArrowDownToLine, ArrowUpFromLine, RotateCcw, Package, 
 import { inventoryService, InventoryItem, StockMovement } from '@/services/inventory.service';
 import apiClient from '@/lib/api-client';
 import toast from 'react-hot-toast';
-import { Modal, PageHeader, StatusBadge, EmptyState, LoadingSpinner } from '@/components/ui';
+import { Modal, PageHeader, StatusBadge, EmptyState, LoadingSpinner, Pagination } from '@/components/ui';
+import { usePagination } from '@/hooks/usePagination';
 
 interface Product { id: string; name: string; sku: string; minStock: number; }
 interface SimpleStore { id: string; name: string; }
@@ -35,6 +36,10 @@ export default function InventoryPage() {
 
   useEffect(() => { fetchData(); }, [activeStoreId]);
 
+  const invPagination = usePagination(inventory);
+  const movPagination = usePagination(movements);
+  const lowStockPagination = usePagination(lowStockItems);
+
   const fetchData = async () => {
     setLoading(true);
     try {
@@ -44,7 +49,10 @@ export default function InventoryPage() {
       if (!activeStoreId && storeId) setActiveStoreId(storeId);
       const [movRes, prodRes, invRes, lowStockRes] = await Promise.all([
         inventoryService.getMovements(storeId).catch(() => []),
-        apiClient.get('/products').then((r: any) => (r.data ?? r) as Product[]).catch(() => [] as Product[]),
+        apiClient.get('/products', { params: { storeId, isActive: true, limit: 500 } }).then((r: any) => {
+          const d = r.data ?? r;
+          return (Array.isArray(d) ? d : (d?.data || [])) as Product[];
+        }).catch(() => [] as Product[]),
         inventoryService.getInventory(storeId).catch(() => []),
         inventoryService.getLowStock(storeId).catch(() => []),
       ]);
@@ -66,7 +74,10 @@ export default function InventoryPage() {
   };
 
   const handleTransfer = async (e: React.FormEvent) => {
-    e.preventDefault(); setSaving(true);
+    e.preventDefault();
+    if (transferData.fromStoreId === transferData.toStoreId) { toast.error('Toko asal dan tujuan tidak boleh sama'); return; }
+    if (transferData.items.some(i => !i.productId || !i.quantity || parseInt(i.quantity) < 1)) { toast.error('Semua item harus memiliki produk dan jumlah yang valid'); return; }
+    setSaving(true);
     try {
       await inventoryService.transfer({ fromStoreId: transferData.fromStoreId, toStoreId: transferData.toStoreId, items: transferData.items.map(i => ({ productId: i.productId, quantity: parseInt(i.quantity as string) || 1 })), notes: transferData.notes });
       toast.success('Stock transferred'); setModalType(null); setTransferData({ fromStoreId: '', toStoreId: '', items: [{ productId: '', quantity: '' }], notes: '' }); await fetchData();
@@ -142,7 +153,7 @@ export default function InventoryPage() {
                   <thead><tr><th>Product</th><th>SKU</th><th>Available</th><th>Reserved</th><th>Min Stock</th></tr></thead>
                   <tbody>
                     {inventory.length === 0 ? <tr><td colSpan={5} className="text-center py-12 text-gray-400">No inventory data</td></tr> :
-                      inventory.map(item => {
+                      invPagination.paginated.map(item => {
                         const isLow = item.availableQuantity <= (item.product?.minStock || 0);
                         return (
                           <tr key={item.id}>
@@ -157,6 +168,7 @@ export default function InventoryPage() {
                   </tbody>
                 </table>
               </div>
+              <Pagination page={invPagination.page} totalPages={invPagination.totalPages} onPageChange={invPagination.setPage} totalItems={invPagination.totalItems} />
             </div>
           )}
 
@@ -167,7 +179,7 @@ export default function InventoryPage() {
                   <thead><tr><th>Type</th><th>Product</th><th>Qty</th><th>Stock After</th><th>Reason</th><th>Date</th></tr></thead>
                   <tbody>
                     {movements.length === 0 ? <tr><td colSpan={6} className="text-center py-12 text-gray-400">No movements recorded</td></tr> :
-                      movements.map(m => {
+                      movPagination.paginated.map(m => {
                         const info = MOVEMENT_LABELS[m.type] || { label: m.type, badge: 'badge-gray' };
                         return (
                           <tr key={m.id}>
@@ -176,13 +188,14 @@ export default function InventoryPage() {
                             <td><span className={`font-bold ${['IN','RETURN'].includes(m.type) ? 'text-emerald-600' : 'text-red-600'}`}>{['IN','RETURN'].includes(m.type) ? '+' : '-'}{m.quantity}</span></td>
                             <td>{m.stockAfter}</td>
                             <td className="text-gray-500 text-sm">{m.reason || '—'}</td>
-                            <td className="text-gray-400 text-sm whitespace-nowrap">{new Date(m.createdAt).toLocaleString('id-ID')}</td>
+                            <td className="text-gray-400 text-sm whitespace-nowrap">{new Date(m.createdAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}</td>
                           </tr>
                         );
                       })}
                   </tbody>
                 </table>
               </div>
+              <Pagination page={movPagination.page} totalPages={movPagination.totalPages} onPageChange={movPagination.setPage} totalItems={movPagination.totalItems} />
             </div>
           )}
 
@@ -193,7 +206,7 @@ export default function InventoryPage() {
                   <thead><tr><th>Product</th><th>SKU</th><th>Current Stock</th><th>Min Stock</th><th>Status</th></tr></thead>
                   <tbody>
                     {lowStockItems.length === 0 ? <tr><td colSpan={5} className="text-center py-12 text-emerald-600">✓ All products are well stocked!</td></tr> :
-                      lowStockItems.map(item => {
+                      lowStockPagination.paginated.map(item => {
                         const isCritical = (item.availableQuantity / (item.product?.minStock || 1)) * 100 < 50;
                         return (
                           <tr key={item.id}>
@@ -208,6 +221,7 @@ export default function InventoryPage() {
                   </tbody>
                 </table>
               </div>
+              <Pagination page={lowStockPagination.page} totalPages={lowStockPagination.totalPages} onPageChange={lowStockPagination.setPage} totalItems={lowStockPagination.totalItems} />
             </div>
           )}
         </>

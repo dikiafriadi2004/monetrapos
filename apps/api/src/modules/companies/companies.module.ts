@@ -10,6 +10,7 @@ import { User } from '../users/user.entity';
 import { Invoice } from '../billing/invoice.entity';
 import { Subscription } from '../subscriptions/subscription.entity';
 import { AdminAuthModule } from '../admin-auth/admin-auth.module';
+import { StorageService } from '../../common/utils/storage.service';
 
 @Module({
   imports: [
@@ -17,7 +18,7 @@ import { AdminAuthModule } from '../admin-auth/admin-auth.module';
     AdminAuthModule,
   ],
   controllers: [CompaniesController, AdminCompaniesController, AdminDashboardController, AdminSettingsController],
-  providers: [CompaniesService],
+  providers: [CompaniesService, StorageService],
   exports: [CompaniesService],
 })
 export class CompaniesModule {}

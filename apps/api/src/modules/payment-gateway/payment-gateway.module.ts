@@ -4,6 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { PaymentGatewayService } from './payment-gateway.service';
 import { PaymentGatewayController } from './payment-gateway.controller';
 import { PaymentGatewayConfigController } from './payment-gateway-config.controller';
+import { CustomPaymentController } from './custom-payment.controller';
 import { PaymentGatewayConfigService } from './payment-gateway-config.service';
 import { PaymentGatewayConfig } from './payment-gateway-config.entity';
 import { UnifiedPaymentService } from './unified-payment.service';
@@ -31,7 +32,7 @@ import { PaymentWebhook } from '../billing/payment-webhook.entity';
     EmailModule,
     AdminAuthModule,
   ],
-  controllers: [PaymentGatewayController, PaymentGatewayConfigController],
+  controllers: [PaymentGatewayController, PaymentGatewayConfigController, CustomPaymentController],
   providers: [
     PaymentGatewayConfigService,
     XenditPaymentService,

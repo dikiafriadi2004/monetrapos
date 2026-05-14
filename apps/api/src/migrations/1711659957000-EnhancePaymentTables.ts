@@ -9,143 +9,42 @@ import {
 
 export class EnhancePaymentTables1711659957000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // Add invoice_type column to invoices table
-    await queryRunner.addColumn(
-      'invoices',
-      new TableColumn({
-        name: 'invoice_type',
-        type: 'enum',
-        enum: ['subscription', 'add_on', 'renewal'],
-        default: "'subscription'",
-        comment: 'Type of invoice',
-      }),
-    );
+    const invoicesTable = await queryRunner.getTable('invoices');
 
-    // Add invoice_pdf_url column to invoices table
-    await queryRunner.addColumn(
-      'invoices',
-      new TableColumn({
-        name: 'invoice_pdf_url',
-        type: 'varchar',
-        length: '500',
-        isNullable: true,
-        comment: 'URL to invoice PDF file',
-      }),
-    );
+    if (!invoicesTable?.columns.find((c) => c.name === 'invoice_type')) {
+      await queryRunner.addColumn('invoices', new TableColumn({ name: 'invoice_type', type: 'enum', enum: ['subscription', 'add_on', 'renewal'], default: "'subscription'", comment: 'Type of invoice' }));
+    }
+    if (!invoicesTable?.columns.find((c) => c.name === 'invoice_pdf_url')) {
+      await queryRunner.addColumn('invoices', new TableColumn({ name: 'invoice_pdf_url', type: 'varchar', length: '500', isNullable: true, comment: 'URL to invoice PDF file' }));
+    }
+    if (!invoicesTable?.columns.find((c) => c.name === 'add_on_id')) {
+      await queryRunner.addColumn('invoices', new TableColumn({ name: 'add_on_id', type: 'varchar', length: '36', isNullable: true, comment: 'Reference to company_add_ons table' }));
+    }
 
-    // Add add_on_id column to invoices table (for add-on invoices)
-    await queryRunner.addColumn(
-      'invoices',
-      new TableColumn({
-        name: 'add_on_id',
-        type: 'varchar',
-        length: '36',
-        isNullable: true,
-        comment: 'Reference to company_add_ons table',
-      }),
-    );
-
-    // Create payment_webhooks table for logging all webhook events
-    await queryRunner.createTable(
-      new Table({
+    // Create payment_webhooks table if not exists
+    const webhooksExists = await queryRunner.hasTable('payment_webhooks');
+    if (!webhooksExists) {
+      await queryRunner.createTable(new Table({
         name: 'payment_webhooks',
         columns: [
-          {
-            name: 'id',
-            type: 'varchar',
-            length: '36',
-            isPrimary: true,
-            generationStrategy: 'uuid',
-          },
-          {
-            name: 'payment_gateway',
-            type: 'enum',
-            enum: ['midtrans', 'xendit'],
-            isNullable: false,
-          },
-          {
-            name: 'event_type',
-            type: 'varchar',
-            length: '100',
-            isNullable: false,
-            comment: 'Webhook event type',
-          },
-          {
-            name: 'payload',
-            type: 'json',
-            isNullable: false,
-            comment: 'Full webhook payload',
-          },
-          {
-            name: 'signature',
-            type: 'varchar',
-            length: '500',
-            isNullable: true,
-            comment: 'Webhook signature for verification',
-          },
-          {
-            name: 'is_verified',
-            type: 'boolean',
-            default: false,
-            comment: 'Whether signature was verified',
-          },
-          {
-            name: 'is_processed',
-            type: 'boolean',
-            default: false,
-            comment: 'Whether webhook was processed',
-          },
-          {
-            name: 'processed_at',
-            type: 'timestamp',
-            isNullable: true,
-          },
-          {
-            name: 'error_message',
-            type: 'text',
-            isNullable: true,
-            comment: 'Error message if processing failed',
-          },
-          {
-            name: 'created_at',
-            type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP',
-          },
-          {
-            name: 'updated_at',
-            type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP',
-            onUpdate: 'CURRENT_TIMESTAMP',
-          },
+          { name: 'id', type: 'varchar', length: '36', isPrimary: true, generationStrategy: 'uuid' },
+          { name: 'payment_gateway', type: 'enum', enum: ['midtrans', 'xendit'], isNullable: false },
+          { name: 'event_type', type: 'varchar', length: '100', isNullable: false },
+          { name: 'payload', type: 'json', isNullable: false },
+          { name: 'signature', type: 'varchar', length: '500', isNullable: true },
+          { name: 'is_verified', type: 'boolean', default: false },
+          { name: 'is_processed', type: 'boolean', default: false },
+          { name: 'processed_at', type: 'timestamp', isNullable: true },
+          { name: 'error_message', type: 'text', isNullable: true },
+          { name: 'created_at', type: 'timestamp', default: 'CURRENT_TIMESTAMP' },
+          { name: 'updated_at', type: 'timestamp', default: 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' },
         ],
-      }),
-      true,
-    );
+      }), true);
 
-    // Add indexes for payment_webhooks
-    await queryRunner.createIndex(
-      'payment_webhooks',
-      new TableIndex({
-        name: 'idx_payment_webhooks_gateway_event',
-        columnNames: ['payment_gateway', 'event_type'],
-      }),
-    );
-
-    await queryRunner.createIndex(
-      'payment_webhooks',
-      new TableIndex({
-        name: 'idx_payment_webhooks_processed',
-        columnNames: ['is_processed'],
-      }),
-    );
-
-    await queryRunner.createIndex(
-      'payment_webhooks',
-      new TableIndex({
-        name: 'idx_payment_webhooks_created_at',
-        columnNames: ['created_at'],
-      }),
-    );
+      await queryRunner.createIndex('payment_webhooks', new TableIndex({ name: 'idx_payment_webhooks_gateway_event', columnNames: ['payment_gateway', 'event_type'] }));
+      await queryRunner.createIndex('payment_webhooks', new TableIndex({ name: 'idx_payment_webhooks_processed', columnNames: ['is_processed'] }));
+      await queryRunner.createIndex('payment_webhooks', new TableIndex({ name: 'idx_payment_webhooks_created_at', columnNames: ['created_at'] }));
+    }
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

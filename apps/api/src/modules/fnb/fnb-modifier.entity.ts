@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   ManyToOne,
+  OneToMany,
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
@@ -47,6 +48,9 @@ export class FnbModifierGroup {
   @Column({ type: 'simple-json', nullable: true })
   product_ids: string[]; // Which products this modifier applies to (empty = all)
 
+  @OneToMany(() => FnbModifierOption, option => option.group, { cascade: true })
+  options: FnbModifierOption[];
+
   @CreateDateColumn()
   created_at: Date;
 
@@ -62,7 +66,7 @@ export class FnbModifierOption {
   @Column({ type: 'uuid' })
   group_id: string;
 
-  @ManyToOne(() => FnbModifierGroup)
+  @ManyToOne(() => FnbModifierGroup, group => group.options)
   @JoinColumn({ name: 'group_id' })
   group: FnbModifierGroup;
 

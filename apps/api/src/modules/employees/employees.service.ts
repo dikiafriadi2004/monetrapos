@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, IsNull, Not } from 'typeorm';
@@ -15,6 +16,8 @@ import { CreateEmployeeDto, UpdateEmployeeDto, CreateUserAccountDto, ClockInDto,
 
 @Injectable()
 export class EmployeesService {
+  private readonly logger = new Logger(EmployeesService.name);
+
   constructor(
     @InjectRepository(Employee)
     private employeeRepo: Repository<Employee>,
@@ -60,28 +63,62 @@ export class EmployeesService {
     // Generate unique employee number
     const employeeNumber = await this.generateEmployeeNumber(companyId);
 
-    // Hash password if provided (for standalone employees)
+    // Jika ada email + password, buat User account dan link ke employee
+    // HANYA jika createUserAccount flag true (default: false untuk menghindari konflik)
+    let userId = dto.userId;
+    if (!userId && dto.email && dto.password && (dto as any).createUserAccount === true) {
+      // Cek apakah email sudah terdaftar sebagai user
+      const existingUser = await this.userRepo.findOne({ where: { email: dto.email } });
+      if (existingUser) {
+        // Link ke user yang sudah ada
+        userId = existingUser.id;
+      } else {
+        // Buat user baru
+        const passwordHash = await bcrypt.hash(dto.password, 10);
+        const newUser = this.userRepo.create({
+          companyId,
+          name: dto.name,
+          email: dto.email,
+          phone: dto.phone || undefined,
+          passwordHash,
+          role: (dto.role && dto.role.trim() ? dto.role.trim() : 'cashier') as any,
+          permissions: [],
+          isActive: true,
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
+        });
+        const savedUser = await this.userRepo.save(newUser);
+        userId = savedUser.id;
+      }
+    }
+
+    // Hash password untuk standalone employee (tanpa user account)
     let passwordHash: string | null = null;
-    if (dto.password) {
+    if (!userId && dto.password) {
       passwordHash = await bcrypt.hash(dto.password, 10);
-    } else if (!dto.userId) {
-      throw new BadRequestException('Password is required when not linking to existing user');
+    }
+
+    // Hash PIN jika ada
+    let hashedPin: string | null = null;
+    if (dto.pin) {
+      hashedPin = await bcrypt.hash(dto.pin, 10);
     }
 
     const employeeData: any = {
       companyId: companyId,
-      userId: dto.userId || undefined,
+      userId: userId || undefined,
       storeId: dto.storeId,
       name: dto.name,
       email: dto.email || undefined,
       phone: dto.phone || undefined,
       passwordHash: passwordHash || undefined,
-      pin: dto.pin || undefined,
+      pin: hashedPin || undefined,
       employeeNumber: employeeNumber,
       position: dto.position || undefined,
       hireDate: new Date(dto.hireDate),
       salary: dto.salary || 0,
       avatarUrl: dto.avatarUrl || undefined,
+      role: (dto.role && dto.role.trim() ? dto.role.trim() : 'cashier'),
       isActive: true,
     };
 
@@ -98,10 +135,11 @@ export class EmployeesService {
   private async generateEmployeeNumber(companyId: string): Promise<string> {
     const today = new Date();
     const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
-    
-    // Find the last employee number for this company and date
+
+    // Cari nomor terakhir — termasuk yang sudah soft-deleted agar tidak duplikat
     const lastEmployee = await this.employeeRepo
       .createQueryBuilder('employee')
+      .withDeleted() // include soft-deleted records
       .where('employee.companyId = :companyId', { companyId })
       .andWhere('employee.employeeNumber LIKE :pattern', { pattern: `EMP-${dateStr}-%` })
       .orderBy('employee.employeeNumber', 'DESC')
@@ -118,7 +156,25 @@ export class EmployeesService {
       }
     }
 
-    return `EMP-${dateStr}-${sequence.toString().padStart(4, '0')}`;
+    // Double-check: pastikan nomor yang dihasilkan belum ada (termasuk soft-deleted)
+    let candidate = `EMP-${dateStr}-${sequence.toString().padStart(4, '0')}`;
+    let exists = await this.employeeRepo
+      .createQueryBuilder('employee')
+      .withDeleted()
+      .where('employee.employeeNumber = :num', { num: candidate })
+      .getCount();
+
+    while (exists > 0) {
+      sequence++;
+      candidate = `EMP-${dateStr}-${sequence.toString().padStart(4, '0')}`;
+      exists = await this.employeeRepo
+        .createQueryBuilder('employee')
+        .withDeleted()
+        .where('employee.employeeNumber = :num', { num: candidate })
+        .getCount();
+    }
+
+    return candidate;
   }
 
   /**
@@ -229,7 +285,8 @@ export class EmployeesService {
       role: (dto.role as any) || 'manager',
       permissions: [],
       isActive: true,
-      emailVerified: false,
+      emailVerified: true,
+      emailVerifiedAt: new Date(),
     });
 
     const savedUser = await this.userRepo.save(user);
@@ -264,30 +321,7 @@ export class EmployeesService {
       .createQueryBuilder('employee')
       .leftJoinAndSelect('employee.user', 'user')
       .leftJoinAndSelect('employee.store', 'store')
-      .where('employee.companyId = :companyId', { companyId })
-      .select([
-        'employee.id',
-        'employee.name',
-        'employee.email',
-        'employee.phone',
-        'employee.employeeNumber',
-        'employee.position',
-        'employee.hireDate',
-        'employee.salary',
-        'employee.avatarUrl',
-        'employee.isActive',
-        'employee.storeId',
-        'employee.userId',
-        'employee.createdAt',
-        'employee.updatedAt',
-        'user.id',
-        'user.name',
-        'user.email',
-        'user.role',
-        'store.id',
-        'store.name',
-        'store.code',
-      ]);
+      .where('employee.companyId = :companyId', { companyId });
 
     if (options?.storeId) {
       queryBuilder.andWhere('employee.storeId = :storeId', { storeId: options.storeId });
@@ -317,43 +351,24 @@ export class EmployeesService {
    * Find one employee by ID
    */
   async findOne(id: string, companyId: string): Promise<Employee> {
-    const employee = await this.employeeRepo.findOne({
-      where: { id, companyId },
-      relations: ['user', 'store'],
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        phone: true,
-        avatarUrl: true,
-        pin: true,
-        employeeNumber: true,
-        position: true,
-        hireDate: true,
-        salary: true,
-        isActive: true,
-        storeId: true,
-        userId: true,
-        createdAt: true,
-        updatedAt: true,
-        user: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-        },
-        store: {
-          id: true,
-          name: true,
-          code: true,
-        },
-      },
-    });
+    const employee = await this.employeeRepo
+      .createQueryBuilder('employee')
+      .leftJoin('employee.user', 'user')
+      .leftJoin('employee.store', 'store')
+      .where('employee.id = :id', { id })
+      .andWhere('employee.companyId = :companyId', { companyId })
+      .select([
+        'employee.id', 'employee.name', 'employee.email', 'employee.phone',
+        'employee.avatarUrl', 'employee.pin', 'employee.employeeNumber',
+        'employee.position', 'employee.role', 'employee.hireDate', 'employee.salary',
+        'employee.isActive', 'employee.storeId', 'employee.userId',
+        'employee.createdAt', 'employee.updatedAt',
+        'user.id', 'user.name', 'user.email', 'user.role',
+        'store.id', 'store.name', 'store.code',
+      ])
+      .getOne();
 
-    if (!employee) {
-      throw new NotFoundException('Employee not found');
-    }
-
+    if (!employee) throw new NotFoundException('Employee not found');
     return employee;
   }
 
@@ -397,10 +412,48 @@ export class EmployeesService {
       }
     }
 
-    Object.assign(employee, dto);
+    // Pisahkan role dan password dari dto (password tidak ada di entity)
+    const { role: roleValue, password, pin: pinValue, ...employeeFields } = dto as any;
+    const originalEmail = employee.email;
+
+    // Hash PIN jika diupdate
+    if (pinValue !== undefined) {
+      (employee as any).pin = pinValue ? await bcrypt.hash(pinValue, 10) : null;
+    }
+
+    // Hanya assign field yang tidak undefined (kecuali pin yang sudah dihandle)
+    for (const key of Object.keys(employeeFields)) {
+      if (employeeFields[key] !== undefined) {
+        (employee as any)[key] = employeeFields[key];
+      }
+    }
+
+    // Simpan role langsung di employee entity
+    if (roleValue && String(roleValue).trim()) {
+      (employee as any).role = String(roleValue).trim();
+    }
+
+    this.logger.debug(`[update] employee ${id} role=${(employee as any).role} userId=${employee.userId}`);
+
     const saved = await this.employeeRepo.save(employee);
     delete (saved as any).passwordHash;
-    return saved;
+
+    // Sync role dan email ke user account jika ada
+    if (employee.userId) {
+      const userUpdates: any = {};
+      if (roleValue && String(roleValue).trim()) {
+        userUpdates.role = String(roleValue).trim();
+      }
+      if (employeeFields.email && employeeFields.email !== originalEmail) {
+        userUpdates.email = employeeFields.email;
+      }
+      if (Object.keys(userUpdates).length > 0) {
+        await this.userRepo.update({ id: employee.userId }, userUpdates);
+      }
+    }
+
+    // Return dengan relasi terbaru
+    return this.findOne(id, companyId);
   }
 
   /**
@@ -563,6 +616,77 @@ export class EmployeesService {
       .getManyAndCount();
 
     return { data, total, page, limit };
+  }
+
+  /**
+   * Self clock-in/out by PIN — karyawan absen mandiri
+   */
+  async selfClockByPin(
+    pin: string,
+    storeId: string,
+    companyId: string,
+    action?: 'clock-in' | 'clock-out',
+    notes?: string,
+    breakDurationMinutes?: number,
+  ): Promise<{ action: string; employee: Partial<Employee>; attendance: EmployeeAttendance }> {
+    if (!pin || pin.length < 4) {
+      throw new BadRequestException('PIN tidak valid');
+    }
+
+    // Cari karyawan berdasarkan PIN dan company
+    const employee = await this.employeeRepo.findOne({
+      where: { pin, companyId, isActive: true },
+    });
+
+    if (!employee) {
+      throw new NotFoundException('PIN tidak ditemukan atau karyawan tidak aktif');
+    }
+
+    // Cek status clock-in saat ini
+    const activeAttendance = await this.attendanceRepo.findOne({
+      where: { employeeId: employee.id, companyId, clockOutAt: IsNull() },
+      order: { clockInAt: 'DESC' },
+    });
+
+    const isClockedIn = !!activeAttendance;
+
+    // Tentukan action otomatis jika tidak dikirim
+    const resolvedAction = action || (isClockedIn ? 'clock-out' : 'clock-in');
+
+    let attendance: EmployeeAttendance;
+
+    if (resolvedAction === 'clock-in') {
+      if (isClockedIn) {
+        throw new ConflictException(`${employee.name} sudah clock in. Silakan clock out terlebih dahulu.`);
+      }
+      attendance = this.attendanceRepo.create({
+        employeeId: employee.id,
+        companyId,
+        storeId: storeId || employee.storeId,
+        clockInAt: new Date(),
+        notes: notes || null,
+      });
+      attendance = await this.attendanceRepo.save(attendance);
+    } else {
+      if (!activeAttendance) {
+        throw new ConflictException(`${employee.name} belum clock in.`);
+      }
+      const clockOutTime = new Date();
+      activeAttendance.clockOutAt = clockOutTime;
+      const durationMs = clockOutTime.getTime() - activeAttendance.clockInAt.getTime();
+      const totalMinutes = Math.floor(durationMs / (1000 * 60));
+      const breakMin = breakDurationMinutes || 0;
+      activeAttendance.breakDurationMinutes = breakMin;
+      activeAttendance.workDurationMinutes = Math.max(0, totalMinutes - breakMin);
+      if (notes) activeAttendance.notes = notes;
+      attendance = await this.attendanceRepo.save(activeAttendance);
+    }
+
+    return {
+      action: resolvedAction,
+      employee: { id: employee.id, name: employee.name, employeeNumber: employee.employeeNumber, position: employee.position },
+      attendance,
+    };
   }
 
   /**

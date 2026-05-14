@@ -4,7 +4,9 @@ export class AddPaymentGatewayPreference1711659970000
   implements MigrationInterface
 {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // Add payment_gateway_preference column to companies table
+    const hasColumn = await queryRunner.hasColumn('companies', 'payment_gateway_preference');
+    if (hasColumn) return;
+
     await queryRunner.addColumn(
       'companies',
       new TableColumn({
@@ -15,8 +17,6 @@ export class AddPaymentGatewayPreference1711659970000
         default: "'xendit'",
       }),
     );
-
-    console.log('✓ Added payment_gateway_preference column to companies table');
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

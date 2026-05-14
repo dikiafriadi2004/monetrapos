@@ -22,7 +22,9 @@ export enum PaymentMethodType {
   QRIS = 'qris',
   BANK_TRANSFER = 'bank_transfer',
   EDC = 'edc',
+  // Note: transactions table uses 'e_wallet', payment_methods table uses 'ewallet'
   EWALLET = 'ewallet',
+  E_WALLET = 'e_wallet',
 }
 
 export enum DiscountType {
@@ -33,10 +35,13 @@ export enum DiscountType {
 }
 
 export enum StoreType {
-  RESTAURANT = 'restaurant',
-  LAUNDRY = 'laundry',
   RETAIL = 'retail',
+  FNB = 'fnb',
+  RESTAURANT = 'restaurant',
   CAFE = 'cafe',
+  LAUNDRY = 'laundry',
+  WAREHOUSE = 'warehouse',
+  SERVICE = 'service',
   OTHER = 'other',
 }
 
@@ -47,9 +52,4 @@ export enum OrderStatus {
   SERVED = 'served',
   PICKED_UP = 'picked_up',
   DELIVERED = 'delivered',
-}
-
-export enum ShiftStatus {
-  OPEN = 'open',
-  CLOSED = 'closed',
 }

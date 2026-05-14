@@ -5,7 +5,7 @@ export * from './api.types';
 export * from './payment-method.types';
 
 // Legacy Payment Method Type (for backward compatibility)
-export type PaymentMethodType = 'cash' | 'card' | 'transfer' | 'qris';
+export type PaymentMethodType = 'cash' | 'card' | 'transfer' | 'qris' | 'ewallet' | 'edc' | 'bank_transfer' | 'e_wallet';
 
 // Product Types
 export interface Product {
@@ -79,7 +79,6 @@ export interface Transaction {
   companyId: string;
   customerId?: string;
   userId: string;
-  shiftId?: string;
   subtotal: number;
   tax: number;
   discount: number;
@@ -103,33 +102,6 @@ export interface TransactionItem {
   discount: number;
   total: number;
   product?: Product;
-}
-
-// Shift Types
-export interface Shift {
-  id: string;
-  companyId: string;
-  employeeId?: string;
-  userId?: string;
-  storeId?: string;
-  // Backend fields
-  openedAt?: string;
-  closedAt?: string;
-  openingCash?: number;
-  closingCash?: number;
-  // Frontend alias fields (mapped from backend)
-  startTime: string;
-  endTime?: string;
-  startingCash: number;
-  endingCash?: number;
-  expectedCash?: number;
-  cashDifference?: number;
-  totalSales?: number;
-  totalTransactions?: number;
-  status: 'open' | 'closed';
-  notes?: string;
-  createdAt: string;
-  updatedAt: string;
 }
 
 // Cart Types

@@ -71,6 +71,12 @@ export class UsersController {
     return { message: 'Password updated successfully' };
   }
 
+  @Post(':id/verify-email')
+  async verifyEmail(@Param('id') id: string, @Request() req: any) {
+    await this.usersService.verifyEmail(id);
+    return { message: 'Email verified successfully' };
+  }
+
   @Delete(':id')
   async remove(@Param('id') id: string, @Request() req: any) {
     await this.usersService.remove(id, req.user.companyId || req.user.company_id);

@@ -4,9 +4,9 @@ import { useAuth } from '@/contexts/AuthContext';
  * Hook untuk mengecek permission user.
  *
  * Logika:
- * - member dengan role owner → semua permission granted
- * - member (non-owner, e.g. admin/manager/accountant) → semua permission granted
- * - employee → hanya permission yang ada di user.permissions[]
+ * - Semua role (owner, admin, manager, cashier, staff) dicek dari user.permissions[]
+ * - Owner dan admin mendapat semua permissions dari backend saat login
+ * - Role lain mendapat permissions sesuai yang di-assign
  */
 export function usePermission() {
   const { user } = useAuth();
@@ -17,13 +17,7 @@ export function usePermission() {
   const hasPermission = (permission: string): boolean => {
     if (!user) return false;
 
-    // Owner role punya semua akses ke semua fitur member-admin
-    if (user.role === 'owner') return true;
-
-    // Non-owner members (admin, manager, accountant) punya akses penuh ke member-admin
-    if (user.type === 'member') return true;
-
-    // Employee harus punya permission spesifik
+    // Cek dari permissions array yang dikirim backend
     return user.permissions?.includes(permission) ?? false;
   };
 
@@ -53,8 +47,6 @@ export function usePermission() {
 
   /**
    * Apakah user adalah owner atau admin (full access)
-   * Owner: semua permission
-   * Admin: hampir semua permission kecuali subscription management
    */
   const isOwnerOrAdmin =
     user?.role === 'owner' || user?.role === 'admin';
@@ -100,7 +92,6 @@ export const PERMISSIONS = {
   EMPLOYEE_EDIT: 'employee.edit',
   EMPLOYEE_DELETE: 'employee.delete',
   EMPLOYEE_MANAGE_ROLE: 'employee.manage_role',
-  EMPLOYEE_MANAGE_SHIFT: 'employee.manage_shift',
   EMPLOYEE_CLOCK: 'employee.clock_in_out',
 
   // Finance

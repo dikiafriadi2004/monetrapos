@@ -1,11 +1,11 @@
-import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { AdminUser, AdminRole } from '../../modules/admin-auth/admin-user.entity';
 
 @Injectable()
-export class AdminUsersSeeder implements OnModuleInit {
+export class AdminUsersSeeder {
   private readonly logger = new Logger(AdminUsersSeeder.name);
 
   constructor(
@@ -13,7 +13,7 @@ export class AdminUsersSeeder implements OnModuleInit {
     private adminUserRepo: Repository<AdminUser>,
   ) {}
 
-  async onModuleInit() {
+  async seed(): Promise<void> {
     const count = await this.adminUserRepo.count();
     if (count > 0) {
       this.logger.log(`AdminUsers already seeded (${count} found) — skipping`);
@@ -22,18 +22,19 @@ export class AdminUsersSeeder implements OnModuleInit {
 
     this.logger.log('Seeding initial AdminUser...');
 
-    const passwordHash = await bcrypt.hash('admin123', 10);
+    const defaultEmail = process.env.ADMIN_EMAIL || 'admin@monetrapos.com';
+    const defaultPassword = process.env.ADMIN_PASSWORD || 'admin123';
+    const passwordHash = await bcrypt.hash(defaultPassword, 10);
+
     const admin = this.adminUserRepo.create({
       name: 'Super Admin',
-      email: 'admin@monetrapos.com',
+      email: defaultEmail,
       passwordHash,
       role: AdminRole.SUPER_ADMIN,
       isActive: true,
     });
     await this.adminUserRepo.save(admin);
 
-    this.logger.log('✅ Seeded initial AdminUser:');
-    this.logger.log('Email: admin@monetrapos.com');
-    this.logger.log('Password: admin123');
+    this.logger.log(`✅ Seeded initial AdminUser: ${defaultEmail}`);
   }
 }

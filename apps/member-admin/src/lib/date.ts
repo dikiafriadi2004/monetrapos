@@ -71,6 +71,22 @@ export function formatCurrency(amount: number): string {
   }).format(amount || 0);
 }
 
+/** Format angka sebagai Rupiah dengan titik ribuan, tanpa prefix "Rp" — contoh: 1.000.000 */
+export function formatRupiah(amount: number | string | null | undefined): string {
+  const n = Number(amount || 0);
+  return new Intl.NumberFormat(WIB_LOCALE, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(n);
+}
+
+/** Parse string Rupiah (dengan titik) ke number — "1.000.000" → 1000000 */
+export function parseRupiah(value: string): number {
+  // Hapus semua karakter non-digit
+  const cleaned = value.replace(/\D/g, '');
+  return cleaned ? parseInt(cleaned, 10) : 0;
+}
+
 export function formatNumber(n: number): string {
   return (n || 0).toLocaleString(WIB_LOCALE);
 }

@@ -145,8 +145,34 @@ export class EmployeesController {
   @Get(':id/clock-in-status')
   @RequirePermissions('employee.view')
   @ApiOperation({ summary: 'Get current clock-in status for employee' })
-  getCurrentClockInStatus(@Param('id') id: string, @Req() req: any) {
+  async getCurrentClockInStatus(@Param('id') id: string, @Req() req: any) {
     const companyId = req.user.companyId;
-    return this.employeesService.getCurrentClockInStatus(id, companyId);
+    const attendance = await this.employeesService.getCurrentClockInStatus(id, companyId);
+    if (!attendance) {
+      return { isClockedIn: false, currentAttendance: null };
+    }
+    return {
+      isClockedIn: true,
+      currentAttendance: {
+        id: attendance.id,
+        clockInTime: attendance.clockInAt,
+        storeId: attendance.storeId,
+        store: attendance.store,
+        notes: attendance.notes,
+      },
+    };
+  }
+
+  /**
+   * Self clock-in/out — karyawan absen mandiri menggunakan PIN
+   * Tidak butuh permission khusus, hanya butuh JWT valid
+   */
+  @Post('self-clock')
+  @ApiOperation({ summary: 'Employee self clock-in or clock-out using PIN' })
+  selfClock(
+    @Body() dto: { pin: string; storeId: string; action?: 'clock-in' | 'clock-out'; notes?: string; breakDurationMinutes?: number },
+    @Req() req: any,
+  ) {
+    return this.employeesService.selfClockByPin(dto.pin, dto.storeId, req.user.companyId, dto.action, dto.notes, dto.breakDurationMinutes);
   }
 }

@@ -14,6 +14,8 @@ interface ReceiptPreviewProps {
     taxRate?: number;
     taxLabel?: string;
     discount: number;
+    redeemPoints?: number;
+    redeemDiscount?: number;
     total: number;
     paidAmount: number;
     changeAmount: number;
@@ -79,17 +81,20 @@ export default function ReceiptPreview({
               {transaction.storeLogo && (
                 <img
                   src={transaction.storeLogo}
-                  alt="Logo"
+                  alt="Logo Toko"
                   className="mx-auto mb-2"
-                  crossOrigin="anonymous"
-                  style={{ maxHeight: 60, maxWidth: 160, objectFit: 'contain' }}
+                  style={{ maxHeight: 70, maxWidth: 180, objectFit: 'contain', display: 'block' }}
                   onError={e => {
                     const img = e.target as HTMLImageElement;
                     img.style.display = 'none';
                   }}
+                  onLoad={e => {
+                    const img = e.target as HTMLImageElement;
+                    img.style.display = 'block';
+                  }}
                 />
               )}
-              {transaction.headerText && (
+              {transaction.headerText && transaction.headerText.trim() !== (transaction.storeName || '').trim() && (
                 <div className="text-xs text-gray-500 mb-2 whitespace-pre-line">{transaction.headerText}</div>
               )}
               <div className="font-bold text-lg">{transaction.storeName || ''}</div>
@@ -162,6 +167,12 @@ export default function ReceiptPreview({
                 <div className="flex justify-between text-green-600">
                   <span>Discount:</span>
                   <span>-{formatCurrency(transaction.discount)}</span>
+                </div>
+              )}
+              {transaction.redeemPoints && transaction.redeemPoints > 0 && (
+                <div className="flex justify-between text-amber-600">
+                  <span>⭐ Tukar Poin ({transaction.redeemPoints} pts):</span>
+                  <span>-{formatCurrency(transaction.redeemDiscount || 0)}</span>
                 </div>
               )}
               {transaction.tax > 0 && (

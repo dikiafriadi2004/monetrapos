@@ -1,10 +1,12 @@
 import apiClient, { unwrap } from '@/lib/api-client';
 
+export type StoreTypeValue = 'retail' | 'fnb' | 'restaurant' | 'cafe' | 'laundry' | 'warehouse' | 'service' | 'other';
+
 export interface Store {
   id: string;
   name: string;
   code?: string;
-  type: 'retail' | 'fnb' | 'warehouse' | 'service';
+  type: StoreTypeValue;
   address?: string;
   city?: string;
   province?: string;
@@ -37,7 +39,7 @@ export interface PaginatedStores {
 export interface CreateStoreDto {
   name: string;
   code?: string;
-  type: Store['type'];
+  type: StoreTypeValue;
   address?: string;
   city?: string;
   province?: string;

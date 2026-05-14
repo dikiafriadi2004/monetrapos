@@ -10,16 +10,19 @@ import toast from 'react-hot-toast';
 import PermissionGate from '@/components/PermissionGate';
 import { PERMISSIONS } from '@/hooks/usePermission';
 import { Modal, PageHeader, SearchInput, StatusBadge, EmptyState, LoadingSpinner, Pagination } from '@/components/ui';
+import { formatRupiah } from '@/lib/date';
 
 export default function TransactionsPage() {
   const { company } = useAuth();
   const { storeId } = useStore();
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [totalTransactions, setTotalTransactions] = useState(0);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [filterDateFrom, setFilterDateFrom] = useState('');
-  const [filterDateTo, setFilterDateTo] = useState('');
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' }); // YYYY-MM-DD format WIB
+  const [filterDateFrom, setFilterDateFrom] = useState(today);
+  const [filterDateTo, setFilterDateTo] = useState(today);
   const [page, setPage] = useState(1);
   const [selectedTx, setSelectedTx] = useState<any>(null);
   const [voidModal, setVoidModal] = useState<{ open: boolean; tx: any | null }>({ open: false, tx: null });
@@ -29,7 +32,7 @@ export default function TransactionsPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [exportLoading, setExportLoading] = useState(false);
 
-  useEffect(() => { if (storeId) loadTransactions(); }, [storeId, page, filterDateFrom, filterDateTo]);
+  useEffect(() => { if (storeId) loadTransactions(); }, [storeId, page, filterDateFrom, filterDateTo, filterStatus]);
 
   const loadTransactions = async () => {
     try {
@@ -37,9 +40,11 @@ export default function TransactionsPage() {
       const params: Record<string, string | number> = { storeId: storeId!, page, limit: 20 };
       if (filterDateFrom) params.startDate = filterDateFrom;
       if (filterDateTo) params.endDate = filterDateTo;
+      if (filterStatus && filterStatus !== 'all') params.status = filterStatus;
       const res = await apiClient.get('/transactions', { params });
       const data = res.data as any;
       setTransactions(Array.isArray(data) ? data : (data?.data || []));
+      setTotalTransactions(data?.total || (Array.isArray(data) ? data.length : 0));
     } catch (err: any) {
       console.error('Failed to load transactions:', err);
       toast.error(err?.response?.data?.message || 'Failed to load transactions');
@@ -81,9 +86,9 @@ export default function TransactionsPage() {
           <div class="divider"></div><p>Invoice: ${tx.transactionNumber}</p><p>Date: ${new Date(tx.createdAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}</p>
           ${tx.customer?.name?`<p>Customer: ${tx.customer.name}</p>`:''}
           <div class="divider"></div>
-          ${(tx.items||[]).map((i:any)=>`<div class="row"><span>${i.quantity}x ${i.productName}</span><span>Rp ${i.subtotal?.toLocaleString('id-ID')}</span></div>`).join('')}
+          ${(tx.items||[]).map((i:any)=>`<div class="row"><span>${i.quantity}x ${i.productName}</span><span>Rp ${formatRupiah(i.subtotal)}</span></div>`).join('')}
           <div class="divider"></div>
-          <div class="row"><span>Total</span><strong>Rp ${tx.total?.toLocaleString('id-ID')}</strong></div>
+          <div class="row"><span>Total</span><strong>Rp ${formatRupiah(tx.total)}</strong></div>
           <div class="divider"></div><div style="text-align:center"><p>Thank you!</p></div>
           </body></html>`);
         win.document.close(); win.print();
@@ -100,20 +105,79 @@ export default function TransactionsPage() {
   };
 
   const handleExport = async () => {
+    if (!storeId) return;
+    setExportLoading(true);
+    try {
+      const params: Record<string, string | number> = { storeId, page: 1, limit: 1000 };
+      if (filterDateFrom) params.startDate = filterDateFrom;
+      if (filterDateTo) params.endDate = filterDateTo;
+      const res = await apiClient.get('/transactions', { params });
+      const data = res.data as any;
+      const rows: any[] = Array.isArray(data) ? data : (data?.data || []);
+
+      if (!rows.length) { toast.error('Tidak ada data untuk diekspor'); return; }
+
+      const fmtDt = (d: string) => d ? new Date(d).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'short', timeStyle: 'short' }) : '';
+      // Angka tanpa format ribuan agar Excel bisa baca sebagai number
+      const fmtNum = (n: any) => formatRupiah(Number(n || 0));
+
+      // Gunakan semicolon (;) sebagai separator — standar Excel di locale Indonesia/Windows
+      const SEP = ';';
+      const escape = (v: any) => {
+        const s = String(v ?? '');
+        // Jika mengandung separator, newline, atau quote — bungkus dengan quote
+        if (s.includes(SEP) || s.includes('"') || s.includes('\n')) {
+          return `"${s.replace(/"/g, '""')}"`;
+        }
+        return s;
+      };
+
+      const headers = ['Invoice', 'Tanggal', 'Pelanggan', 'Metode Bayar', 'Subtotal', 'Diskon', 'Pajak', 'Total', 'Status'];
+      const csvRows = rows.map(t => [
+        t.transactionNumber || '',
+        fmtDt(t.createdAt),
+        t.customerName || t.customer?.name || '',
+        t.paymentMethod || '',
+        fmtNum(t.subtotal),
+        fmtNum(t.discountAmount),
+        fmtNum(t.taxAmount),
+        fmtNum(t.total),
+        t.status || '',
+      ].map(escape).join(SEP));
+
+      // sep= hint agar Excel otomatis deteksi separator
+      const csv = `sep=${SEP}\n` + [headers.join(SEP), ...csvRows].join('\n');
+      const bom = '\uFEFF';
+      const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      const dateLabel = filterDateFrom || new Date().toISOString().split('T')[0];
+      a.href = URL.createObjectURL(blob);
+      a.download = `transaksi_${dateLabel}.csv`;
+      a.click();
+      toast.success(`${rows.length} transaksi berhasil diekspor`);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Gagal export CSV');
+    } finally { setExportLoading(false); }
+  };
+
+  const handleExportPdf = async () => {
+    if (!storeId) return;
     setExportLoading(true);
     try {
       const today = new Date().toISOString().split('T')[0];
       const monthStart = new Date(new Date().setDate(1)).toISOString().split('T')[0];
-      const report = await transactionService.getSalesReport({ storeId: storeId!, startDate: monthStart, endDate: today, groupBy: 'day' });
-      const rows = (report as any)?.daily || (report as any)?.data || [];
-      if (!rows.length) { toast.error('No data to export'); return; }
-      const headers = Object.keys(rows[0]);
-      const csv = [headers.join(','), ...rows.map((r: any) => headers.map((h: string) => r[h]).join(','))].join('\n');
+      const token = localStorage.getItem('access_token') || '';
+      const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4404/api/v1';
+      const url = `${apiBase}/transactions/export-pdf?storeId=${storeId}&startDate=${monthStart}&endDate=${today}`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) { toast.error('Gagal export PDF'); return; }
+      const blob = await res.blob();
       const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-      a.download = `transactions_${today}.csv`; a.click();
-      toast.success('Report exported');
-    } catch { toast.error('Failed to export report'); }
+      a.href = URL.createObjectURL(blob);
+      a.download = `transactions_${today}.pdf`;
+      a.click();
+      toast.success('PDF exported');
+    } catch { toast.error('Failed to export PDF'); }
     finally { setExportLoading(false); }
   };
 
@@ -124,28 +188,33 @@ export default function TransactionsPage() {
   });
 
   const fmt = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n || 0);
-  const fmtDate = (d: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(d));
+  const fmtDate = (d: string) => new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' }).format(new Date(d));
 
   return (
     <div>
-      <PageHeader title="Transactions" description="View and manage transaction history"
-        action={<button onClick={handleExport} disabled={exportLoading || !storeId} className="btn btn-outline btn-sm">
-          {exportLoading ? <Loader2 size={14} className="animate-spin"/> : <Download size={14}/>} Export
-        </button>} />
+      <PageHeader title="Riwayat Transaksi" description="Lihat dan kelola riwayat transaksi"
+        action={<div className="flex gap-2">
+          <button onClick={handleExport} disabled={exportLoading || !storeId} className="btn btn-outline btn-sm">
+            {exportLoading ? <Loader2 size={14} className="animate-spin"/> : <Download size={14}/>} CSV
+          </button>
+          <button onClick={handleExportPdf} disabled={exportLoading || !storeId} className="btn btn-outline btn-sm" style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}>
+            {exportLoading ? <Loader2 size={14} className="animate-spin"/> : <Download size={14}/>} PDF
+          </button>
+        </div>} />
 
       {/* Filters */}
       <div className="flex flex-wrap gap-3 mb-6">
-        <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Search by invoice or customer..." className="flex-1 min-w-[200px]" />
-        <select className="form-input w-40" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
-          <option value="all">All Status</option>
-          {['completed','pending','cancelled','voided','refunded'].map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
+        <SearchInput value={searchQuery} onChange={setSearchQuery} placeholder="Cari invoice atau nama pelanggan..." className="flex-1 min-w-[200px]" />
+        <select className="form-input w-40" value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setPage(1); }}>
+          <option value="all">Semua Status</option>
+          {['completed','pending','cancelled','voided','refunded'].map(s => <option key={s} value={s}>{s === 'completed' ? 'Selesai' : s === 'pending' ? 'Menunggu' : s === 'cancelled' ? 'Dibatalkan' : s === 'voided' ? 'Dibatalkan' : 'Dikembalikan'}</option>)}
         </select>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500">From</span>
+          <span className="text-sm text-gray-500">Dari</span>
           <input type="date" className="form-input w-36" value={filterDateFrom} onChange={e => { setFilterDateFrom(e.target.value); setPage(1); }} />
-          <span className="text-sm text-gray-500">To</span>
+          <span className="text-sm text-gray-500">Sampai</span>
           <input type="date" className="form-input w-36" value={filterDateTo} onChange={e => { setFilterDateTo(e.target.value); setPage(1); }} />
-          {(filterDateFrom || filterDateTo) && <button onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); setPage(1); }} className="btn btn-ghost btn-sm text-red-500">Clear</button>}
+          {(filterDateFrom || filterDateTo) && <button onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); setPage(1); }} className="btn btn-ghost btn-sm text-red-500">Hapus</button>}
         </div>
       </div>
 
@@ -155,7 +224,17 @@ export default function TransactionsPage() {
         <div className="card">
           <div className="table-container border-0">
             <table className="table">
-              <thead><tr><th>Invoice</th><th>Date</th><th>Customer</th><th>Payment</th><th>Total</th><th>Status</th><th className="text-right">Actions</th></tr></thead>
+              <thead>
+                <tr>
+                  <th colSpan={7} style={{ padding: '8px 16px', background: 'var(--bg-secondary)', borderBottom: '1px solid var(--border-color)' }}>
+                    <span className="text-xs text-gray-500">
+                      Menampilkan {transactions.length} dari {totalTransactions} transaksi
+                      {page > 1 && ` · Halaman ${page}`}
+                    </span>
+                  </th>
+                </tr>
+                <tr><th>Invoice</th><th>Tanggal</th><th>Pelanggan</th><th>Pembayaran</th><th>Total</th><th>Status</th><th className="text-right">Aksi</th></tr>
+              </thead>
               <tbody>
                 {filtered.map(tx => (
                   <tr key={tx.id}>
@@ -186,7 +265,12 @@ export default function TransactionsPage() {
             </table>
           </div>
           <div className="px-4 py-3 border-t border-gray-100">
-            <Pagination page={page} totalPages={Math.ceil(filtered.length / 20) || 1} onPageChange={setPage} totalItems={filtered.length} />
+            <Pagination
+              page={page}
+              totalPages={Math.max(1, Math.ceil(totalTransactions / 20))}
+              onPageChange={(p) => { setPage(p); window.scrollTo(0, 0); }}
+              totalItems={totalTransactions}
+            />
           </div>
         </div>
       )}

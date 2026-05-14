@@ -85,7 +85,7 @@ apiClient.interceptors.response.use(
         if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
           window.location.href = '/login';
         }
-        return Promise.reject(refreshError);
+        return Promise.reject(error); // reject dengan error asli, bukan refreshError
       }
     }
 

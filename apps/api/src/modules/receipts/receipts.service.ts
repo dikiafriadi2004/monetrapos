@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Transaction } from '../transactions/transaction.entity';
@@ -49,7 +49,7 @@ export class ReceiptsService {
       return this.generateA4Receipt(receiptData);
     } else if (dto.format === ReceiptFormat.EMAIL) {
       if (!dto.email) {
-        throw new Error('Email is required for email format');
+        throw new BadRequestException('Email is required for email format');
       }
       return this.sendEmailReceipt(receiptData, dto.email);
     }
@@ -158,7 +158,7 @@ export class ReceiptsService {
         employeeName,
         paymentMethod: transaction.paymentMethod,
       },
-      items: transaction.items.map((item) => ({
+      items: (transaction.items || []).map((item) => ({
         name: item.productName,
         quantity: item.quantity,
         price: item.unitPrice ?? (item.subtotal / item.quantity),
@@ -258,7 +258,7 @@ export class ReceiptsService {
       <body>
         <div class="header">
           ${data.store.logoUrl ? `<img src="${data.store.logoUrl}" alt="Logo" />` : ''}
-          ${data.store.headerText ? `<div class="header-text">${data.store.headerText}</div>` : ''}
+          ${data.store.headerText && data.store.headerText.trim() !== (data.store.name || '').trim() ? `<div class="header-text">${data.store.headerText}</div>` : ''}
           <h2>${data.store.name}</h2>
           ${data.store.address ? `<p>${data.store.address}</p>` : ''}
           ${data.store.phone ? `<p>${data.store.phone}</p>` : ''}

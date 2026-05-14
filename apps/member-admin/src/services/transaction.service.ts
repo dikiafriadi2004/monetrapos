@@ -30,7 +30,6 @@ export interface CreateTransactionRequest {
   customerId?: string;
   employeeId?: string;
   employeeName?: string;
-  shiftId?: string;
   notes?: string;
   orderType?: string;
   tableId?: string;

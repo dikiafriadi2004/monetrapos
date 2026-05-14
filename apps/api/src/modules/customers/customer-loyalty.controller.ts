@@ -22,6 +22,11 @@ export class CustomerLoyaltyController {
     return { tiers: this.customerLoyaltyService.getAllTierBenefits() };
   }
 
+  @Get(':customerId/tier-info')
+  async getCustomerTierInfo(@Param('customerId') customerId: string) {
+    return await this.customerLoyaltyService.getCustomerTierInfo(customerId);
+  }
+
   @Get('statistics')
   async getTierStatistics(@Request() req) {
     return await this.customerLoyaltyService.getTierStatistics(req.user.companyId);

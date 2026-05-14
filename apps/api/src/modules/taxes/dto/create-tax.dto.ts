@@ -19,9 +19,10 @@ export class CreateTaxDto {
   @IsString()
   name: string;
 
-  @ApiProperty({ enum: TaxType, example: TaxType.PERCENTAGE })
+  @ApiProperty({ enum: TaxType, example: TaxType.PERCENTAGE, required: false })
+  @IsOptional()
   @IsEnum(TaxType)
-  type: TaxType;
+  type?: TaxType = TaxType.PERCENTAGE;
 
   @ApiProperty({
     example: 11,

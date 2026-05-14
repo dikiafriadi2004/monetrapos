@@ -7,6 +7,7 @@ import { suppliersService, Supplier } from '@/services/suppliers.service';
 import apiClient from '@/lib/api-client';
 import { ArrowLeft, Plus, Trash2, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { formatRupiah } from '@/lib/date';
 
 interface Store { id: string; name: string; }
 interface Product { id: string; name: string; sku?: string; costPrice?: number; }
@@ -42,7 +43,7 @@ export default function EditPurchaseOrderPage() {
     setItems(p => p.map((item, idx) => idx === i ? { ...item, [key]: val } : item));
 
   const subtotal = items.reduce((s, i) => s + (i.quantity * i.unitPrice), 0);
-  const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
+  const fmt = (n: number) => `Rp ${formatRupiah(n)}`;
   const f = (k: string, v: string) => setForm(p => ({ ...p, [k]: v }));
 
   const handleSubmit = async (e: React.FormEvent) => {

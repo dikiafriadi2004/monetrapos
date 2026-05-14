@@ -341,7 +341,7 @@ function EventList({ events, type, emptyMessage }: { events: UpcomingEvent[]; ty
                   {event.phone || event.email || '-'}
                 </td>
                 <td style={{ padding: 'var(--space-md) var(--space-lg)', color: 'var(--text-secondary)' }}>
-                  {new Date(event.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long' })}
+                  {new Date(event.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', timeZone: 'Asia/Jakarta' })}
                 </td>
                 <td style={{ padding: 'var(--space-md) var(--space-lg)' }}>
                   <span style={{

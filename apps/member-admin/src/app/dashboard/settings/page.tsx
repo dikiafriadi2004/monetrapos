@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Save, Building2, Receipt, Bell, CreditCard, Settings as SettingsIcon, Loader2, CheckCircle, AlertCircle } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import { Save, Building2, Receipt, Bell, CreditCard, Settings as SettingsIcon, Loader2, CheckCircle, AlertCircle, User, KeyRound, Hash } from 'lucide-react';
 import apiClient from '../../../lib/api-client';
 import { API_ENDPOINTS } from '../../../lib/api-endpoints';
 import ImageUpload from '@/components/ImageUpload';
 import Link from 'next/link';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface CompanyProfile { name: string; businessType: string; taxId: string; address: string; city: string; province: string; postalCode: string; phone: string; email: string; logoUrl: string; }
 interface CompanySettings {
@@ -13,10 +15,12 @@ interface CompanySettings {
   receiptSettings?: { showLogo?: boolean; showTaxNumber?: boolean; footerText?: string; headerText?: string; };
   notificationPreferences?: { emailNotifications?: boolean; smsNotifications?: boolean; whatsappNotifications?: boolean; lowStockAlerts?: boolean; expiryReminders?: boolean; };
 }
-type ActiveTab = 'profile' | 'tax' | 'receipt' | 'notifications' | 'payments';
+type ActiveTab = 'myprofile' | 'profile' | 'tax' | 'receipt' | 'notifications' | 'payments';
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('profile');
+  const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<ActiveTab>('myprofile');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
@@ -24,7 +28,32 @@ export default function SettingsPage() {
   const [profile, setProfile] = useState<CompanyProfile>({ name: '', businessType: 'retail', taxId: '', address: '', city: '', province: '', postalCode: '', phone: '', email: '', logoUrl: '' });
   const [settings, setSettings] = useState<CompanySettings>({ taxSettings: { defaultTaxRate: 0, taxInclusive: true, taxLabel: 'PPN', taxNumber: '' }, receiptSettings: { showLogo: true, showTaxNumber: true, footerText: '', headerText: '' }, notificationPreferences: { emailNotifications: true, smsNotifications: false, whatsappNotifications: false, lowStockAlerts: true, expiryReminders: true } });
 
+  // My Profile state
+  const [myProfile, setMyProfile] = useState({ name: '', email: '' });
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
+  const [pinForm, setPinForm] = useState({ newPin: '', confirmPin: '' });
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [savingPin, setSavingPin] = useState(false);
+
   useEffect(() => { fetchData(); }, []);
+
+  // Baca tab dari URL query param
+  useEffect(() => {
+    const tab = searchParams?.get('tab') as ActiveTab;
+    if (tab && ['myprofile','profile','tax','receipt','notifications','payments'].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (user) {
+      setMyProfile({
+        name: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+        email: user.email || '',
+      });
+    }
+  }, [user]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -38,6 +67,42 @@ export default function SettingsPage() {
 
   const showSuccess = (msg: string) => { setSuccessMessage(msg); setErrorMessage(''); setTimeout(() => setSuccessMessage(''), 3000); };
   const showError = (msg: string) => { setErrorMessage(msg); setSuccessMessage(''); };
+
+  const handleSaveMyProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingProfile(true);
+    try {
+      await apiClient.patch('/auth/profile', { name: myProfile.name });
+      showSuccess('Profile berhasil diperbarui');
+    } catch (err: any) { showError(err.response?.data?.message || 'Gagal memperbarui profile'); }
+    finally { setSavingProfile(false); }
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) { showError('Password baru tidak cocok'); return; }
+    if (passwordForm.newPassword.length < 8) { showError('Password minimal 8 karakter'); return; }
+    setSavingPassword(true);
+    try {
+      await apiClient.patch('/auth/profile', { currentPassword: passwordForm.currentPassword, newPassword: passwordForm.newPassword });
+      showSuccess('Password berhasil diubah');
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (err: any) { showError(err.response?.data?.message || 'Gagal mengubah password'); }
+    finally { setSavingPassword(false); }
+  };
+
+  const handleChangePin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pinForm.newPin && !/^\d{4,6}$/.test(pinForm.newPin)) { showError('PIN harus 4-6 digit angka'); return; }
+    if (pinForm.newPin !== pinForm.confirmPin) { showError('Konfirmasi PIN tidak cocok'); return; }
+    setSavingPin(true);
+    try {
+      await apiClient.patch('/auth/profile', { pin: pinForm.newPin || '' });
+      showSuccess(pinForm.newPin ? 'PIN berhasil diubah' : 'PIN berhasil dihapus');
+      setPinForm({ newPin: '', confirmPin: '' });
+    } catch (err: any) { showError(err.response?.data?.message || 'Gagal mengubah PIN'); }
+    finally { setSavingPin(false); }
+  };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault(); setSaving(true);
@@ -54,6 +119,7 @@ export default function SettingsPage() {
   };
 
   const TABS = [
+    { id: 'myprofile', label: 'My Profile', icon: User },
     { id: 'profile', label: 'Business Profile', icon: Building2 },
     { id: 'tax', label: 'Tax Settings', icon: SettingsIcon },
     { id: 'receipt', label: 'Receipt', icon: Receipt },
@@ -65,7 +131,7 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <div className="mb-6"><h1 className="text-2xl font-bold text-gray-900">Settings</h1><p className="text-sm text-gray-500 mt-1">Manage your business profile, tax settings, and preferences.</p></div>
+      <div className="mb-6"><h1 className="text-2xl font-bold text-gray-900">Settings</h1><p className="text-sm text-gray-500 mt-1">Manage your profile, business settings, and preferences.</p></div>
 
       {successMessage && <div className="flex items-center gap-2 p-3 mb-4 bg-emerald-50 border border-emerald-200 rounded-lg text-emerald-700 text-sm"><CheckCircle size={16}/>{successMessage}</div>}
       {errorMessage && <div className="flex items-center gap-2 p-3 mb-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm"><AlertCircle size={16}/>{errorMessage}</div>}
@@ -80,7 +146,107 @@ export default function SettingsPage() {
         ))}
       </div>
 
-      {/* Profile Tab */}
+      {/* My Profile Tab */}
+      {activeTab === 'myprofile' && (
+        <div className="space-y-4 animate-fade-in">
+          {/* Edit Profile */}
+          <div className="card">
+            <div className="card-header"><h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2"><User size={15}/>Edit Profile</h3></div>
+            <div className="card-body">
+              <form onSubmit={handleSaveMyProfile} className="space-y-4 max-w-md">
+                <div className="form-group">
+                  <label className="form-label">Nama Lengkap</label>
+                  <input className="form-input" value={myProfile.name} onChange={e => setMyProfile({...myProfile, name: e.target.value})} placeholder="Nama lengkap" required />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Email</label>
+                  <input className="form-input bg-gray-50" value={myProfile.email} disabled />
+                  <p className="text-xs text-gray-400 mt-1">Email tidak dapat diubah</p>
+                </div>
+                <div className="flex justify-end">
+                  <button type="submit" className="btn btn-primary" disabled={savingProfile}>
+                    {savingProfile ? <Loader2 size={14} className="animate-spin"/> : <Save size={14}/>} Simpan Profile
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          {/* Change Password */}
+          <div className="card">
+            <div className="card-header"><h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2"><KeyRound size={15}/>Ganti Password</h3></div>
+            <div className="card-body">
+              <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
+                <div className="form-group">
+                  <label className="form-label">Password Saat Ini</label>
+                  <input type="password" className="form-input" value={passwordForm.currentPassword} onChange={e => setPasswordForm({...passwordForm, currentPassword: e.target.value})} placeholder="Masukkan password saat ini" required />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Password Baru</label>
+                  <input type="password" className="form-input" value={passwordForm.newPassword} onChange={e => setPasswordForm({...passwordForm, newPassword: e.target.value})} placeholder="Minimal 8 karakter" required minLength={8} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Konfirmasi Password Baru</label>
+                  <input type="password" className="form-input" value={passwordForm.confirmPassword} onChange={e => setPasswordForm({...passwordForm, confirmPassword: e.target.value})} placeholder="Ulangi password baru" required />
+                </div>
+                <div className="flex justify-end">
+                  <button type="submit" className="btn btn-primary" disabled={savingPassword}>
+                    {savingPassword ? <Loader2 size={14} className="animate-spin"/> : <KeyRound size={14}/>} Ganti Password
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          {/* Change PIN */}
+          <div className="card">
+            <div className="card-header">
+              <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2"><Hash size={15}/>PIN Kasir</h3>
+              <p className="text-xs text-gray-400 mt-0.5">PIN digunakan untuk absensi dan login cepat di POS (4-6 digit angka)</p>
+            </div>
+            <div className="card-body">
+              <form onSubmit={handleChangePin} className="space-y-4 max-w-md">
+                <div className="form-group">
+                  <label className="form-label">PIN Baru (kosongkan untuk hapus PIN)</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    value={pinForm.newPin}
+                    onChange={e => setPinForm({...pinForm, newPin: e.target.value.replace(/\D/g, '').slice(0, 6)})}
+                    placeholder="4-6 digit angka"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                  />
+                </div>
+                {pinForm.newPin && (
+                  <div className="form-group">
+                    <label className="form-label">Konfirmasi PIN Baru</label>
+                    <input
+                      type="password"
+                      className="form-input"
+                      value={pinForm.confirmPin}
+                      onChange={e => setPinForm({...pinForm, confirmPin: e.target.value.replace(/\D/g, '').slice(0, 6)})}
+                      placeholder="Ulangi PIN baru"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={6}
+                    />
+                  </div>
+                )}
+                <div className="flex justify-end">
+                  <button type="submit" className="btn btn-primary" disabled={savingPin}>
+                    {savingPin ? <Loader2 size={14} className="animate-spin"/> : <Hash size={14}/>}
+                    {pinForm.newPin ? 'Simpan PIN' : 'Hapus PIN'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Business Profile Tab */}
       {activeTab === 'profile' && (
         <div className="card animate-fade-in">
           <div className="card-header"><h3 className="text-sm font-semibold text-gray-700">Business Profile</h3></div>

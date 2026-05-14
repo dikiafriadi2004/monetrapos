@@ -179,8 +179,32 @@ export class EmailService {
   async sendWelcomeEmail(to: string, name: string, companyName: string): Promise<void> {
     await this.sendMail({
       to,
-      subject: `Selamat Datang di MonetraPOS - ${companyName}`,
-      html: this.welcomeTemplate(name, companyName),
+      subject: `Selamat Datang di MonetraPOS - Trial 14 Hari Dimulai!`,
+      html: this.welcomeTrialTemplate(name, companyName),
+    });
+  }
+
+  async sendTrialReminderEmail(to: string, name: string, companyName: string, daysRemaining: number): Promise<void> {
+    await this.sendMail({
+      to,
+      subject: `⏰ ${daysRemaining} hari lagi trial MonetraPOS Anda berakhir - ${companyName}`,
+      html: this.trialReminderTemplate(name, companyName, daysRemaining),
+    });
+  }
+
+  async sendTrialExpiredEmail(to: string, name: string, companyName: string): Promise<void> {
+    await this.sendMail({
+      to,
+      subject: `Trial MonetraPOS Anda telah berakhir - ${companyName}`,
+      html: this.trialExpiredTemplate(name, companyName),
+    });
+  }
+
+  async sendPaymentInvoiceEmail(to: string, name: string, invoiceNumber: string, amount: number, paymentUrl: string, dueDate: Date): Promise<void> {
+    await this.sendMail({
+      to,
+      subject: `Invoice Pembayaran - ${invoiceNumber}`,
+      html: this.paymentInvoiceTemplate(name, invoiceNumber, amount, paymentUrl, dueDate),
     });
   }
 
@@ -276,6 +300,168 @@ export class EmailService {
         <a href="${process.env.MEMBER_ADMIN_URL || 'http://localhost:4403'}/login" style="display:inline-block;background:#4f46e5;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">
           Masuk ke Dashboard
         </a>
+      </div>
+    `);
+  }
+
+  private welcomeTrialTemplate(name: string, companyName: string): string {
+    const dashboardUrl = process.env.MEMBER_ADMIN_URL || 'http://localhost:4403';
+    return this.baseTemplate(`
+      <h2 style="color:#111827;font-size:24px;font-weight:700;margin:0 0 8px;">Trial 14 Hari Dimulai! 🚀</h2>
+      <p style="color:#6b7280;margin:0 0 24px;">Halo <strong>${name}</strong>,</p>
+      <p style="color:#374151;line-height:1.6;margin:0 0 16px;">
+        Selamat! Akun trial <strong>${companyName}</strong> telah berhasil dibuat. Anda memiliki <strong>14 hari</strong> untuk mencoba MonetraPOS secara gratis.
+      </p>
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:20px;margin:0 0 16px;">
+        <p style="color:#1e40af;font-weight:600;margin:0 0 12px;">✅ Yang tersedia di masa trial:</p>
+        <ul style="color:#1d4ed8;margin:0;padding-left:20px;line-height:2;">
+          <li>Sistem POS (kasir)</li>
+          <li>Manajemen inventori</li>
+          <li>Laporan dasar</li>
+          <li>Hingga 50 produk</li>
+          <li>Hingga 100 transaksi/bulan</li>
+          <li>2 pengguna</li>
+        </ul>
+      </div>
+      <div style="background:#fef9c3;border:1px solid #fde047;border-radius:8px;padding:20px;margin:0 0 32px;">
+        <p style="color:#854d0e;font-weight:600;margin:0 0 12px;">🔒 Upgrade untuk unlock semua fitur:</p>
+        <ul style="color:#713f12;margin:0;padding-left:20px;line-height:2;">
+          <li>Manajemen pelanggan & loyalitas</li>
+          <li>Manajemen karyawan</li>
+          <li>Laporan lanjutan & analitik</li>
+          <li>Multi-toko</li>
+          <li>Produk & transaksi tidak terbatas</li>
+          <li>Dukungan prioritas</li>
+        </ul>
+      </div>
+      <div style="text-align:center;margin-bottom:16px;">
+        <a href="${dashboardUrl}/dashboard" style="display:inline-block;background:#4f46e5;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">
+          Mulai Sekarang →
+        </a>
+      </div>
+      <p style="text-align:center;color:#9ca3af;font-size:13px;">
+        Trial berakhir dalam 14 hari. Tidak perlu kartu kredit untuk memulai.
+      </p>
+    `);
+  }
+
+  private trialReminderTemplate(name: string, companyName: string, daysRemaining: number): string {
+    const upgradeUrl = process.env.MEMBER_ADMIN_URL || 'http://localhost:4403';
+    const isUrgent = daysRemaining <= 2;
+    const bgColor = isUrgent ? '#fef2f2' : '#fef9c3';
+    const borderColor = isUrgent ? '#fecaca' : '#fde047';
+    const textColor = isUrgent ? '#991b1b' : '#854d0e';
+    const subTextColor = isUrgent ? '#7f1d1d' : '#713f12';
+
+    return this.baseTemplate(`
+      <h2 style="color:#111827;font-size:24px;font-weight:700;margin:0 0 8px;">
+        ${isUrgent ? '🚨' : '⏰'} ${daysRemaining} hari lagi trial Anda berakhir
+      </h2>
+      <p style="color:#6b7280;margin:0 0 24px;">Halo <strong>${name}</strong>,</p>
+      <p style="color:#374151;line-height:1.6;margin:0 0 16px;">
+        Trial MonetraPOS untuk <strong>${companyName}</strong> akan berakhir dalam <strong>${daysRemaining} hari</strong>.
+      </p>
+      <div style="background:${bgColor};border:1px solid ${borderColor};border-radius:8px;padding:20px;margin:0 0 32px;">
+        <p style="color:${textColor};font-weight:600;margin:0 0 8px;">
+          ${isUrgent ? '⚠️ Segera upgrade sebelum akses Anda terbatas!' : '💡 Jangan lewatkan kesempatan ini!'}
+        </p>
+        <p style="color:${subTextColor};margin:0;line-height:1.6;">
+          Setelah trial berakhir, Anda hanya bisa melihat data (read-only). Upgrade sekarang untuk tetap bisa mengelola bisnis Anda.
+        </p>
+      </div>
+      <div style="text-align:center;margin-bottom:16px;">
+        <a href="${upgradeUrl}/upgrade" style="display:inline-block;background:#4f46e5;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">
+          Upgrade Sekarang →
+        </a>
+      </div>
+      <p style="text-align:center;color:#9ca3af;font-size:13px;">
+        Mulai dari Rp 299.000/bulan. Batalkan kapan saja.
+      </p>
+    `);
+  }
+
+  private trialExpiredTemplate(name: string, companyName: string): string {
+    const upgradeUrl = process.env.MEMBER_ADMIN_URL || 'http://localhost:4403';
+    return this.baseTemplate(`
+      <h2 style="color:#111827;font-size:24px;font-weight:700;margin:0 0 8px;">Trial Anda Telah Berakhir 😢</h2>
+      <p style="color:#6b7280;margin:0 0 24px;">Halo <strong>${name}</strong>,</p>
+      <p style="color:#374151;line-height:1.6;margin:0 0 16px;">
+        Trial 14 hari MonetraPOS untuk <strong>${companyName}</strong> telah berakhir.
+      </p>
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:20px;margin:0 0 16px;">
+        <p style="color:#991b1b;font-weight:600;margin:0 0 8px;">🔒 Akses Anda sekarang terbatas:</p>
+        <ul style="color:#7f1d1d;margin:0;padding-left:20px;line-height:2;">
+          <li>Tidak bisa membuat transaksi baru</li>
+          <li>Tidak bisa menambah produk</li>
+          <li>Hanya bisa melihat data yang ada</li>
+        </ul>
+      </div>
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:20px;margin:0 0 32px;">
+        <p style="color:#166534;font-weight:600;margin:0 0 8px;">✅ Data Anda aman!</p>
+        <p style="color:#15803d;margin:0;line-height:1.6;">
+          Semua data Anda tersimpan dengan aman. Upgrade sekarang untuk memulihkan akses penuh.
+        </p>
+      </div>
+      <div style="text-align:center;margin-bottom:16px;">
+        <a href="${upgradeUrl}/upgrade" style="display:inline-block;background:#4f46e5;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">
+          Upgrade & Pulihkan Akses →
+        </a>
+      </div>
+      <p style="text-align:center;color:#9ca3af;font-size:13px;">
+        Mulai dari Rp 299.000/bulan. Batalkan kapan saja.
+      </p>
+    `);
+  }
+
+  private paymentInvoiceTemplate(name: string, invoiceNumber: string, amount: number, paymentUrl: string, dueDate: Date): string {
+    const formattedAmount = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR' }).format(amount);
+    const formattedDueDate = new Intl.DateTimeFormat('id-ID', { dateStyle: 'long' }).format(dueDate);
+    
+    return this.baseTemplate(`
+      <h2 style="color:#111827;font-size:24px;font-weight:700;margin:0 0 8px;">Invoice Pembayaran 💳</h2>
+      <p style="color:#6b7280;margin:0 0 24px;">Halo <strong>${name}</strong>,</p>
+      <p style="color:#374151;line-height:1.6;margin:0 0 32px;">
+        Terima kasih telah mendaftar di MonetraPOS. Berikut adalah detail invoice pembayaran Anda:
+      </p>
+      
+      <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:24px;margin:0 0 32px;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          <tr>
+            <td style="color:#6b7280;padding:8px 0;">Invoice Number:</td>
+            <td style="color:#111827;font-weight:600;padding:8px 0;text-align:right;">${invoiceNumber}</td>
+          </tr>
+          <tr>
+            <td style="color:#6b7280;padding:8px 0;">Total Amount:</td>
+            <td style="color:#111827;font-weight:700;font-size:18px;padding:8px 0;text-align:right;">${formattedAmount}</td>
+          </tr>
+          <tr>
+            <td style="color:#6b7280;padding:8px 0;">Due Date:</td>
+            <td style="color:#ef4444;font-weight:600;padding:8px 0;text-align:right;">${formattedDueDate}</td>
+          </tr>
+        </table>
+      </div>
+
+      <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:8px;padding:20px;margin:0 0 32px;">
+        <p style="color:#92400e;font-weight:600;margin:0 0 8px;">⚠️ Pembayaran Diperlukan</p>
+        <p style="color:#78350f;margin:0;line-height:1.6;">
+          Akun Anda akan diaktifkan setelah pembayaran dikonfirmasi. Silakan selesaikan pembayaran sebelum tanggal jatuh tempo.
+        </p>
+      </div>
+
+      <div style="text-align:center;margin:0 0 32px;">
+        <a href="${paymentUrl}" style="display:inline-block;background:#10b981;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;">
+          Bayar Sekarang
+        </a>
+      </div>
+
+      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:20px;">
+        <p style="color:#075985;font-weight:600;margin:0 0 12px;">Metode Pembayaran yang Tersedia:</p>
+        <ul style="color:#0c4a6e;margin:0;padding-left:20px;line-height:2;">
+          <li>Virtual Account (BCA, BNI, Mandiri, BRI)</li>
+          <li>QRIS (Scan & Pay)</li>
+          <li>E-Wallet (OVO, DANA, LinkAja, ShopeePay)</li>
+          <li>Kartu Kredit/Debit</li>
+        </ul>
       </div>
     `);
   }

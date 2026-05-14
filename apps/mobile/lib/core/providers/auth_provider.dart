@@ -1,14 +1,15 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../constants/app_constants.dart';
 import '../network/api_client.dart';
 import '../network/api_exception.dart';
+import '../models/models.dart';
 
 class AuthState {
   final bool isAuthenticated;
   final bool isLoading;
-  final Map<String, dynamic>? user;
+  final UserModel? user;
   final String? error;
 
   const AuthState({
@@ -21,19 +22,19 @@ class AuthState {
   AuthState copyWith({
     bool? isAuthenticated,
     bool? isLoading,
-    Map<String, dynamic>? user,
+    UserModel? user,
     String? error,
+    bool clearError = false,
   }) =>
       AuthState(
         isAuthenticated: isAuthenticated ?? this.isAuthenticated,
         isLoading: isLoading ?? this.isLoading,
         user: user ?? this.user,
-        error: error,
+        error: clearError ? null : error,
       );
 }
 
 class AuthNotifier extends StateNotifier<AuthState> {
-  final _storage = const FlutterSecureStorage();
   final _api = ApiClient();
 
   AuthNotifier() : super(const AuthState()) {
@@ -41,37 +42,59 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> _checkAuth() async {
-    final token = await _storage.read(key: AppConstants.tokenKey);
-    if (token != null) {
-      final userData = await _storage.read(key: AppConstants.userKey);
-      if (userData != null) {
-        state = state.copyWith(
-          isAuthenticated: true,
-          user: jsonDecode(userData),
-        );
+    state = state.copyWith(isLoading: true);
+    try {
+      await _api.loadToken();
+      if (_api.hasToken) {
+        final userData = await _api.storage.read(key: AppConstants.userKey);
+        if (userData != null) {
+          final user = UserModel.fromJson(jsonDecode(userData));
+          debugPrint('_checkAuth: user=${user.email} storeId=${user.storeId} type=${user.type}');
+          try {
+            await _api.dio.get('/auth/me');
+            state = state.copyWith(isAuthenticated: true, isLoading: false, user: user);
+            return;
+          } catch (e) {
+            debugPrint('_checkAuth /auth/me error: $e — clearing token');
+            await _api.clearToken();
+          }
+        }
       }
+    } catch (e) {
+      debugPrint('_checkAuth error: $e');
     }
+    state = state.copyWith(isLoading: false);
   }
 
   Future<bool> login(String email, String password) async {
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(isLoading: true, clearError: true);
+    // Coba employee dulu — employee punya storeId yang dibutuhkan POS
+    try {
+      final response = await _api.dio.post('/auth/login/employee', data: {
+        'email': email,
+        'password': password,
+      });
+      return _handleLoginResponse(response.data);
+    } catch (_) {}
+    // Fallback ke member (owner/admin)
     try {
       final response = await _api.dio.post('/auth/login', data: {
         'email': email,
         'password': password,
       });
+      return _handleLoginResponse(response.data);
+    } catch (e) {
+      final msg = ApiException.fromDioError(e as dynamic).message;
+      state = state.copyWith(isLoading: false, error: msg);
+      return false;
+    }
+  }
 
-      final data = response.data;
-      await _storage.write(key: AppConstants.tokenKey, value: data['accessToken']);
-      await _storage.write(key: AppConstants.refreshTokenKey, value: data['refreshToken']);
-      await _storage.write(key: AppConstants.userKey, value: jsonEncode(data['user']));
-
-      state = state.copyWith(
-        isAuthenticated: true,
-        isLoading: false,
-        user: data['user'],
-      );
-      return true;
+  Future<bool> loginPin(String pin) async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    try {
+      final response = await _api.dio.post('/auth/login/pin', data: {'pin': pin});
+      return _handleLoginResponse(response.data);
     } catch (e) {
       final msg = e is Exception ? ApiException.fromDioError(e as dynamic).message : e.toString();
       state = state.copyWith(isLoading: false, error: msg);
@@ -79,14 +102,24 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
+  Future<bool> _handleLoginResponse(Map<String, dynamic> data) async {
+    final token = data['accessToken'] as String;
+    final refreshToken = data['refreshToken'] as String;
+    await _api.saveToken(token, refreshToken);
+
+    final user = UserModel.fromJson(data['user']);
+    await _api.storage.write(key: AppConstants.userKey, value: jsonEncode(data['user']));
+
+    state = state.copyWith(isAuthenticated: true, isLoading: false, user: user);
+    return true;
+  }
+
   Future<void> logout() async {
-    await _storage.deleteAll();
+    await _api.clearToken();
     state = const AuthState();
   }
 
-  String? get companyId => state.user?['companyId'];
-  String? get userId => state.user?['id'];
-  String? get userName => state.user?['name'];
+  void clearError() => state = state.copyWith(clearError: true);
 }
 
 final authProvider = StateNotifierProvider<AuthNotifier, AuthState>(

@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { registrationService, SubscriptionPlan } from '@/services/registration.service';
-import { CheckCircle, Building2, CreditCard, User, ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
+import { CheckCircle, Building2, CreditCard, User, ArrowLeft, ArrowRight, Loader2, Sparkles, Zap } from 'lucide-react';
 import toast from 'react-hot-toast';
+import Link from 'next/link';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -101,28 +102,24 @@ export default function RegisterPage() {
         password: formData.password,
       });
 
-      if (response.paymentUrl) {
+      if (response.paymentUrl && !response.paymentUrl.includes('/login') && !response.paymentUrl.includes('/billing')) {
+        // Normal flow: ada payment URL dari Xendit → redirect ke checkout
         toast.success('Registrasi berhasil! Mengarahkan ke halaman pembayaran...');
         setTimeout(() => {
-          // Redirect ke halaman checkout custom kita, bukan langsung ke Xendit
-          const checkoutUrl = `/checkout?invoice=${response.invoiceNumber}&amount=${response.amount}&paymentUrl=${encodeURIComponent(response.paymentUrl)}`;
+          const checkoutUrl = `/checkout?invoice=${response.invoiceNumber}&invoiceId=${response.invoiceId}&amount=${response.amount}&paymentUrl=${encodeURIComponent(response.paymentUrl)}`;
           router.push(checkoutUrl);
         }, 1000);
-      } else if ((response as any).paymentError) {
-        const errMsg = (response as any).paymentError as string;
-        if (errMsg.includes('IP Allowlist') || errMsg.includes('IP server')) {
-          toast.error('Registrasi berhasil! Pembayaran otomatis tidak tersedia saat ini (IP restriction). Silakan bayar manual via halaman billing.', { duration: 6000 });
-        } else {
-          toast.error(`Registrasi berhasil, namun pembayaran otomatis gagal. Silakan bayar via halaman billing.`, { duration: 5000 });
-        }
+      } else if (response.invoiceNumber) {
+        // Ada invoice tapi tidak ada payment URL (error Xendit) → tetap ke checkout
+        toast('Registrasi berhasil! Silakan selesaikan pembayaran.', { icon: '💳' });
         setTimeout(() => {
-          router.push(`/checkout?invoice=${response.invoiceNumber}&amount=${response.amount}`);
-        }, 2000);
-      } else {
-        toast.success('Registrasi berhasil! Silakan selesaikan pembayaran.');
-        setTimeout(() => {
-          router.push(`/checkout?invoice=${response.invoiceNumber}&amount=${response.amount}`);
+          const checkoutUrl = `/checkout?invoice=${response.invoiceNumber}&invoiceId=${response.invoiceId}&amount=${response.amount}`;
+          router.push(checkoutUrl);
         }, 1000);
+      } else {
+        // Fallback
+        toast.success('Registrasi berhasil!');
+        router.push('/login');
       }
     } catch (error: any) {
       console.error('Registration failed:', error);
@@ -165,9 +162,51 @@ export default function RegisterPage() {
           <h1 style={{ fontSize: '2.5rem', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '0.5rem' }}>
             Register MonetraPOS
           </h1>
-          <p style={{ fontSize: '1.125rem', color: 'var(--text-secondary)' }}>
+          <p style={{ fontSize: '1.125rem', color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
             Complete POS System for Your Business
           </p>
+
+          {/* Trial vs Paid Choice Banner */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '1rem',
+            maxWidth: '600px',
+            margin: '0 auto',
+          }}>
+            <Link
+              href="/register-trial"
+              style={{
+                display: 'block',
+                padding: '1.25rem',
+                background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
+                borderRadius: 12,
+                textDecoration: 'none',
+                color: 'white',
+                textAlign: 'center',
+                border: '2px solid transparent',
+                transition: 'all 0.2s',
+              }}
+            >
+              <Sparkles size={24} style={{ margin: '0 auto 0.5rem' }} />
+              <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: 4 }}>Coba Gratis 14 Hari</div>
+              <div style={{ fontSize: '0.75rem', opacity: 0.9 }}>Tidak perlu kartu kredit</div>
+            </Link>
+            <div
+              style={{
+                padding: '1.25rem',
+                background: 'var(--bg-secondary)',
+                borderRadius: 12,
+                textAlign: 'center',
+                border: '2px solid var(--accent-base)',
+                cursor: 'default',
+              }}
+            >
+              <Zap size={24} style={{ margin: '0 auto 0.5rem', color: 'var(--accent-base)' }} />
+              <div style={{ fontWeight: 700, fontSize: '1rem', marginBottom: 4, color: 'var(--text-primary)' }}>Langsung Beli Paket</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Pilih paket di bawah ↓</div>
+            </div>
+          </div>
         </div>
 
         {/* Progress Steps */}
@@ -664,10 +703,16 @@ export default function RegisterPage() {
         {/* Footer */}
         <div style={{ textAlign: 'center', marginTop: '2rem' }}>
           <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-            Already have an account?{' '}
+            Sudah punya akun?{' '}
             <a href="/login" style={{ color: 'var(--accent-base)', fontWeight: '600' }}>
-              Login here
+              Login di sini
             </a>
+          </p>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
+            Ingin coba gratis dulu?{' '}
+            <Link href="/register-trial" style={{ color: 'var(--accent-base)', fontWeight: '600' }}>
+              Trial 14 hari gratis →
+            </Link>
           </p>
         </div>
       </div>

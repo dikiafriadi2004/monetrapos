@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, DataSource } from 'typeorm';
@@ -12,9 +13,14 @@ import { Customer } from '../customers/customer.entity';
 import { Employee } from '../employees/employee.entity';
 import { TransactionStatus } from '../../common/enums';
 import { CreateTransactionDto, VoidTransactionDto } from './dto';
+import { NotificationsService } from '../notifications/notifications.service';
+import { FnbOrder, OrderStatus as FnbOrderStatus } from '../fnb/fnb-order.entity';
+import { Table, TableStatus } from '../fnb/table.entity';
 
 @Injectable()
 export class TransactionsService {
+  private readonly logger = new Logger(TransactionsService.name);
+
   constructor(
     @InjectRepository(Transaction)
     private transactionRepo: Repository<Transaction>,
@@ -23,7 +29,10 @@ export class TransactionsService {
     @InjectRepository(Product) private productRepo: Repository<Product>,
     @InjectRepository(Customer) private customerRepo: Repository<Customer>,
     @InjectRepository(Employee) private employeeRepo: Repository<Employee>,
+    @InjectRepository(FnbOrder) private fnbOrderRepo: Repository<FnbOrder>,
+    @InjectRepository(Table) private tableRepo: Repository<Table>,
     private readonly dataSource: DataSource,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   async create(dto: CreateTransactionDto): Promise<Transaction> {
@@ -58,7 +67,9 @@ export class TransactionsService {
         });
 
         if (!product) {
-          throw new NotFoundException(`Product ${item.productId} not found`);
+          // Product not found — skip stock deduction (may be a custom/deleted item)
+          this.logger.warn(`Product ${item.productId} not found — skipping stock deduction for "${item.productName}"`);
+          continue;
         }
 
         const currentStock = product.stock || 0;
@@ -82,21 +93,46 @@ export class TransactionsService {
         });
 
         if (customer) {
-          // Calculate loyalty points: 1 point per 10,000 IDR spent
-          loyaltyPointsEarned = Math.floor(dto.total / 10000);
-          customer.loyaltyPoints = (customer.loyaltyPoints || 0) + loyaltyPointsEarned;
-          await queryRunner.manager.save(Customer, customer);
-        }
-      }
+          // Tier multiplier
+          const tierMultiplier: Record<string, number> = {
+            regular: 1, silver: 1.25, gold: 1.5, platinum: 2,
+          };
+          const multiplier = tierMultiplier[customer.loyaltyTier] || 1;
 
-      // Validate shiftId if provided — set null if shift doesn't exist
-      let validShiftId: string | null = null;
-      if (dto.shiftId) {
-        const shiftExists = await queryRunner.manager.query(
-          `SELECT id FROM shifts WHERE id = ? LIMIT 1`,
-          [dto.shiftId]
-        );
-        if (shiftExists?.length > 0) validShiftId = dto.shiftId;
+          // 1 poin per Rp 10.000, dikali multiplier tier
+          loyaltyPointsEarned = Math.floor((dto.total / 10000) * multiplier);
+          customer.loyaltyPoints = (customer.loyaltyPoints || 0) + loyaltyPointsEarned;
+
+          // Update total spent dan total orders — gunakan increment SQL agar aman dari race condition
+          await queryRunner.manager.query(
+            `UPDATE customers SET 
+              total_spent = total_spent + ?,
+              total_orders = total_orders + 1,
+              last_purchase_at = NOW(),
+              first_purchase_at = COALESCE(first_purchase_at, NOW())
+            WHERE id = ?`,
+            [dto.total, dto.customerId]
+          );
+
+          // Reload customer untuk update tier
+          const updatedCustomer = await queryRunner.manager.findOne(Customer, {
+            where: { id: dto.customerId },
+          });
+          if (updatedCustomer) {
+            const newTotalSpent = Number(updatedCustomer.totalSpent);
+            let newTier = 'regular';
+            if (newTotalSpent >= 50000000) newTier = 'platinum';
+            else if (newTotalSpent >= 15000000) newTier = 'gold';
+            else if (newTotalSpent >= 5000000) newTier = 'silver';
+
+            if (newTier !== updatedCustomer.loyaltyTier) {
+              await queryRunner.manager.query(
+                'UPDATE customers SET loyalty_tier = ? WHERE id = ?',
+                [newTier, dto.customerId]
+              );
+            }
+          }
+        }
       }
 
       // Get companyId from store using queryRunner to stay within transaction
@@ -158,45 +194,98 @@ export class TransactionsService {
         }
       }
 
-      // Create transaction using TypeORM entity manager to avoid raw SQL column name issues
-      const crypto = require('crypto') as any;
-      const txId = crypto.randomUUID();
+      // Check if there's an existing pending transaction for this FnB order
+      const fnbOrderId = dto.fnbOrderId as string | undefined;
+      let txId: string = '';
+      let isExistingTx = false;
 
-      const txEntity = queryRunner.manager.create(Transaction);
-      txEntity.id = txId;
-      txEntity.companyId = companyId;
-      txEntity.storeId = dto.storeId;
-      txEntity.shiftId = validShiftId as any;
-      txEntity.employeeId = resolvedEmployeeId as any;
-      txEntity.transactionNumber = transactionNumber;
-      txEntity.invoiceNumber = invoiceNumber;
-      txEntity.subtotal = calculatedTotals.subtotal;
-      txEntity.taxAmount = calculatedTotals.taxAmount;
-      txEntity.discountAmount = calculatedTotals.discountAmount;
-      txEntity.serviceCharge = 0;
-      txEntity.total = calculatedTotals.total;
-      txEntity.paymentMethod = normalizedPaymentMethod as any;
-      txEntity.paidAmount = dto.paidAmount;
-      txEntity.changeAmount = dto.changeAmount || 0;
-      txEntity.customerId = dto.customerId || null as any;
-      txEntity.customerName = dto.customerName || null as any;
-      txEntity.customerPhone = dto.customerPhone || null as any;
-      txEntity.status = TransactionStatus.COMPLETED;
-      txEntity.notes = dto.notes || null as any;
-      txEntity.metadata = {
-        loyaltyPointsEarned,
-        orderType: (dto as any).orderType,
-        tableId: (dto as any).tableId,
-        employeeId: dto.employeeId,
-        employeeName: (dto as any).employeeName,
-        paymentMethods: dto.paymentMethods || [{ method: dto.paymentMethod, amount: dto.paidAmount }],
-      };
-      await queryRunner.manager.save(Transaction, txEntity);
+      if (fnbOrderId) {
+        // Look for existing pending transaction linked to this FnB order
+        const existingTx = await queryRunner.manager
+          .createQueryBuilder(Transaction, 'tx')
+          .where(`JSON_EXTRACT(tx.metadata, '$.fnbOrderId') = :fnbOrderId`, { fnbOrderId })
+          .andWhere('tx.status = :status', { status: 'pending' })
+          .getOne();
+
+        if (existingTx) {
+          // Update the existing pending transaction instead of creating a new one
+          txId = existingTx.id;
+          isExistingTx = true;
+
+          existingTx.companyId = companyId;
+          existingTx.storeId = dto.storeId;          existingTx.employeeId = resolvedEmployeeId as any;
+          existingTx.transactionNumber = transactionNumber;
+          existingTx.invoiceNumber = invoiceNumber;
+          existingTx.subtotal = calculatedTotals.subtotal;
+          existingTx.taxAmount = calculatedTotals.taxAmount;
+          existingTx.discountAmount = calculatedTotals.discountAmount;
+          existingTx.serviceCharge = 0;
+          existingTx.total = calculatedTotals.total;
+          existingTx.paymentMethod = normalizedPaymentMethod as any;
+          existingTx.paidAmount = dto.paidAmount;
+          existingTx.changeAmount = dto.changeAmount || 0;
+          existingTx.customerId = dto.customerId || null as any;
+          existingTx.customerName = dto.customerName || null as any;
+          existingTx.customerPhone = dto.customerPhone || null as any;
+          existingTx.status = TransactionStatus.COMPLETED;
+          existingTx.notes = dto.notes || null as any;
+          existingTx.metadata = {
+            ...existingTx.metadata,
+            loyaltyPointsEarned,
+            orderType: dto.orderType,
+            tableId: dto.tableId,
+            fnbOrderId,
+            employeeId: dto.employeeId,
+            employeeName: (dto as any).employeeName,
+            paymentMethods: dto.paymentMethods || [{ method: dto.paymentMethod, amount: dto.paidAmount }],
+          };
+          await queryRunner.manager.save(Transaction, existingTx);
+
+          // Remove old items and replace with current cart items
+          await queryRunner.manager.delete(TransactionItem, { transactionId: txId });
+        }
+      }
+
+      if (!isExistingTx) {
+        // Create new transaction
+        const crypto = require('crypto') as any;
+        txId = crypto.randomUUID();
+
+        const txEntity = queryRunner.manager.create(Transaction);
+        txEntity.id = txId;
+        txEntity.companyId = companyId;
+        txEntity.storeId = dto.storeId;        txEntity.employeeId = resolvedEmployeeId as any;
+        txEntity.transactionNumber = transactionNumber;
+        txEntity.invoiceNumber = invoiceNumber;
+        txEntity.subtotal = calculatedTotals.subtotal;
+        txEntity.taxAmount = calculatedTotals.taxAmount;
+        txEntity.discountAmount = calculatedTotals.discountAmount;
+        txEntity.serviceCharge = 0;
+        txEntity.total = calculatedTotals.total;
+        txEntity.paymentMethod = normalizedPaymentMethod as any;
+        txEntity.paidAmount = dto.paidAmount;
+        txEntity.changeAmount = dto.changeAmount || 0;
+        txEntity.customerId = dto.customerId || null as any;
+        txEntity.customerName = dto.customerName || null as any;
+        txEntity.customerPhone = dto.customerPhone || null as any;
+        txEntity.status = TransactionStatus.COMPLETED;
+        txEntity.notes = dto.notes || null as any;
+        txEntity.metadata = {
+          loyaltyPointsEarned,
+          orderType: dto.orderType,
+          tableId: dto.tableId,
+          fnbOrderId: fnbOrderId || undefined,
+          employeeId: dto.employeeId,
+          employeeName: (dto as any).employeeName,
+          paymentMethods: dto.paymentMethods || [{ method: dto.paymentMethod, amount: dto.paidAmount }],
+        };
+        await queryRunner.manager.save(Transaction, txEntity);
+      }
 
       // Create transaction items
       for (const item of dto.items) {
         const itemEntity = queryRunner.manager.create(TransactionItem);
-        itemEntity.transactionId = txId;
+        itemEntity.transactionId = txId!;
         itemEntity.productId = item.productId || null as any;
         itemEntity.productName = item.productName;
         itemEntity.variantName = item.variantName || null as any;
@@ -211,7 +300,23 @@ export class TransactionsService {
       await queryRunner.commitTransaction();
 
       // Reload with relations
-      return this.findOne(txId);
+      const savedTx = await this.findOne(txId!);
+
+      // Auto-complete FnB order after successful payment (non-blocking)
+      const tableId = dto.tableId;
+      const orderType = dto.orderType;
+      // Always try to complete FnB order if this is an FnB transaction
+      if (fnbOrderId || tableId || orderType) {
+        this.autoCompleteFnbOrder(fnbOrderId, tableId, dto.storeId, companyId)
+          .catch(e => this.logger.warn(`Failed to auto-complete FnB order: ${e.message}`));
+      }
+
+      // Check low stock for each sold product (non-blocking, background)
+      this.checkLowStockAfterSale(companyId, dto.storeId, dto.items).catch(e =>
+        this.logger.warn(`Low stock check failed: ${e.message}`)
+      );
+
+      return savedTx;
     } catch (error) {
       await queryRunner.rollbackTransaction();
       throw error;
@@ -278,7 +383,16 @@ export class TransactionsService {
     const where: any = { storeId };
 
     if (startDate && endDate) {
-      where.createdAt = Between(new Date(startDate), new Date(endDate));
+      // Set start ke awal hari (00:00:00) dan end ke akhir hari (23:59:59.999)
+      const start = new Date(startDate);
+      start.setUTCHours(0, 0, 0, 0);
+      const end = new Date(endDate);
+      end.setUTCHours(23, 59, 59, 999);
+      where.createdAt = Between(start, end);
+    } else if (startDate) {
+      const start = new Date(startDate);
+      start.setUTCHours(0, 0, 0, 0);
+      where.createdAt = Between(start, new Date());
     }
 
     const [data, total] = await this.transactionRepo.findAndCount({
@@ -353,18 +467,30 @@ export class TransactionsService {
         }
       }
 
-      // Restore customer loyalty points if applicable
-      if (transaction.customerId && transaction.metadata?.loyaltyPointsEarned) {
+      // Restore customer loyalty points dan total_spent jika applicable
+      if (transaction.customerId) {
         const customer = await queryRunner.manager.findOne(Customer, {
           where: { id: transaction.customerId },
         });
 
         if (customer) {
-          customer.loyaltyPoints = Math.max(
-            0,
-            (customer.loyaltyPoints || 0) - transaction.metadata.loyaltyPointsEarned,
-          );
+          // Kurangi loyalty points
+          if (transaction.metadata?.loyaltyPointsEarned) {
+            customer.loyaltyPoints = Math.max(
+              0,
+              (customer.loyaltyPoints || 0) - transaction.metadata.loyaltyPointsEarned,
+            );
+          }
           await queryRunner.manager.save(Customer, customer);
+
+          // Kurangi total_spent dan total_orders via SQL atomic
+          await queryRunner.manager.query(
+            `UPDATE customers SET
+              total_spent = GREATEST(0, total_spent - ?),
+              total_orders = GREATEST(0, total_orders - 1)
+            WHERE id = ?`,
+            [transaction.total, transaction.customerId],
+          );
         }
       }
 
@@ -431,18 +557,30 @@ export class TransactionsService {
         }
       }
 
-      // Restore customer loyalty points if applicable
-      if (transaction.customerId && transaction.metadata?.loyaltyPointsEarned) {
+      // Restore customer loyalty points dan total_spent jika applicable
+      if (transaction.customerId) {
         const customer = await queryRunner.manager.findOne(Customer, {
           where: { id: transaction.customerId },
         });
 
         if (customer) {
-          customer.loyaltyPoints = Math.max(
-            0,
-            (customer.loyaltyPoints || 0) - transaction.metadata.loyaltyPointsEarned,
-          );
+          // Kurangi loyalty points
+          if (transaction.metadata?.loyaltyPointsEarned) {
+            customer.loyaltyPoints = Math.max(
+              0,
+              (customer.loyaltyPoints || 0) - transaction.metadata.loyaltyPointsEarned,
+            );
+          }
           await queryRunner.manager.save(Customer, customer);
+
+          // Kurangi total_spent dan total_orders via SQL atomic
+          await queryRunner.manager.query(
+            `UPDATE customers SET
+              total_spent = GREATEST(0, total_spent - ?),
+              total_orders = GREATEST(0, total_orders - 1)
+            WHERE id = ?`,
+            [transaction.total, transaction.customerId],
+          );
         }
       }
 
@@ -469,6 +607,12 @@ export class TransactionsService {
   }
 
   async getSalesReport(storeId: string, startDate: string, endDate: string) {
+    // Set start ke awal hari dan end ke akhir hari
+    const start = new Date(startDate);
+    start.setUTCHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setUTCHours(23, 59, 59, 999);
+
     const result = await this.transactionRepo
       .createQueryBuilder('tx')
       .select([
@@ -480,10 +624,7 @@ export class TransactionsService {
       ])
       .where('tx.storeId = :storeId', { storeId })
       .andWhere('tx.status = :status', { status: TransactionStatus.COMPLETED })
-      .andWhere('tx.createdAt BETWEEN :startDate AND :endDate', {
-        startDate,
-        endDate,
-      })
+      .andWhere('tx.createdAt BETWEEN :start AND :end', { start, end })
       .getRawOne();
 
     return result;
@@ -548,7 +689,7 @@ export class TransactionsService {
         name: transaction.customerName || transaction.customer?.name,
         phone: transaction.customerPhone || transaction.customer?.phone,
       },
-      items: transaction.items.map((item) => ({
+      items: (transaction.items || []).map((item) => ({
         name: item.productName,
         variant: item.variantName,
         quantity: item.quantity,
@@ -567,5 +708,110 @@ export class TransactionsService {
       notes: transaction.notes,
       loyaltyPointsEarned: transaction.metadata?.loyaltyPointsEarned || 0,
     };
+  }
+
+  /**
+   * Auto-complete FnB order after successful payment.
+   * Tries by fnbOrderId first, then by active order on the same table.
+   */
+  private async autoCompleteFnbOrder(
+    fnbOrderId: string | undefined,
+    tableId: string | undefined,
+    storeId: string,
+    companyId: string,
+  ): Promise<void> {
+    const activeStatuses = [
+      FnbOrderStatus.PENDING,
+      FnbOrderStatus.PREPARING,
+      FnbOrderStatus.READY,
+      FnbOrderStatus.SERVED,
+    ];
+
+    if (fnbOrderId) {
+      const order = await this.fnbOrderRepo.findOne({ where: { id: fnbOrderId } });
+      await this.fnbOrderRepo.update(
+        { id: fnbOrderId },
+        { status: FnbOrderStatus.COMPLETED, completed_at: new Date() },
+      );
+      this.logger.log(`FnB order ${fnbOrderId} auto-completed after payment`);
+      // Free table if dine-in
+      if (order?.table_id) {
+        await this.tableRepo.update(
+          { id: order.table_id },
+          { status: TableStatus.AVAILABLE, current_transaction_id: null },
+        ).catch(() => {});
+      }
+      return;
+    }
+
+    if (tableId) {
+      const order = await this.fnbOrderRepo.findOne({
+        where: { store_id: storeId, table_id: tableId } as any,
+        order: { created_at: 'DESC' } as any,
+      });
+      if (order && activeStatuses.includes(order.status)) {
+        await this.fnbOrderRepo.update(
+          { id: order.id },
+          { status: FnbOrderStatus.COMPLETED, completed_at: new Date() },
+        );
+        await this.tableRepo.update(
+          { id: tableId },
+          { status: TableStatus.AVAILABLE, current_transaction_id: null },
+        ).catch(() => {});
+        this.logger.log(`FnB order ${order.id} (table ${tableId}) auto-completed after payment`);
+      }
+      return;
+    }
+
+    // No fnbOrderId or tableId — cannot safely determine which order to complete
+    this.logger.warn(`autoCompleteFnbOrder: no fnbOrderId or tableId provided, skipping auto-complete`);
+  }
+
+  /**
+   * Check low stock after a sale and send in-app + email notifications
+   */
+  private async checkLowStockAfterSale(
+    companyId: string,
+    storeId: string,
+    items: Array<{ productId?: string; productName: string; quantity: number }>,
+  ): Promise<void> {
+    for (const item of items) {
+      if (!item.productId) continue;
+      try {
+        const product = await this.productRepo.findOne({
+          where: { id: item.productId },
+        });
+        if (!product || !product.trackInventory) continue;
+
+        const currentStock = product.stock || 0;
+        if (currentStock <= product.lowStockThreshold) {
+          this.logger.warn(
+            `Low stock: ${product.name} — stok ${currentStock} (threshold: ${product.lowStockThreshold})`,
+          );
+
+          // Save in-app notification
+          await this.notificationsService.createInAppNotification({
+            companyId,
+            type: 'low_stock',
+            title: `⚠️ Stok Rendah: ${product.name}`,
+            message: `Stok ${product.name} tersisa ${currentStock} unit (batas minimum: ${product.lowStockThreshold}).`,
+            data: { productId: product.id, productName: product.name, currentStock, threshold: product.lowStockThreshold, storeId },
+          });
+
+          // Send email alert (non-blocking)
+          const companyRows = await this.dataSource.query(
+            `SELECT email FROM companies WHERE id = ? LIMIT 1`,
+            [companyId],
+          );
+          const email = companyRows?.[0]?.email;
+          if (email) {
+            this.notificationsService.sendLowStockAlert(email, product.name, currentStock)
+              .catch(e => this.logger.warn(`Low stock email failed: ${e.message}`));
+          }
+        }
+      } catch (e) {
+        this.logger.warn(`checkLowStockAfterSale error for product ${item.productId}: ${(e as any).message}`);
+      }
+    }
   }
 }

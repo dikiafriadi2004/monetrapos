@@ -7,6 +7,9 @@ import { TransactionItem } from './transaction-item.entity';
 import { Product } from '../products/product.entity';
 import { Customer } from '../customers/customer.entity';
 import { Employee } from '../employees/employee.entity';
+import { FnbOrder } from '../fnb/fnb-order.entity';
+import { Table } from '../fnb/table.entity';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -16,7 +19,10 @@ import { Employee } from '../employees/employee.entity';
       Product,
       Customer,
       Employee,
+      FnbOrder,
+      Table,
     ]),
+    NotificationsModule,
   ],
   controllers: [TransactionsController],
   providers: [TransactionsService],

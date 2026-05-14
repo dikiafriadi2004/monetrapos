@@ -1,0 +1,26 @@
+# ============================================================
+# MIKROTIK PORT FORWARDING - MonetraPOS (FINAL CONFIG)
+# ============================================================
+# Status     : ACTIVE & WORKING
+# Public IP  : 151.242.116.114
+# Server IP  : 10.1.2.254
+# WAN Iface  : 20260108214422
+# ============================================================
+#
+# Rules yang sudah aktif di Mikrotik:
+#
+# 0  srcnat  masquerade  out-interface=ether1
+# 2  srcnat  masquerade  out-interface=20260108214422
+# 3  dstnat  dst-nat     in-interface=20260108214422  tcp:4402 -> 10.1.2.254:4402
+# 4  dstnat  dst-nat     in-interface=20260108214422  tcp:4403 -> 10.1.2.254:4403
+# 5  dstnat  dst-nat     in-interface=20260108214422  tcp:4404 -> 10.1.2.254:4404
+#
+# ============================================================
+# AKSES ONLINE:
+# ============================================================
+# API          : http://151.242.116.114:4404
+# Member Admin : http://151.242.116.114:4403
+# Company Admin: http://151.242.116.114:4402
+# Swagger Docs : http://151.242.116.114:4404/api/docs
+# Webhook URL  : http://151.242.116.114:4404/api/v1/payment-gateway/webhook/xendit
+# ============================================================

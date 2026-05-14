@@ -7,8 +7,15 @@ export interface Employee {
   email: string;
   phone?: string;
   position?: string;
-  role?: { id: string; name: string };
+  role?: string;                                                        // role langsung di employee entity
+  roleEntity?: { id: string; name: string };                           // custom Role entity (jika ada)
+  user?: { id: string; name: string; email: string; role: string };    // User account
   store?: { id: string; name: string };
+  storeId?: string;
+  userId?: string;
+  hireDate?: string;
+  salary?: number;
+  pin?: string;
   isActive: boolean;
   createdAt: string;
 }
@@ -39,15 +46,29 @@ export interface AttendanceRecord {
 
 export interface CreateEmployeeDto {
   name: string;
-  email: string;
+  email?: string;
   password?: string;
   phone?: string;
   position?: string;
-  roleId?: string;
   storeId?: string;
+  hireDate?: string;
+  salary?: number;
+  pin?: string;
+  role?: string;
 }
 
-export type UpdateEmployeeDto = Partial<CreateEmployeeDto>;
+export interface UpdateEmployeeDto {
+  name?: string;
+  email?: string;
+  phone?: string;
+  position?: string;
+  storeId?: string;
+  hireDate?: string;
+  salary?: number;
+  pin?: string;
+  role?: string;
+  isActive?: boolean;
+}
 
 export const employeesService = {
   getAll: async (params?: { storeId?: string; search?: string; isActive?: boolean }): Promise<Employee[]> => {
@@ -74,8 +95,15 @@ export const employeesService = {
   clockOut: async (id: string, dto: { breakDurationMinutes?: number; notes?: string }): Promise<void> =>
     unwrap<void>(await apiClient.post(`/employees/${id}/clock-out`, dto)),
 
-  getAttendance: async (id: string, limit = 30): Promise<AttendanceRecord[]> =>
-    unwrap<AttendanceRecord[]>(await apiClient.get(`/employees/${id}/attendance?limit=${limit}`)),
+  getAttendance: async (id: string, params?: { limit?: number; startDate?: string; endDate?: string }): Promise<AttendanceRecord[]> => {
+    const q = new URLSearchParams();
+    if (params?.limit) q.append('limit', String(params.limit));
+    if (params?.startDate) q.append('startDate', params.startDate);
+    if (params?.endDate) q.append('endDate', params.endDate);
+    const res = await apiClient.get(`/employees/${id}/attendance?${q.toString()}`);
+    const data = res.data;
+    return Array.isArray(data) ? data : (data?.data || []);
+  },
 };
 
 export const rolesService = {

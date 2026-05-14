@@ -25,6 +25,9 @@ export interface Customer {
 
 export interface PaginatedCustomers {
   data: Customer[];
+  total?: number;
+  page?: number;
+  limit?: number;
   meta?: { totalPages: number; total: number; page: number; limit: number };
 }
 

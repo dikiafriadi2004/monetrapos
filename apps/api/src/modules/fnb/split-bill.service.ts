@@ -30,7 +30,7 @@ export class SplitBillService {
   async splitByItems(companyId: string, transactionId: string, dto: SplitByItemsDto) {
     const transaction = await this.transactionRepo.findOne({
       where: { id: transactionId, companyId },
-      relations: ['items', 'items.product'],
+      relations: ['items'],
     });
 
     if (!transaction) throw new NotFoundException('Transaction not found');

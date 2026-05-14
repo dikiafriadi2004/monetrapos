@@ -2,6 +2,9 @@ import { MigrationInterface, QueryRunner, TableColumn } from 'typeorm';
 
 export class AddTransactionNumber1711659960000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
+    const hasColumn = await queryRunner.hasColumn('transactions', 'transaction_number');
+    if (hasColumn) return; // Already exists (e.g. after InitialSchema migration)
+
     // Add transaction_number column
     await queryRunner.addColumn(
       'transactions',

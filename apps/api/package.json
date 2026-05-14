@@ -3,11 +3,15 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "nest build",
-    "start": "node dist/main",
+    "build": "nest build && node -e \"const fs=require('fs');const src='src/migrations/schema.sql';const dst='dist/src/migrations/schema.sql';if(fs.existsSync(src))fs.copyFileSync(src,dst);\"",
+    "start": "node dist/src/main",
     "start:dev": "nest start --watch",
-    "start:prod": "node dist/main",
-    "dev": "nest start --watch"
+    "start:prod": "node dist/src/main",
+    "dev": "nest start --watch",
+    "migration:run": "npx typeorm migration:run -d dist/src/data-source.js",
+    "migration:revert": "npx typeorm migration:revert -d dist/src/data-source.js",
+    "deploy": "npm run build && npm run migration:run",
+    "check-payments": "ts-node src/scripts/auto-check-pending-payments.ts"
   },
   "dependencies": {
     "@nestjs/bull": "^11.0.4",
@@ -24,6 +28,8 @@
     "@nestjs/testing": "^11.1.17",
     "@nestjs/throttler": "^6.5.0",
     "@nestjs/typeorm": "^11.0.0",
+    "@sentry/node": "^10.47.0",
+    "@sentry/profiling-node": "^10.47.0",
     "@types/bcrypt": "^6.0.0",
     "@types/bull": "^3.15.9",
     "@types/nodemailer": "^8.0.0",
@@ -33,6 +39,7 @@
     "@types/qrcode": "^1.5.6",
     "bcrypt": "^6.0.0",
     "bull": "^4.16.5",
+    "cache-manager": "^7.2.8",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.4",
     "dotenv": "^16.6.1",
@@ -55,10 +62,11 @@
   "devDependencies": {
     "@types/express": "^5.0.6",
     "@types/multer": "^2.1.0",
-    "@types/node": "^25.5.2",
+    "@types/node": "^25.6.0",
     "@types/qs": "^6.15.0",
     "@types/range-parser": "^1.2.7",
     "@types/send": "^1.2.1",
-    "@types/serve-static": "^2.2.0"
+    "@types/serve-static": "^2.2.0",
+    "ts-node": "^10.9.2"
   }
 }

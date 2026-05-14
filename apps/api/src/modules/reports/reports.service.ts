@@ -17,6 +17,20 @@ import {
   DashboardResponseDto,
 } from './dto';
 
+/** Buat Date untuk akhir hari (23:59:59.999) di timezone lokal server */
+function endOfDay(dateStr: string): Date {
+  const d = new Date(dateStr);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
+/** Buat Date untuk awal hari (00:00:00.000) di timezone lokal server */
+function startOfDay(dateStr: string): Date {
+  const d = new Date(dateStr);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 @Injectable()
 export class ReportsService {
 
@@ -45,8 +59,8 @@ export class ReportsService {
         status: TransactionStatus.COMPLETED,
       })
       .andWhere('transaction.createdAt BETWEEN :startDate AND :endDate', {
-        startDate: new Date(startDate),
-        endDate: new Date(endDate + 'T23:59:59.999Z'),
+        startDate: startOfDay(startDate),
+        endDate: endOfDay(endDate),
       });
 
     if (storeId) {
@@ -115,8 +129,8 @@ export class ReportsService {
         status: TransactionStatus.COMPLETED,
       })
       .andWhere('transaction.createdAt BETWEEN :startDate AND :endDate', {
-        startDate: new Date(startDate),
-        endDate: new Date(endDate + 'T23:59:59.999Z'),
+        startDate: startOfDay(startDate),
+        endDate: endOfDay(endDate),
       })
       .groupBy('DATE(transaction.createdAt)')
       .orderBy('date', 'ASC');
@@ -150,8 +164,8 @@ export class ReportsService {
         status: TransactionStatus.COMPLETED,
       })
       .andWhere('transaction.createdAt BETWEEN :startDate AND :endDate', {
-        startDate: new Date(startDate),
-        endDate: new Date(endDate + 'T23:59:59.999Z'),
+        startDate: startOfDay(startDate),
+        endDate: endOfDay(endDate),
       })
       .groupBy('YEARWEEK(transaction.createdAt)')
       .orderBy('week', 'ASC');
@@ -185,8 +199,8 @@ export class ReportsService {
         status: TransactionStatus.COMPLETED,
       })
       .andWhere('transaction.createdAt BETWEEN :startDate AND :endDate', {
-        startDate: new Date(startDate),
-        endDate: new Date(endDate + 'T23:59:59.999Z'),
+        startDate: startOfDay(startDate),
+        endDate: endOfDay(endDate),
       })
       .groupBy('DATE_FORMAT(transaction.createdAt, "%Y-%m")')
       .orderBy('month', 'ASC');
@@ -227,8 +241,8 @@ export class ReportsService {
         status: TransactionStatus.COMPLETED,
       })
       .andWhere('transaction.createdAt BETWEEN :startDate AND :endDate', {
-        startDate: new Date(startDate),
-        endDate: new Date(endDate + 'T23:59:59.999Z'),
+        startDate: startOfDay(startDate),
+        endDate: endOfDay(endDate),
       })
       .groupBy('item.productId')
       .addGroupBy('item.productName')
@@ -386,8 +400,8 @@ export class ReportsService {
     const salesMetrics = await transactionQuery
       .clone()
       .andWhere('transaction.createdAt BETWEEN :startDate AND :endDate', {
-        startDate: new Date(startDate),
-        endDate: new Date(endDate + 'T23:59:59.999Z'),
+        startDate: startOfDay(startDate),
+        endDate: endOfDay(endDate),
       })
       .select('SUM(transaction.total)', 'totalRevenue')
       .addSelect('COUNT(transaction.id)', 'totalTransactions')
@@ -424,8 +438,8 @@ export class ReportsService {
       customerQuery
         .clone()
         .andWhere('customer.createdAt BETWEEN :startDate AND :endDate', {
-          startDate: new Date(startDate),
-          endDate: new Date(endDate + 'T23:59:59.999Z'),
+          startDate: startOfDay(startDate),
+          endDate: endOfDay(endDate),
         })
         .getCount(),
     ]);
@@ -484,8 +498,8 @@ export class ReportsService {
         status: TransactionStatus.COMPLETED,
       })
       .andWhere('transaction.createdAt BETWEEN :startDate AND :endDate', {
-        startDate: new Date(startDate),
-        endDate: new Date(endDate + 'T23:59:59.999Z'),
+        startDate: startOfDay(startDate),
+        endDate: endOfDay(endDate),
       })
       .groupBy('item.productId')
       .addGroupBy('item.productName')
@@ -509,8 +523,8 @@ export class ReportsService {
         status: TransactionStatus.COMPLETED,
       })
       .andWhere('transaction.createdAt BETWEEN :startDate AND :endDate', {
-        startDate: new Date(startDate),
-        endDate: new Date(endDate + 'T23:59:59.999Z'),
+        startDate: startOfDay(startDate),
+        endDate: endOfDay(endDate),
       })
       .groupBy('DATE(transaction.createdAt)')
       .orderBy('date', 'ASC');

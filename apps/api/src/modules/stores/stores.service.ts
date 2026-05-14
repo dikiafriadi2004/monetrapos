@@ -87,12 +87,12 @@ export class StoresService {
 
     const defaultStore = this.storeRepo.create({
       companyId,
-      name: `${companyName} - Main Store`,
+      name: companyName,
       code: 'MAIN',
       type: StoreType.RETAIL,
       isActive: true,
       receiptHeader: companyName,
-      receiptFooter: 'Thank you for your business!',
+      receiptFooter: 'Terima kasih atas kunjungan Anda!',
     });
 
     return this.storeRepo.save(defaultStore);

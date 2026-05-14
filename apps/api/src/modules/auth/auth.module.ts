@@ -16,6 +16,8 @@ import { BillingModule } from '../billing/billing.module';
 import { PaymentGatewayModule } from '../payment-gateway/payment-gateway.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { EmailModule } from '../email/email.module';
+import { RolesModule } from '../roles/roles.module';
+import { StoresModule } from '../stores/stores.module';
 
 @Module({
   imports: [
@@ -42,6 +44,8 @@ import { EmailModule } from '../email/email.module';
     PaymentGatewayModule,
     NotificationsModule,
     EmailModule,
+    RolesModule,
+    StoresModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtMemberStrategy],

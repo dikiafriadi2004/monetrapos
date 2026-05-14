@@ -295,7 +295,15 @@ export default function PaymentGatewaySettingsPage() {
             <label className="form-label">Webhook URL</label>
             <div style={{ display: 'flex', gap: '8px' }}>
               <input type="text" className="form-input" value={form.webhookUrl} onChange={e => setForm(p => ({ ...p, webhookUrl: e.target.value }))} style={{ flex: 1 }} />
-              <button type="button" onClick={() => { navigator.clipboard.writeText(form.webhookUrl); toast.success('URL disalin!'); }} className="btn btn-outline" style={{ flexShrink: 0 }}>
+              <button 
+                type="button" 
+                onClick={async () => { 
+                  const { copyToClipboardWithToast } = await import('@/utils/clipboard');
+                  await copyToClipboardWithToast(form.webhookUrl, 'URL disalin!');
+                }} 
+                className="btn btn-outline" 
+                style={{ flexShrink: 0 }}
+              >
                 Salin
               </button>
             </div>

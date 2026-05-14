@@ -132,6 +132,15 @@ export default function SubscriptionPage() {
       <div className="flex-between">
         <h1 style={{ fontSize: '2rem', fontWeight: '700', color: 'var(--text-primary)' }}>Subscription Details</h1>
         <div style={{ display: 'flex', gap: 'var(--space-sm)' }}>
+          {/* Show Upgrade button for trial users */}
+          {(['trial', 'pending'] as string[]).includes(subscription.status) && (
+            <button
+              onClick={() => router.push('/upgrade')}
+              className="btn btn-primary btn-sm"
+            >
+              🚀 Upgrade ke Paket Berbayar
+            </button>
+          )}
           <button
             onClick={() => router.push('/dashboard/subscription/history')}
             className="btn btn-outline btn-sm"

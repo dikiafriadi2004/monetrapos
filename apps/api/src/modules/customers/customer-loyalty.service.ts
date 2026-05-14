@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
 import { Customer } from './customer.entity';
@@ -65,6 +65,41 @@ export class CustomerLoyaltyService {
   ) {}
 
   /**
+   * Get tier info for a specific customer — used by POS to apply automatic discount
+   */
+  async getCustomerTierInfo(customerId: string): Promise<{
+    tier: string;
+    totalSpent: number;
+    loyaltyPoints: number;
+    discountPercentage: number;
+    pointsMultiplier: number;
+    nextTier: string | null;
+    spentToNextTier: number | null;
+  }> {
+    const customer = await this.customerRepository.findOne({ where: { id: customerId } });
+    if (!customer) throw new NotFoundException(`Customer ${customerId} not found`);
+
+    const tier = customer.loyaltyTier as LoyaltyTier;
+    const benefits = this.getTierBenefits(tier);
+    const totalSpent = Number(customer.totalSpent || 0);
+
+    // Find next tier
+    const sortedTiers = [...this.tierThresholds].sort((a, b) => a.minSpent - b.minSpent);
+    const currentIndex = sortedTiers.findIndex(t => t.tier === tier);
+    const nextTierData = currentIndex < sortedTiers.length - 1 ? sortedTiers[currentIndex + 1] : null;
+
+    return {
+      tier,
+      totalSpent,
+      loyaltyPoints: customer.loyaltyPoints || 0,
+      discountPercentage: benefits.discountPercentage,
+      pointsMultiplier: benefits.pointsMultiplier,
+      nextTier: nextTierData?.tier || null,
+      spentToNextTier: nextTierData ? Math.max(0, nextTierData.minSpent - totalSpent) : null,
+    };
+  }
+
+  /**
    * Get tier benefits for a specific tier
    */
   getTierBenefits(tier: LoyaltyTier): TierBenefits {
@@ -103,7 +138,7 @@ export class CustomerLoyaltyService {
     });
 
     if (!customer) {
-      throw new Error(`Customer ${customerId} not found`);
+      throw new NotFoundException(`Customer ${customerId} not found`);
     }
 
     const newTier = this.calculateTier(Number(customer.totalSpent));

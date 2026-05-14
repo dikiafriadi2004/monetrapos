@@ -25,6 +25,20 @@ class SubscriptionService {
       const res = await apiClient.get('/subscriptions/current');
       return res.data;
     } catch {
+      // Fallback: try to get subscription from /auth/me
+      try {
+        const meRes = await apiClient.get('/auth/me');
+        if (meRes.data?.subscription) {
+          const sub = meRes.data.subscription;
+          // Normalize trial_end to trialEnd
+          if (sub.trial_end && !sub.trialEnd) {
+            sub.trialEnd = sub.trial_end;
+          }
+          return sub;
+        }
+      } catch {
+        // ignore
+      }
       return null;
     }
   }

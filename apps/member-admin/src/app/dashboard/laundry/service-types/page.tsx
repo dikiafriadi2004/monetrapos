@@ -5,6 +5,7 @@ import { Plus, Edit2, Trash2, Loader2, X, Shirt, Clock } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import toast from 'react-hot-toast';
 import { ConfirmModal } from '@/components/ui';
+import { formatRupiah } from '@/lib/date';
 
 interface ServiceType {
   id: string;
@@ -88,7 +89,7 @@ export default function LaundryServiceTypesPage() {
   };
 
   const formatPrice = (p: number, type: string) =>
-    `Rp ${Number(p).toLocaleString('id-ID')} / ${type === 'per_kg' ? 'kg' : 'item'}`;
+    `Rp ${formatRupiah(Number(p))} / ${type === 'per_kg' ? 'kg' : 'item'}`;
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 400 }}>

@@ -4,153 +4,56 @@ export class EnhanceCustomersAndLoyaltyPoints1711659965000
   implements MigrationInterface
 {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // Create loyalty_point_transactions table
-    await queryRunner.createTable(
-      new Table({
-        name: 'loyalty_point_transactions',
-        columns: [
-          {
-            name: 'id',
-            type: 'uuid',
-            isPrimary: true,
-            default: 'uuid_generate_v4()',
-          },
-          {
-            name: 'customer_id',
-            type: 'uuid',
-            isNullable: false,
-          },
-          {
-            name: 'company_id',
-            type: 'uuid',
-            isNullable: false,
-          },
-          {
-            name: 'type',
-            type: 'enum',
-            enum: ['earn', 'redeem', 'adjustment', 'expire'],
-            isNullable: false,
-          },
-          {
-            name: 'points',
-            type: 'int',
-            isNullable: false,
-          },
-          {
-            name: 'balance_after',
-            type: 'int',
-            isNullable: false,
-          },
-          {
-            name: 'reference_type',
-            type: 'varchar',
-            length: '50',
-            isNullable: true,
-          },
-          {
-            name: 'reference_id',
-            type: 'uuid',
-            isNullable: true,
-          },
-          {
-            name: 'description',
-            type: 'text',
-            isNullable: true,
-          },
-          {
-            name: 'performed_by',
-            type: 'uuid',
-            isNullable: true,
-          },
-          {
-            name: 'created_at',
-            type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP',
-          },
-          {
-            name: 'updated_at',
-            type: 'timestamp',
-            default: 'CURRENT_TIMESTAMP',
-            onUpdate: 'CURRENT_TIMESTAMP',
-          },
-        ],
-        foreignKeys: [
-          {
-            columnNames: ['customer_id'],
-            referencedTableName: 'customers',
-            referencedColumnNames: ['id'],
-            onDelete: 'CASCADE',
-          },
-          {
-            columnNames: ['company_id'],
-            referencedTableName: 'companies',
-            referencedColumnNames: ['id'],
-            onDelete: 'CASCADE',
-          },
-          {
-            columnNames: ['performed_by'],
-            referencedTableName: 'users',
-            referencedColumnNames: ['id'],
-            onDelete: 'SET NULL',
-          },
-        ],
-        indices: [
-          {
-            name: 'idx_loyalty_point_transactions_customer_id',
-            columnNames: ['customer_id'],
-          },
-          {
-            name: 'idx_loyalty_point_transactions_company_id',
-            columnNames: ['company_id'],
-          },
-          {
-            name: 'idx_loyalty_point_transactions_created_at',
-            columnNames: ['created_at'],
-          },
-        ],
-      }),
-      true,
-    );
+    const customersTable = await queryRunner.getTable('customers');
 
-    // Add new columns to customers table
-    await queryRunner.addColumn(
-      'customers',
-      new TableColumn({
-        name: 'loyalty_tier',
-        type: 'enum',
-        enum: ['regular', 'silver', 'gold', 'platinum'],
-        default: "'regular'",
-        isNullable: false,
-      }),
-    );
+    // Create loyalty_point_transactions table if not exists
+    const loyaltyTableExists = await queryRunner.hasTable('loyalty_point_transactions');
+    if (!loyaltyTableExists) {
+      await queryRunner.createTable(
+        new Table({
+          name: 'loyalty_point_transactions',
+          columns: [
+            { name: 'id', type: 'varchar', length: '36', isPrimary: true, generationStrategy: 'uuid' },
+            { name: 'customer_id', type: 'varchar', length: '36', isNullable: false },
+            { name: 'company_id', type: 'varchar', length: '36', isNullable: false },
+            { name: 'type', type: 'enum', enum: ['earn', 'redeem', 'adjustment', 'expire'], isNullable: false },
+            { name: 'points', type: 'int', isNullable: false },
+            { name: 'balance_after', type: 'int', isNullable: false },
+            { name: 'reference_type', type: 'varchar', length: '50', isNullable: true },
+            { name: 'reference_id', type: 'varchar', length: '36', isNullable: true },
+            { name: 'description', type: 'text', isNullable: true },
+            { name: 'performed_by', type: 'varchar', length: '36', isNullable: true },
+            { name: 'created_at', type: 'timestamp', default: 'CURRENT_TIMESTAMP' },
+            { name: 'updated_at', type: 'timestamp', default: 'CURRENT_TIMESTAMP', onUpdate: 'CURRENT_TIMESTAMP' },
+          ],
+          foreignKeys: [
+            { columnNames: ['customer_id'], referencedTableName: 'customers', referencedColumnNames: ['id'], onDelete: 'CASCADE' },
+            { columnNames: ['company_id'], referencedTableName: 'companies', referencedColumnNames: ['id'], onDelete: 'CASCADE' },
+            { columnNames: ['performed_by'], referencedTableName: 'users', referencedColumnNames: ['id'], onDelete: 'SET NULL' },
+          ],
+          indices: [
+            { name: 'idx_loyalty_point_transactions_customer_id', columnNames: ['customer_id'] },
+            { name: 'idx_loyalty_point_transactions_company_id', columnNames: ['company_id'] },
+            { name: 'idx_loyalty_point_transactions_created_at', columnNames: ['created_at'] },
+          ],
+        }),
+        true,
+      );
+    }
 
-    await queryRunner.addColumn(
-      'customers',
-      new TableColumn({
-        name: 'date_of_birth',
-        type: 'date',
-        isNullable: true,
-      }),
-    );
-
-    await queryRunner.addColumn(
-      'customers',
-      new TableColumn({
-        name: 'gender',
-        type: 'enum',
-        enum: ['male', 'female', 'other'],
-        isNullable: true,
-      }),
-    );
-
-    await queryRunner.addColumn(
-      'customers',
-      new TableColumn({
-        name: 'notes',
-        type: 'text',
-        isNullable: true,
-      }),
-    );
+    // Add columns to customers table only if they don't exist
+    if (!customersTable?.columns.find((c) => c.name === 'loyalty_tier')) {
+      await queryRunner.addColumn('customers', new TableColumn({ name: 'loyalty_tier', type: 'enum', enum: ['regular', 'silver', 'gold', 'platinum'], default: "'regular'", isNullable: false }));
+    }
+    if (!customersTable?.columns.find((c) => c.name === 'date_of_birth')) {
+      await queryRunner.addColumn('customers', new TableColumn({ name: 'date_of_birth', type: 'date', isNullable: true }));
+    }
+    if (!customersTable?.columns.find((c) => c.name === 'gender')) {
+      await queryRunner.addColumn('customers', new TableColumn({ name: 'gender', type: 'enum', enum: ['male', 'female', 'other'], isNullable: true }));
+    }
+    if (!customersTable?.columns.find((c) => c.name === 'notes')) {
+      await queryRunner.addColumn('customers', new TableColumn({ name: 'notes', type: 'text', isNullable: true }));
+    }
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

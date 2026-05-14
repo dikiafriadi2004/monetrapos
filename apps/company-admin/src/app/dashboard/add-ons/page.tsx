@@ -159,6 +159,12 @@ export default function AddOnsManagementPage() {
     return matchSearch && matchCat;
   });
 
+  const PAGE_SIZE = 20;
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
   const stats = {
     total: addOns.length,
     active: addOns.filter(a => a.status === 'active').length,
@@ -224,7 +230,8 @@ export default function AddOnsManagementPage() {
             <p style={{ color: 'var(--text-secondary)' }}>No add-ons found</p>
           </div>
         ) : (
-          <div style={{ overflowX: 'auto' }}>
+          <>
+            <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -234,7 +241,7 @@ export default function AddOnsManagementPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(addOn => {
+                {paginated.map(addOn => {
                   const CatIcon = categoryIcons[addOn.category];
                   const catColor = categoryColors[addOn.category];
                   const statusColor = statusColors[addOn.status];
@@ -283,6 +290,23 @@ export default function AddOnsManagementPage() {
               </tbody>
             </table>
           </div>
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'var(--space-md) var(--space-lg)', borderTop: '1px solid var(--border-subtle)' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)' }}>{filtered.length} add-ons</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={safePage === 1}
+                  style={{ padding: '4px 12px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', background: 'none', cursor: safePage === 1 ? 'not-allowed' : 'pointer', opacity: safePage === 1 ? 0.4 : 1 }}>
+                  Previous
+                </button>
+                <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{safePage} / {totalPages}</span>
+                <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}
+                  style={{ padding: '4px 12px', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)', background: 'none', cursor: safePage >= totalPages ? 'not-allowed' : 'pointer', opacity: safePage >= totalPages ? 0.4 : 1 }}>
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </>
         )}
       </div>
 

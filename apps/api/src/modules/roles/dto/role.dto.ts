@@ -18,9 +18,10 @@ export class CreateRoleDto {
   @IsString()
   description?: string;
 
-  @ApiProperty({ example: 'store-uuid-here' })
+  @ApiPropertyOptional({ example: 'store-uuid-here' })
+  @IsOptional()
   @IsString()
-  storeId: string;
+  storeId?: string;
 
   @ApiPropertyOptional({
     example: ['pos.create_transaction', 'pos.void_transaction'],

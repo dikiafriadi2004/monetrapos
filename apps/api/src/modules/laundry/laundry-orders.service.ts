@@ -6,7 +6,6 @@ import { LaundryItem } from './laundry-item.entity';
 import { LaundryServiceType, PricingType } from './laundry-service-type.entity';
 import { CreateLaundryOrderDto } from './dto/create-laundry-order.dto';
 import { UpdateLaundryOrderDto, UpdateLaundryOrderStatusDto } from './dto/update-laundry-order.dto';
-
 @Injectable()
 export class LaundryOrdersService {
   constructor(
@@ -187,6 +186,26 @@ export class LaundryOrdersService {
     }
 
     Object.assign(order, updateDto);
+
+    // Recalculate total_price jika weight_kg atau service_type_id berubah
+    if (updateDto.weight_kg !== undefined || updateDto.service_type_id !== undefined) {
+      const serviceTypeId = updateDto.service_type_id || order.service_type_id;
+      if (serviceTypeId) {
+        const serviceType = await this.serviceTypeRepository.findOne({
+          where: { id: serviceTypeId },
+        });
+        if (serviceType) {
+          const weightKg = updateDto.weight_kg ?? order.weight_kg;
+          const itemCount = order.item_count || 0;
+          try {
+            order.total_price = await this.calculatePrice(serviceType, weightKg, itemCount);
+          } catch {
+            // Jika kalkulasi gagal (misal weight tidak ada untuk per_kg), biarkan harga lama
+          }
+        }
+      }
+    }
+
     return await this.orderRepository.save(order);
   }
 
@@ -211,6 +230,62 @@ export class LaundryOrdersService {
       order.ready_at = now;
     } else if (newStatus === LaundryOrderStatus.DELIVERED) {
       order.delivered_at = now;
+
+      // Auto-create transaction record when order is delivered
+      try {
+        const paymentMethod = updateStatusDto.payment_method || 'cash';
+        const paymentMethodMap: Record<string, string> = {
+          cash: 'cash', qris: 'qris', transfer: 'bank_transfer',
+          bank_transfer: 'bank_transfer', card: 'edc', edc: 'edc',
+        };
+        const normalizedMethod = paymentMethodMap[paymentMethod.toLowerCase()] || 'cash';
+
+        const today = new Date();
+        const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+
+        const countRows = await this.dataSource.query(
+          `SELECT COUNT(*) as cnt FROM transactions WHERE invoice_number LIKE ? AND store_id = ?`,
+          [`INV-${dateStr}%`, order.store_id]
+        );
+        const seq = String(parseInt(countRows?.[0]?.cnt || '0', 10) + 1).padStart(4, '0');
+        const invoiceNumber = `INV-${dateStr}-${seq}`;
+
+        const txCountRows = await this.dataSource.query(
+          `SELECT COUNT(*) as cnt FROM transactions WHERE transaction_number LIKE ? AND store_id = ?`,
+          [`TRX-${dateStr}%`, order.store_id]
+        );
+        const txSeq = String(parseInt(txCountRows?.[0]?.cnt || '0', 10) + 1).padStart(4, '0');
+        const transactionNumber = `TRX-${dateStr}-${txSeq}`;
+
+        const txId = require('crypto').randomUUID();
+        const storeRows = await this.dataSource.query(
+          `SELECT company_id FROM stores WHERE id = ? LIMIT 1`,
+          [order.store_id]
+        );
+        const txCompanyId = storeRows?.[0]?.company_id || companyId;
+
+        // Use parameterized query to prevent SQL injection
+        await this.dataSource.query(
+          `INSERT INTO transactions (id, company_id, store_id, transaction_number, invoice_number, subtotal, tax_amount, discount_amount, service_charge, total, payment_method, paid_amount, change_amount, customer_id, customer_name, status, notes, metadata, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, ?, ?, ?, 0, ?, ?, 'completed', ?, ?, NOW(), NOW())`,
+          [
+            txId, txCompanyId, order.store_id, transactionNumber, invoiceNumber,
+            Number(order.total_price || 0), Number(order.total_price || 0),
+            normalizedMethod, Number(order.total_price || 0),
+            order.customer_id || null,
+            order.customer?.name || null,
+            `Laundry Order ${order.order_number}`,
+            JSON.stringify({
+              laundryOrderId: id,
+              orderNumber: order.order_number,
+              serviceType: order.service_type?.name || null,
+            }),
+          ]
+        );
+      } catch (txErr) {
+        // Non-critical — don't fail the status update if transaction creation fails
+        console.error('Failed to create transaction for laundry order:', txErr);
+      }
     }
 
     order.status = newStatus;

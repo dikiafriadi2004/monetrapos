@@ -2,7 +2,7 @@
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
-// import * as Sentry from '@sentry/node'; // Uncomment when Sentry packages are installed
+import * as Sentry from '@sentry/node';
 
 @ApiTags('Health')
 @Controller('health')
@@ -50,37 +50,19 @@ export class HealthController {
   @ApiOperation({ summary: 'Test Sentry error tracking (Development only)' })
   testSentry() {
     if (process.env.NODE_ENV === 'production') {
-      return {
-        message: 'Sentry test endpoint is disabled in production',
-      };
+      return { message: 'Sentry test endpoint is disabled in production' };
     }
-
-    return {
-      message: 'Sentry packages not installed',
-      note: 'Install @sentry/node and @sentry/profiling-node to enable error monitoring',
-    };
-
-    /* Uncomment when Sentry packages are installed
+    if (!process.env.SENTRY_DSN) {
+      return { message: 'SENTRY_DSN not configured', note: 'Set SENTRY_DSN in .env to enable' };
+    }
     try {
       throw new Error('Test error for Sentry monitoring');
     } catch (error) {
       Sentry.captureException(error, {
-        tags: {
-          test: 'true',
-          endpoint: 'health/sentry-test',
-        },
-        extra: {
-          message: 'This is a test error to verify Sentry integration',
-          timestamp: new Date().toISOString(),
-        },
+        tags: { test: 'true', endpoint: 'health/sentry-test' },
       });
     }
-
-    return {
-      message: 'Test error sent to Sentry',
-      note: 'Check your Sentry dashboard at https://sentry.io',
-    };
-    */
+    return { message: 'Test error sent to Sentry', note: 'Check your Sentry dashboard' };
   }
 
   @Get('sentry-message')

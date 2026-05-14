@@ -12,48 +12,67 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authProvider);
-    final dashAsync = ref.watch(dashboardProvider);
     final currency = NumberFormat.currency(locale: 'id_ID', symbol: 'Rp ', decimalDigits: 0);
+    final user = auth.user;
+
+    // Jika belum authenticated, tampilkan loading
+    if (!auth.isAuthenticated) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final dashAsync = ref.watch(dashboardProvider);
 
     return Scaffold(
-      backgroundColor: AppTheme.surface,
+      backgroundColor: AppColors.surface,
       appBar: AppBar(
+        backgroundColor: AppColors.white,
+        elevation: 0,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Dashboard', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            Text(
-              'Selamat datang, ${auth.user?['name'] ?? ''}',
-              style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
-            ),
+            const Text('Dashboard', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: AppColors.gray900)),
+            Text('Halo, ${user?.displayName ?? 'User'}',
+                style: const TextStyle(fontSize: 12, color: AppColors.gray500)),
           ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh, color: AppColors.gray600),
             onPressed: () => ref.invalidate(dashboardProvider),
           ),
           IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => ref.read(authProvider.notifier).logout(),
+            icon: const Icon(Icons.logout, color: AppColors.gray600),
+            onPressed: () => _showLogout(context, ref),
           ),
         ],
       ),
       body: dashAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, size: 48, color: AppTheme.error),
-              const SizedBox(height: 8),
-              Text(e.toString()),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+              const Icon(Icons.wifi_off, size: 56, color: AppColors.gray300),
               const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () => ref.invalidate(dashboardProvider),
-                child: const Text('Coba Lagi'),
+              const Text('Gagal memuat data', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+              const SizedBox(height: 8),
+              Text(
+                e.toString().contains('403') || e.toString().contains('401')
+                    ? 'Sesi login berakhir. Silakan login ulang.'
+                    : 'Periksa koneksi internet Anda.',
+                style: const TextStyle(color: AppColors.gray500, fontSize: 13),
+                textAlign: TextAlign.center,
               ),
-            ],
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () => ref.invalidate(dashboardProvider),
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Coba Lagi'),
+                style: ElevatedButton.styleFrom(minimumSize: const Size(160, 44)),
+              ),
+            ]),
           ),
         ),
         data: (data) => RefreshIndicator(
@@ -62,37 +81,36 @@ class DashboardScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             children: [
               // Quick Action - POS
-              InkWell(
+              GestureDetector(
                 onTap: () => context.go('/pos'),
                 child: Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     gradient: const LinearGradient(
-                      colors: [AppTheme.primary, AppTheme.primaryDark],
+                      colors: [AppColors.primary, AppColors.primaryDark],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
                     ),
                     borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: const Row(
-                    children: [
-                      Icon(Icons.point_of_sale, color: Colors.white, size: 32),
-                      SizedBox(width: 16),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Buka POS', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                          Text('Mulai transaksi baru', style: TextStyle(color: Colors.white70, fontSize: 13)),
-                        ],
-                      ),
-                      Spacer(),
-                      Icon(Icons.arrow_forward_ios, color: Colors.white70),
+                    boxShadow: [
+                      BoxShadow(color: AppColors.primary.withValues(alpha: 0.3), blurRadius: 12, offset: const Offset(0, 4)),
                     ],
                   ),
+                  child: const Row(children: [
+                    Icon(Icons.point_of_sale, color: Colors.white, size: 32),
+                    SizedBox(width: 16),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('Buka POS', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                      Text('Mulai transaksi baru', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                    ])),
+                    Icon(Icons.arrow_forward_ios, color: Colors.white70, size: 18),
+                  ]),
                 ),
               ),
               const SizedBox(height: 20),
 
-              // Stats Grid
-              const Text('Ringkasan Hari Ini', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              // Stats
+              const Text('Ringkasan Hari Ini', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.gray800)),
               const SizedBox(height: 12),
               GridView.count(
                 crossAxisCount: 2,
@@ -100,61 +118,67 @@ class DashboardScreen extends ConsumerWidget {
                 physics: const NeverScrollableScrollPhysics(),
                 crossAxisSpacing: 12,
                 mainAxisSpacing: 12,
-                childAspectRatio: 1.5,
+                childAspectRatio: 1.6,
                 children: [
-                  _StatCard(
-                    label: 'Penjualan',
-                    value: currency.format(data.todaySales),
-                    icon: Icons.trending_up,
-                    color: AppTheme.secondary,
-                  ),
-                  _StatCard(
-                    label: 'Transaksi',
-                    value: data.todayTransactions.toString(),
-                    icon: Icons.receipt_long,
-                    color: AppTheme.primary,
-                  ),
-                  _StatCard(
-                    label: 'Produk',
-                    value: data.totalProducts.toString(),
-                    icon: Icons.inventory_2,
-                    color: AppTheme.warning,
-                  ),
-                  _StatCard(
-                    label: 'Pelanggan',
-                    value: data.totalCustomers.toString(),
-                    icon: Icons.people,
-                    color: const Color(0xFF8B5CF6),
-                  ),
+                  _StatCard(label: 'Penjualan', value: currency.format(data.todaySales), icon: Icons.trending_up, color: AppColors.success),
+                  _StatCard(label: 'Transaksi', value: '${data.todayTransactions}', icon: Icons.receipt_long, color: AppColors.primary),
+                  _StatCard(label: 'Produk', value: '${data.totalProducts}', icon: Icons.inventory_2, color: AppColors.warning),
+                  _StatCard(label: 'Pelanggan', value: '${data.totalCustomers}', icon: Icons.people, color: const Color(0xFF8B5CF6)),
                 ],
               ),
               const SizedBox(height: 20),
 
               // Quick Actions
-              const Text('Menu Cepat', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              const Text('Menu Cepat', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.gray800)),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  _QuickAction(icon: Icons.inventory_2_outlined, label: 'Produk', onTap: () => context.go('/products')),
-                  const SizedBox(width: 12),
-                  _QuickAction(icon: Icons.people_outlined, label: 'Pelanggan', onTap: () => context.go('/customers')),
-                  const SizedBox(width: 12),
-                  _QuickAction(icon: Icons.warehouse_outlined, label: 'Inventori', onTap: () => context.go('/inventory')),
-                  const SizedBox(width: 12),
-                  _QuickAction(icon: Icons.receipt_long_outlined, label: 'Transaksi', onTap: () => context.go('/transactions')),
-                ],
-              ),
+              Row(children: [
+                _QuickAction(icon: Icons.inventory_2_outlined, label: 'Produk', onTap: () => context.go('/products')),
+                const SizedBox(width: 10),
+                _QuickAction(icon: Icons.people_outlined, label: 'Pelanggan', onTap: () => context.go('/customers')),
+                const SizedBox(width: 10),
+                _QuickAction(icon: Icons.warehouse_outlined, label: 'Inventori', onTap: () => context.go('/inventory')),
+                const SizedBox(width: 10),
+                _QuickAction(icon: Icons.receipt_long_outlined, label: 'Transaksi', onTap: () => context.go('/transactions')),
+              ]),
               const SizedBox(height: 20),
 
               // Recent Transactions
               if (data.recentTransactions.isNotEmpty) ...[
-                const Text('Transaksi Terbaru', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                const Text('Transaksi Terbaru', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.gray800)),
                 const SizedBox(height: 12),
-                ...data.recentTransactions.map((tx) => _TransactionTile(tx: tx, currency: currency)),
+                ...data.recentTransactions.map((tx) => _TxTile(tx: tx, currency: currency)),
               ],
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showLogout(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Keluar', style: TextStyle(fontWeight: FontWeight.w700)),
+        content: const Text('Yakin ingin keluar dari aplikasi?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogCtx).pop(),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(dialogCtx).pop();
+              Future.microtask(() => ref.read(authProvider.notifier).logout());
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text('Keluar'),
+          ),
+        ],
       ),
     );
   }
@@ -165,29 +189,28 @@ class _StatCard extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color color;
-
   const _StatCard({required this.label, required this.value, required this.icon, required this.color});
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Icon(icon, color: color, size: 24),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                Text(label, style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280))),
-              ],
-            ),
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.gray200),
       ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Container(
+          width: 36, height: 36,
+          decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.gray900)),
+          Text(label, style: const TextStyle(fontSize: 11, color: AppColors.gray500)),
+        ]),
+      ]),
     );
   }
 }
@@ -196,74 +219,73 @@ class _QuickAction extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-
   const _QuickAction({required this.icon, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-      child: InkWell(
+      child: GestureDetector(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Card(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: Column(
-              children: [
-                Icon(icon, color: AppTheme.primary, size: 24),
-                const SizedBox(height: 4),
-                Text(label, style: const TextStyle(fontSize: 11, color: Color(0xFF374151))),
-              ],
-            ),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          decoration: BoxDecoration(
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.gray200),
           ),
+          child: Column(children: [
+            Icon(icon, color: AppColors.primary, size: 22),
+            const SizedBox(height: 4),
+            Text(label, style: const TextStyle(fontSize: 10, color: AppColors.gray700, fontWeight: FontWeight.w500)),
+          ]),
         ),
       ),
     );
   }
 }
 
-class _TransactionTile extends StatelessWidget {
+class _TxTile extends StatelessWidget {
   final Map<String, dynamic> tx;
   final NumberFormat currency;
-
-  const _TransactionTile({required this.tx, required this.currency});
+  const _TxTile({required this.tx, required this.currency});
 
   @override
   Widget build(BuildContext context) {
     final status = tx['status'] ?? '';
-    final statusColor = status == 'completed' ? AppTheme.secondary : AppTheme.warning;
+    final isCompleted = status == 'completed';
+    final statusColor = isCompleted ? AppColors.success : AppColors.warning;
     final total = double.tryParse(tx['total']?.toString() ?? '0') ?? 0;
+    final date = (tx['createdAt']?.toString() ?? '').length >= 10 ? tx['createdAt'].toString().substring(0, 10) : '-';
 
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: AppTheme.primary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: const Icon(Icons.receipt, color: AppTheme.primary, size: 20),
-        ),
-        title: Text(tx['transactionNumber'] ?? '-', style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14)),
-        subtitle: Text(tx['createdAt']?.toString().substring(0, 10) ?? '-', style: const TextStyle(fontSize: 12)),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            Text(currency.format(total), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(status, style: TextStyle(fontSize: 10, color: statusColor)),
-            ),
-          ],
-        ),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.gray200),
       ),
+      child: Row(children: [
+        Container(
+          width: 38, height: 38,
+          decoration: BoxDecoration(color: AppColors.primaryLight, borderRadius: BorderRadius.circular(8)),
+          child: const Icon(Icons.receipt, color: AppColors.primary, size: 20),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(tx['transactionNumber'] ?? '-', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+          Text(date, style: const TextStyle(fontSize: 11, color: AppColors.gray500)),
+        ])),
+        Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+          Text(currency.format(total), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(color: statusColor.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4)),
+            child: Text(isCompleted ? 'Selesai' : status,
+                style: TextStyle(fontSize: 10, color: statusColor, fontWeight: FontWeight.w500)),
+          ),
+        ]),
+      ]),
     );
   }
 }

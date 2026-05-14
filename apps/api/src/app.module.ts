@@ -12,6 +12,8 @@ import { APP_GUARD } from '@nestjs/core';
 import { validate } from './config/env.validation';
 import { QueueModule } from './common/queue/queue.module';
 import { CacheModule } from './common/cache/cache.module';
+import { FeatureGuard } from './modules/auth/guards/feature.guard';
+import { StorageService } from './common/utils/storage.service';
 import { AuthModule } from './modules/auth/auth.module';
 import { AdminAuthModule } from './modules/admin-auth/admin-auth.module';
 import { CompaniesModule } from './modules/companies/companies.module';
@@ -31,7 +33,6 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { TransactionsModule } from './modules/transactions/transactions.module';
 import { AuditModule } from './modules/audit/audit.module';
 import { CustomersModule } from './modules/customers/customers.module';
-import { ShiftsModule } from './modules/shifts/shifts.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { ReceiptsModule } from './modules/receipts/receipts.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
@@ -45,6 +46,7 @@ import { LaundryModule } from './modules/laundry/laundry.module';
 import { HealthModule } from './health/health.module';
 import { LandingModule } from './modules/landing/landing.module';
 import { EmailModule } from './modules/email/email.module';
+import { ExpensesModule } from './modules/expenses/expenses.module';
 
 import {
   TenantMiddleware,
@@ -58,6 +60,8 @@ import { Store } from './modules/stores/store.entity';
 import { Role } from './modules/roles/role.entity';
 import { Permission } from './modules/roles/permission.entity';
 import { Employee } from './modules/employees/employee.entity';
+import { EmployeeAttendance } from './modules/employees/employee-attendance.entity';
+import { LoyaltyPointTransaction } from './modules/customers/loyalty-point-transaction.entity';
 import { Product } from './modules/products/product.entity';
 import { Category } from './modules/products/category.entity';
 import { ProductVariant } from './modules/products/product-variant.entity';
@@ -80,9 +84,9 @@ import { PasswordResetToken } from './modules/auth/password-reset-token.entity';
 import { Notification } from './modules/notifications/notification.entity';
 import { AuditLog } from './modules/audit/audit-log.entity';
 import { Customer } from './modules/customers/customer.entity';
-import { Shift } from './modules/shifts/shift.entity';
 import { StockMovement } from './modules/inventory/stock-movement.entity';
 import { StockOpname, StockOpnameItem } from './modules/inventory/stock-opname.entity';
+import { Inventory } from './modules/inventory/inventory.entity';
 import { AddOn } from './modules/add-ons/add-on.entity';
 import { CompanyAddOn } from './modules/add-ons/company-add-on.entity';
 import { Supplier } from './modules/suppliers/supplier.entity';
@@ -93,12 +97,17 @@ import { FnbModifierGroup, FnbModifierOption } from './modules/fnb/fnb-modifier.
 import { LaundryServiceType } from './modules/laundry/laundry-service-type.entity';
 import { LaundryOrder } from './modules/laundry/laundry-order.entity';
 import { LaundryItem } from './modules/laundry/laundry-item.entity';
+import { Expense } from './modules/expenses/expense.entity';
+import { Coupon } from './modules/billing/coupon.entity';
+import { WebhookLog } from './modules/billing/webhook-log.entity';
+import { EmailTemplate } from './modules/email/email-template.entity';
 import { DiscountUsage } from './modules/discounts/discount-usage.entity';
 import { PaymentGatewayConfig } from './modules/payment-gateway/payment-gateway-config.entity';
 import { SubscriptionHistory } from './modules/subscriptions/subscription-history.entity';
 import { LandingContent } from './modules/landing/landing-content.entity';
 import { EmailConfig } from './modules/email/email-config.entity';
 import { AdminUser } from './modules/admin-auth/admin-user.entity';
+import { PaymentWebhook } from './modules/billing/payment-webhook.entity';
 
 const entities = [
   Company,
@@ -107,6 +116,8 @@ const entities = [
   Role,
   Permission,
   Employee,
+  EmployeeAttendance,
+  LoyaltyPointTransaction,
   Product,
   Category,
   ProductVariant,
@@ -129,10 +140,10 @@ const entities = [
   Notification,
   AuditLog,
   Customer,
-  Shift,
   StockMovement,
   StockOpname,
   StockOpnameItem,
+  Inventory,
   AddOn,
   CompanyAddOn,
   Supplier,
@@ -145,12 +156,17 @@ const entities = [
   LaundryServiceType,
   LaundryOrder,
   LaundryItem,
+  Expense,
   DiscountUsage,
   PaymentGatewayConfig,
   SubscriptionHistory,
   LandingContent,
   EmailConfig,
   AdminUser,
+  PaymentWebhook,
+  Coupon,
+  WebhookLog,
+  EmailTemplate,
 ];
 
 @Module({
@@ -180,10 +196,10 @@ const entities = [
         database: configService.get<string>('DB_DATABASE'),
         entities,
         synchronize: false, // Disabled - use migrations instead
-        logging: configService.get<string>('NODE_ENV') === 'development',
+        logging: false, // Disabled to reduce noise in logs
       }),
     }),
-    TypeOrmModule.forFeature([Permission, Company, User, Subscription]),
+    TypeOrmModule.forFeature([Permission, Company, User, Subscription, SubscriptionPlan]),
     AuthModule,
     AdminAuthModule,
     CompaniesModule,
@@ -203,7 +219,6 @@ const entities = [
     TransactionsModule,
     AuditModule,
     CustomersModule,
-    ShiftsModule,
     InventoryModule,
     ReceiptsModule,
     NotificationsModule,
@@ -217,10 +232,14 @@ const entities = [
     HealthModule,
     LandingModule,
     EmailModule,
+    ExpensesModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    FeatureGuard,
+    StorageService,
   ],
+  exports: [StorageService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

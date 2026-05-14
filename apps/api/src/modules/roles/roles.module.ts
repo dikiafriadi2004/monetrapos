@@ -5,6 +5,7 @@ import { RolesController, AdminRolesController } from './roles.controller';
 import { Role } from './role.entity';
 import { Permission } from './permission.entity';
 import { AdminAuthModule } from '../admin-auth/admin-auth.module';
+import { PermissionSeeder } from '../../common/seeders/permission.seeder';
 
 @Module({
   imports: [
@@ -12,7 +13,7 @@ import { AdminAuthModule } from '../admin-auth/admin-auth.module';
     AdminAuthModule,
   ],
   controllers: [RolesController, AdminRolesController],
-  providers: [RolesService],
-  exports: [RolesService],
+  providers: [RolesService, PermissionSeeder],
+  exports: [RolesService, PermissionSeeder],
 })
 export class RolesModule {}

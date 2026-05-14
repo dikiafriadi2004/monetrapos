@@ -9,6 +9,7 @@ import {
   UseGuards,
   Request,
   Query,
+  BadRequestException,
 } from '@nestjs/common';
 import { TablesService } from './tables.service';
 import { CreateTableDto } from './dto/create-table.dto';
@@ -50,7 +51,7 @@ export class TablesController {
     @Query('floor') floor?: string,
   ) {
     if (!storeId) {
-      throw new Error('store_id is required');
+      throw new BadRequestException('store_id is required');
     }
     return this.tablesService.getFloorPlan(req.user.companyId, storeId, floor);
   }
@@ -76,6 +77,14 @@ export class TablesController {
     @Request() req,
   ) {
     return this.tablesService.updateStatus(id, updateStatusDto, req.user.companyId);
+  }
+
+  @Post('sync-status')
+  syncTableStatuses(
+    @Request() req,
+    @Query('store_id') storeId?: string,
+  ) {
+    return this.tablesService.syncTableStatuses(req.user.companyId, storeId);
   }
 
   @Delete(':id')

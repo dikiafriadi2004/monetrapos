@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { purchaseOrdersService, PurchaseOrder, PurchaseOrderStatus } from '@/services/purchase-orders.service';
 import { ShoppingCart, Plus, Search, Eye, Edit2, Trash2, CheckCircle, XCircle, Clock, Package, Loader2, Building2, Store, FileText } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { ConfirmModal } from '@/components/ui';
+import { ConfirmModal, Pagination } from '@/components/ui';
+import { usePagination } from '@/hooks/usePagination';
 
 const STATUS_CONFIG: Record<string, { color: string; icon: any }> = {
   [PurchaseOrderStatus.DRAFT]: { color: '#6b7280', icon: FileText },
@@ -15,7 +16,7 @@ const STATUS_CONFIG: Record<string, { color: string; icon: any }> = {
 };
 
 const fmt = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n || 0);
-const fmtDate = (d: string) => new Date(d).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric' });
+const fmtDate = (d: string) => new Date(d).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Asia/Jakarta' });
 
 export default function PurchaseOrdersPage() {
   const router = useRouter();
@@ -66,6 +67,8 @@ export default function PurchaseOrdersPage() {
     o.poNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
     o.supplierName.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const { page, setPage, totalPages, totalItems, paginated } = usePagination(filtered);
 
   return (
     <div>
@@ -136,7 +139,7 @@ export default function PurchaseOrdersPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(o => {
+                {paginated.map(o => {
                   const cfg = STATUS_CONFIG[o.status];
                   const Icon = cfg.icon;
                   return (
@@ -185,6 +188,7 @@ export default function PurchaseOrdersPage() {
               </tbody>
             </table>
           </div>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalItems={totalItems} />
         </div>
       )}
       <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { 100% { transform: rotate(360deg); } }` }} />

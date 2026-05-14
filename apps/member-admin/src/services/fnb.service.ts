@@ -164,11 +164,15 @@ class FnbService {
     storeId?: string;
     status?: OrderStatus;
     orderType?: OrderType;
+    startDate?: string;
+    endDate?: string;
   }): Promise<FnbOrder[]> {
     const q = new URLSearchParams();
     if (params?.storeId) q.append('store_id', params.storeId);
     if (params?.status) q.append('status', params.status);
     if (params?.orderType) q.append('order_type', params.orderType);
+    if (params?.startDate) q.append('start_date', params.startDate);
+    if (params?.endDate) q.append('end_date', params.endDate);
     const res = await apiClient.get(`/fnb/orders?${q.toString()}`);
     const data = Array.isArray(res.data) ? res.data : (res.data?.data || []);
     return data.map(mapOrder);

@@ -249,9 +249,58 @@ export default function ReportsPage() {
     exportToCSV(productReport.topProducts, 'product_performance');
   };
 
+  const handleExportProductsPdf = async () => {
+    if (!productReport) return;
+    const params = new URLSearchParams({ startDate: productFilters.startDate, endDate: productFilters.endDate, limit: productFilters.limit.toString() });
+    if (productFilters.storeId) params.append('storeId', productFilters.storeId);
+    if (productFilters.categoryId) params.append('categoryId', productFilters.categoryId);
+    const token = localStorage.getItem('access_token') || '';
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://10.1.2.254:4404/api/v1';
+    const url = `${apiBase}/reports/products/export-pdf?${params.toString()}`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) { toast.error('Gagal export PDF'); return; }
+    const blob = await res.blob();
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `product-report-${productFilters.startDate}-${productFilters.endDate}.pdf`;
+    link.click();
+  };
+
   const handleExportInventory = () => {
     if (!inventoryReport) return;
     exportToCSV(inventoryReport.products, 'inventory_report');
+  };
+
+  const handleExportSalesPdf = async () => {
+    if (!salesReport) return;
+    const params = new URLSearchParams({ startDate: salesFilters.startDate, endDate: salesFilters.endDate, groupBy: salesFilters.groupBy });
+    if (salesFilters.storeId) params.append('storeId', salesFilters.storeId);
+    const token = localStorage.getItem('access_token') || '';
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://10.1.2.254:4404/api/v1';
+    const url = `${apiBase}/reports/sales/export-pdf?${params.toString()}`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) { toast.error('Gagal export PDF'); return; }
+    const blob = await res.blob();
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `sales-report-${salesFilters.startDate}-${salesFilters.endDate}.pdf`;
+    link.click();
+  };
+
+  const handleExportInventoryPdf = async () => {
+    if (!inventoryReport) return;
+    const params = new URLSearchParams({ lowStockOnly: inventoryFilters.lowStockOnly.toString() });
+    if (inventoryFilters.storeId) params.append('storeId', inventoryFilters.storeId);
+    const token = localStorage.getItem('access_token') || '';
+    const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://10.1.2.254:4404/api/v1';
+    const url = `${apiBase}/reports/inventory/export-pdf?${params.toString()}`;
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) { toast.error('Gagal export PDF'); return; }
+    const blob = await res.blob();
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `inventory-report.pdf`;
+    link.click();
   };
 
   return (
@@ -259,9 +308,9 @@ export default function ReportsPage() {
       {/* Header */}
       <div className="flex-between" style={{ marginBottom: 'var(--space-xl)' }}>
         <div>
-          <h1 style={{ fontSize: '1.75rem', marginBottom: 'var(--space-xs)' }}>Reports & Analytics</h1>
+          <h1 style={{ fontSize: '1.75rem', marginBottom: 'var(--space-xs)' }}>Laporan & Analitik</h1>
           <p style={{ color: 'var(--text-secondary)' }}>
-            View sales, product performance, and inventory reports.
+            Lihat laporan penjualan, performa produk, dan inventori.
           </p>
         </div>
       </div>
@@ -287,7 +336,7 @@ export default function ReportsPage() {
             }}
           >
             <TrendingUp size={18} />
-            Sales Report
+            Laporan Penjualan
           </button>
           <button
             onClick={() => setActiveTab('products')}
@@ -307,7 +356,7 @@ export default function ReportsPage() {
             }}
           >
             <BarChart3 size={18} />
-            Product Performance
+            Performa Produk
           </button>
           <button
             onClick={() => setActiveTab('inventory')}
@@ -327,7 +376,7 @@ export default function ReportsPage() {
             }}
           >
             <Package size={18} />
-            Inventory Report
+            Laporan Inventori
           </button>
         </div>
       </div>
@@ -340,15 +389,15 @@ export default function ReportsPage() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-md)' }}>
               <h3 style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
                 <Filter size={18} />
-                Filters
+                Filter
               </h3>
               <button className="btn btn-primary btn-sm" onClick={fetchSalesReport}>
-                Apply Filters
+                Terapkan Filter
               </button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 'var(--space-md)' }}>
               <div className="form-group">
-                <label className="form-label">Start Date</label>
+                <label className="form-label">Tanggal Mulai</label>
                 <input
                   type="date"
                   className="form-input"
@@ -357,7 +406,7 @@ export default function ReportsPage() {
                 />
               </div>
               <div className="form-group">
-                <label className="form-label">End Date</label>
+                <label className="form-label">Tanggal Akhir</label>
                 <input
                   type="date"
                   className="form-input"
@@ -366,25 +415,25 @@ export default function ReportsPage() {
                 />
               </div>
               <div className="form-group">
-                <label className="form-label">Group By</label>
+                <label className="form-label">Kelompokkan</label>
                 <select
                   className="form-input"
                   value={salesFilters.groupBy}
                   onChange={(e) => setSalesFilters({ ...salesFilters, groupBy: e.target.value as any })}
                 >
-                  <option value="day">Daily</option>
-                  <option value="week">Weekly</option>
-                  <option value="month">Monthly</option>
+                  <option value="day">Harian</option>
+                  <option value="week">Mingguan</option>
+                  <option value="month">Bulanan</option>
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">Store</label>
+                <label className="form-label">Toko</label>
                 <select
                   className="form-input"
                   value={salesFilters.storeId}
                   onChange={(e) => setSalesFilters({ ...salesFilters, storeId: e.target.value })}
                 >
-                  <option value="">All Stores</option>
+                  <option value="">Semua Toko</option>
                   {stores.map((store) => (
                     <option key={store.id} value={store.id}>{store.name}</option>
                   ))}
@@ -395,7 +444,7 @@ export default function ReportsPage() {
 
           {loading ? (
             <div className="glass-panel" style={{ padding: 'var(--space-2xl)', textAlign: 'center' }}>
-              <p style={{ color: 'var(--text-tertiary)' }}>Loading sales report...</p>
+              <p style={{ color: 'var(--text-tertiary)' }}>Memuat laporan penjualan...</p>
             </div>
           ) : salesReport ? (
             <>
@@ -403,7 +452,7 @@ export default function ReportsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>
                 <div className="glass-panel" style={{ padding: 'var(--space-lg)', textAlign: 'center' }}>
                   <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: 'var(--space-sm)' }}>
-                    Total Revenue
+                    Total Pendapatan
                   </div>
                   <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--success)' }}>
                     {formatCurrency(salesReport.summary.totalRevenue)}
@@ -411,7 +460,7 @@ export default function ReportsPage() {
                 </div>
                 <div className="glass-panel" style={{ padding: 'var(--space-lg)', textAlign: 'center' }}>
                   <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: 'var(--space-sm)' }}>
-                    Total Transactions
+                    Total Transaksi
                   </div>
                   <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--primary)' }}>
                     {formatNumber(salesReport.summary.totalTransactions)}
@@ -419,7 +468,7 @@ export default function ReportsPage() {
                 </div>
                 <div className="glass-panel" style={{ padding: 'var(--space-lg)', textAlign: 'center' }}>
                   <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: 'var(--space-sm)' }}>
-                    Avg Transaction
+                    Rata-rata Transaksi
                   </div>
                   <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--warning)' }}>
                     {formatCurrency(salesReport.summary.averageTransaction)}
@@ -427,7 +476,7 @@ export default function ReportsPage() {
                 </div>
                 <div className="glass-panel" style={{ padding: 'var(--space-lg)', textAlign: 'center' }}>
                   <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: 'var(--space-sm)' }}>
-                    Total Tax
+                    Total Pajak
                   </div>
                   <div style={{ fontSize: '1.5rem', fontWeight: 700 }}>
                     {formatCurrency(salesReport.summary.totalTax)}
@@ -435,7 +484,7 @@ export default function ReportsPage() {
                 </div>
                 <div className="glass-panel" style={{ padding: 'var(--space-lg)', textAlign: 'center' }}>
                   <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: 'var(--space-sm)' }}>
-                    Total Discount
+                    Total Diskon
                   </div>
                   <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--danger)' }}>
                     {formatCurrency(salesReport.summary.totalDiscount)}
@@ -453,12 +502,18 @@ export default function ReportsPage() {
                   borderBottom: '1px solid var(--border-subtle)' 
                 }}>
                   <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>
-                    Sales Breakdown ({salesFilters.groupBy === 'day' ? 'Daily' : salesFilters.groupBy === 'week' ? 'Weekly' : 'Monthly'})
+                    Rincian Penjualan ({salesFilters.groupBy === 'day' ? 'Harian' : salesFilters.groupBy === 'week' ? 'Mingguan' : 'Bulanan'})
                   </h3>
-                  <button className="btn btn-outline btn-sm" onClick={handleExportSales}>
-                    <Download size={16} style={{ marginRight: '6px' }} />
-                    Export CSV
-                  </button>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn btn-outline btn-sm" onClick={handleExportSales}>
+                      <Download size={16} style={{ marginRight: '6px' }} />
+                      CSV
+                    </button>
+                    <button className="btn btn-outline btn-sm" onClick={handleExportSalesPdf} style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}>
+                      <Download size={16} style={{ marginRight: '6px' }} />
+                      PDF
+                    </button>
+                  </div>
                 </div>
                 <div style={{ 
                   display: 'grid', 
@@ -471,9 +526,9 @@ export default function ReportsPage() {
                   fontWeight: 600, 
                   textTransform: 'uppercase' 
                 }}>
-                  <div>{salesFilters.groupBy === 'day' ? 'Date' : salesFilters.groupBy === 'week' ? 'Week' : 'Month'}</div>
-                  <div>Revenue</div>
-                  <div>Transactions</div>
+                  <div>{salesFilters.groupBy === 'day' ? 'Tanggal' : salesFilters.groupBy === 'week' ? 'Minggu' : 'Bulan'}</div>
+                  <div>Pendapatan</div>
+                  <div>Transaksi</div>
                 </div>
                 <div style={{ maxHeight: '500px', overflowY: 'auto' }}>
                   {(salesReport.daily || salesReport.weekly || salesReport.monthly || []).map((item: any, index: number) => (
@@ -505,7 +560,7 @@ export default function ReportsPage() {
           ) : (
             <div className="glass-panel" style={{ padding: 'var(--space-2xl)', textAlign: 'center' }}>
               <TrendingUp size={48} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} />
-              <p style={{ color: 'var(--text-tertiary)' }}>No sales data available. Apply filters to view report.</p>
+              <p style={{ color: 'var(--text-tertiary)' }}>Belum ada data penjualan. Terapkan filter untuk melihat laporan.</p>
             </div>
           )}
         </div>
@@ -519,10 +574,10 @@ export default function ReportsPage() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-md)' }}>
               <h3 style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
                 <Filter size={18} />
-                Filters
+                Filter
               </h3>
               <button className="btn btn-primary btn-sm" onClick={fetchProductReport}>
-                Apply Filters
+                Terapkan Filter
               </button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr', gap: 'var(--space-md)' }}>
@@ -588,7 +643,7 @@ export default function ReportsPage() {
 
           {loading ? (
             <div className="glass-panel" style={{ padding: 'var(--space-2xl)', textAlign: 'center' }}>
-              <p style={{ color: 'var(--text-tertiary)' }}>Loading product performance...</p>
+              <p style={{ color: 'var(--text-tertiary)' }}>Memuat performa produk...</p>
             </div>
           ) : productReport ? (
             <>
@@ -596,7 +651,7 @@ export default function ReportsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>
                 <div className="glass-panel" style={{ padding: 'var(--space-lg)', textAlign: 'center' }}>
                   <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: 'var(--space-sm)' }}>
-                    Total Products
+                    Total Produk
                   </div>
                   <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--primary)' }}>
                     {formatNumber(productReport.summary.totalProducts)}
@@ -604,7 +659,7 @@ export default function ReportsPage() {
                 </div>
                 <div className="glass-panel" style={{ padding: 'var(--space-lg)', textAlign: 'center' }}>
                   <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: 'var(--space-sm)' }}>
-                    Total Revenue
+                    Total Pendapatan
                   </div>
                   <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--success)' }}>
                     {formatCurrency(productReport.summary.totalRevenue)}
@@ -630,12 +685,18 @@ export default function ReportsPage() {
                   borderBottom: '1px solid var(--border-subtle)' 
                 }}>
                   <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>
-                    Top Products by Revenue
+                    Top Produk berdasarkan Pendapatan
                   </h3>
-                  <button className="btn btn-outline btn-sm" onClick={handleExportProducts}>
-                    <Download size={16} style={{ marginRight: '6px' }} />
-                    Export CSV
-                  </button>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn btn-outline btn-sm" onClick={handleExportProducts}>
+                      <Download size={16} style={{ marginRight: '6px' }} />
+                      CSV
+                    </button>
+                    <button className="btn btn-outline btn-sm" onClick={handleExportProductsPdf} style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}>
+                      <Download size={16} style={{ marginRight: '6px' }} />
+                      PDF
+                    </button>
+                  </div>
                 </div>
                 <div style={{ 
                   display: 'grid', 
@@ -648,12 +709,12 @@ export default function ReportsPage() {
                   fontWeight: 600, 
                   textTransform: 'uppercase' 
                 }}>
-                  <div>Product</div>
+                  <div>Produk</div>
                   <div>SKU</div>
-                  <div>Qty Sold</div>
-                  <div>Revenue</div>
+                  <div>Terjual</div>
+                  <div>Pendapatan</div>
                   <div>Profit</div>
-                  <div>Avg Price</div>
+                  <div>Harga Rata-rata</div>
                 </div>
                 <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
                   {productReport.topProducts.map((product, index) => (
@@ -696,7 +757,7 @@ export default function ReportsPage() {
           ) : (
             <div className="glass-panel" style={{ padding: 'var(--space-2xl)', textAlign: 'center' }}>
               <BarChart3 size={48} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} />
-              <p style={{ color: 'var(--text-tertiary)' }}>No product data available. Apply filters to view report.</p>
+              <p style={{ color: 'var(--text-tertiary)' }}>Belum ada data produk. Terapkan filter untuk melihat laporan.</p>
             </div>
           )}
         </div>
@@ -710,10 +771,10 @@ export default function ReportsPage() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-md)' }}>
               <h3 style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
                 <Filter size={18} />
-                Filters
+                Filter
               </h3>
               <button className="btn btn-primary btn-sm" onClick={fetchInventoryReport}>
-                Apply Filters
+                Terapkan Filter
               </button>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-md)' }}>
@@ -751,7 +812,7 @@ export default function ReportsPage() {
                     onChange={(e) => setInventoryFilters({ ...inventoryFilters, lowStockOnly: e.target.checked })}
                     style={{ width: 'auto' }}
                   />
-                  Show Low Stock Only
+                  Tampilkan Stok Rendah Saja
                 </label>
               </div>
             </div>
@@ -759,7 +820,7 @@ export default function ReportsPage() {
 
           {loading ? (
             <div className="glass-panel" style={{ padding: 'var(--space-2xl)', textAlign: 'center' }}>
-              <p style={{ color: 'var(--text-tertiary)' }}>Loading inventory report...</p>
+              <p style={{ color: 'var(--text-tertiary)' }}>Memuat laporan inventori...</p>
             </div>
           ) : inventoryReport ? (
             <>
@@ -767,7 +828,7 @@ export default function ReportsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-md)', marginBottom: 'var(--space-lg)' }}>
                 <div className="glass-panel" style={{ padding: 'var(--space-lg)', textAlign: 'center' }}>
                   <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: 'var(--space-sm)' }}>
-                    Total Products
+                    Total Produk
                   </div>
                   <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--primary)' }}>
                     {formatNumber(inventoryReport.summary.totalProducts)}
@@ -775,7 +836,7 @@ export default function ReportsPage() {
                 </div>
                 <div className="glass-panel" style={{ padding: 'var(--space-lg)', textAlign: 'center' }}>
                   <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: 'var(--space-sm)' }}>
-                    Low Stock Products
+                    Produk Stok Rendah
                   </div>
                   <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--danger)' }}>
                     {formatNumber(inventoryReport.summary.lowStockProducts)}
@@ -783,7 +844,7 @@ export default function ReportsPage() {
                 </div>
                 <div className="glass-panel" style={{ padding: 'var(--space-lg)', textAlign: 'center' }}>
                   <div style={{ fontSize: '0.85rem', color: 'var(--text-tertiary)', marginBottom: 'var(--space-sm)' }}>
-                    Total Inventory Value
+                    Total Nilai Inventori
                   </div>
                   <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--success)' }}>
                     {formatCurrency(inventoryReport.summary.totalInventoryValue)}
@@ -801,12 +862,18 @@ export default function ReportsPage() {
                   borderBottom: '1px solid var(--border-subtle)' 
                 }}>
                   <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>
-                    Inventory Status
+                    Status Inventori
                   </h3>
-                  <button className="btn btn-outline btn-sm" onClick={handleExportInventory}>
-                    <Download size={16} style={{ marginRight: '6px' }} />
-                    Export CSV
-                  </button>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn btn-outline btn-sm" onClick={handleExportInventory}>
+                      <Download size={16} style={{ marginRight: '6px' }} />
+                      CSV
+                    </button>
+                    <button className="btn btn-outline btn-sm" onClick={handleExportInventoryPdf} style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}>
+                      <Download size={16} style={{ marginRight: '6px' }} />
+                      PDF
+                    </button>
+                  </div>
                 </div>
                 <div style={{ 
                   display: 'grid', 
@@ -819,12 +886,12 @@ export default function ReportsPage() {
                   fontWeight: 600, 
                   textTransform: 'uppercase' 
                 }}>
-                  <div>Product</div>
-                  <div>Category</div>
-                  <div>Stock</div>
-                  <div>Threshold</div>
-                  <div>Cost</div>
-                  <div>Value</div>
+                  <div>Produk</div>
+                  <div>Kategori</div>
+                  <div>Stok</div>
+                  <div>Min. Stok</div>
+                  <div>Harga Beli</div>
+                  <div>Nilai</div>
                 </div>
                 <div style={{ maxHeight: '600px', overflowY: 'auto' }}>
                   {inventoryReport.products.map((product) => (
@@ -880,7 +947,7 @@ export default function ReportsPage() {
           ) : (
             <div className="glass-panel" style={{ padding: 'var(--space-2xl)', textAlign: 'center' }}>
               <Package size={48} style={{ marginBottom: 'var(--space-md)', opacity: 0.5 }} />
-              <p style={{ color: 'var(--text-tertiary)' }}>No inventory data available. Apply filters to view report.</p>
+              <p style={{ color: 'var(--text-tertiary)' }}>Belum ada data inventori. Terapkan filter untuk melihat laporan.</p>
             </div>
           )}
         </div>

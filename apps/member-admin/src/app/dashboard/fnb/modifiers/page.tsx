@@ -5,6 +5,7 @@ import { Plus, Edit2, Trash2, Loader2, X, ChevronDown, ChevronRight, ToggleLeft,
 import apiClient from '@/lib/api-client';
 import toast from 'react-hot-toast';
 import { ConfirmModal } from '@/components/ui';
+import { formatRupiah } from '@/lib/date';
 
 interface ModifierOption {
   id: string;
@@ -129,7 +130,7 @@ export default function FnbModifiersPage() {
     } catch { toast.error('Failed to delete option'); }
   };
 
-  const formatPrice = (p: number) => p > 0 ? `+Rp ${p.toLocaleString('id-ID')}` : 'Free';
+  const formatPrice = (p: number) => p > 0 ? `+Rp ${formatRupiah(p)}` : 'Free';
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 400 }}>

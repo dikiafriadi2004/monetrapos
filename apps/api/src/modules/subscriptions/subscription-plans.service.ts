@@ -285,27 +285,30 @@ export class SubscriptionPlansService {
       return;
     }
 
+    // Standard feature keys used across all plans
     const plans = [
       {
         name: 'Starter',
         slug: 'starter',
-        description: 'Perfect for small businesses just getting started',
+        description: 'Cocok untuk usaha kecil yang baru memulai',
         priceMonthly: 299000,
-        priceYearly: 2990000, // 2 months free
+        priceYearly: 2990000,
         setupFee: 0,
         trialDays: 14,
         features: {
-          pos_terminal: true,
+          pos: true,
           inventory: true,
           basic_reports: true,
           receipt_printing: true,
+          customer_management: true,
           customer_loyalty: true,
-          email_support: true,
-          mobile_app: false,
-          api_access: false,
+          employee_management: true,
+          advanced_reports: false,
           multi_store: false,
           kds: false,
           online_ordering: false,
+          api_access: false,
+          priority_support: false,
         },
         maxStores: 1,
         maxUsers: 5,
@@ -320,25 +323,25 @@ export class SubscriptionPlansService {
       {
         name: 'Professional',
         slug: 'professional',
-        description: 'For growing businesses with multiple locations',
+        description: 'Untuk bisnis yang berkembang dengan banyak cabang',
         priceMonthly: 599000,
         priceYearly: 5990000,
         setupFee: 0,
         trialDays: 14,
         features: {
-          pos_terminal: true,
+          pos: true,
           inventory: true,
-          advanced_reports: true,
+          basic_reports: true,
           receipt_printing: true,
+          customer_management: true,
           customer_loyalty: true,
-          email_support: true,
-          phone_support: true,
-          mobile_app: true,
-          api_access: true,
+          employee_management: true,
+          advanced_reports: true,
           multi_store: true,
           kds: true,
           online_ordering: true,
-          delivery_management: false,
+          api_access: true,
+          priority_support: false,
         },
         maxStores: 3,
         maxUsers: 20,
@@ -353,27 +356,28 @@ export class SubscriptionPlansService {
       {
         name: 'Enterprise',
         slug: 'enterprise',
-        description: 'For large businesses with advanced needs',
+        description: 'Untuk bisnis besar dengan kebutuhan lanjutan',
         priceMonthly: 1499000,
         priceYearly: 14990000,
         setupFee: 0,
         trialDays: 30,
         features: {
-          pos_terminal: true,
+          pos: true,
           inventory: true,
-          advanced_reports: true,
+          basic_reports: true,
           receipt_printing: true,
+          customer_management: true,
           customer_loyalty: true,
-          priority_support: true,
-          dedicated_manager: true,
-          mobile_app: true,
-          api_access: true,
-          custom_domain: true,
-          white_label: true,
+          employee_management: true,
+          advanced_reports: true,
           multi_store: true,
           kds: true,
           online_ordering: true,
           delivery_management: true,
+          api_access: true,
+          priority_support: true,
+          dedicated_manager: true,
+          white_label: true,
           custom_integrations: true,
         },
         maxStores: 999,
@@ -390,8 +394,6 @@ export class SubscriptionPlansService {
 
     for (const planData of plans) {
       const plan = await this.create(planData as any);
-
-      // Seed duration options for each plan
       await this.seedDurationOptionsForPlan(plan.id);
     }
 

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { ShoppingCart, Receipt, AlertCircle, Scan, Tag, CreditCard } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { ShoppingCart, Receipt, AlertCircle, Scan, Tag, CreditCard, UtensilsCrossed, RefreshCcw, Clock } from 'lucide-react';
 import ProductSearch from '@/components/pos/ProductSearch';
 import Cart from '@/components/pos/Cart';
 import CustomerSelect from '@/components/pos/CustomerSelect';
@@ -13,18 +13,17 @@ import BarcodeScanner from '@/components/pos/BarcodeScanner';
 import ReceiptPreview from '@/components/pos/ReceiptPreview';
 import { Product, Customer, CartItem, PaymentMethodType } from '@/types';
 import { transactionService } from '@/services/transaction.service';
-import { shiftService } from '@/services/shift.service';
 import { paymentMethodService } from '@/services/payment-method.service';
 import { useAuth } from '@/contexts/AuthContext';
 import { PaymentMethod } from '@/types/payment-method.types';
 import toast from 'react-hot-toast';
 import apiClient from '@/lib/api-client';
-import { getImageUrl } from '@/lib/date';
+import { getImageUrl, formatRupiah } from '@/lib/date';
 
 const ORDER_TYPES = [
-  { value: 'dine-in',  label: 'Dine-in',  emoji: '??' },
-  { value: 'takeaway', label: 'Takeaway', emoji: '??' },
-  { value: 'delivery', label: 'Delivery', emoji: '??' },
+  { value: 'dine-in',  label: 'Dine-in',  emoji: '🪑' },
+  { value: 'takeaway', label: 'Takeaway', emoji: '🥡' },
+  { value: 'delivery', label: 'Delivery', emoji: '🛵' },
 ];
 
 export default function POSPage() {
@@ -52,8 +51,6 @@ export default function POSPage() {
   const [isBarcodeScannerOpen, setIsBarcodeScannerOpen] = useState(false);
   const [isReceiptPreviewOpen, setIsReceiptPreviewOpen] = useState(false);
   const [lastTransaction, setLastTransaction] = useState<any>(null);
-  const [activeShift, setActiveShift] = useState<any>(null);
-  const [shiftLoading, setShiftLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [heldTransactions, setHeldTransactions] = useState<Array<{
@@ -65,7 +62,7 @@ export default function POSPage() {
     timestamp: Date;
   }>>([]);
 
-  // Tax and discount � fetched from company settings, fallback 0%
+  // Tax and discount � fetched from company settings, fallback 0%
   const [taxRate, setTaxRate] = useState(0);
   const [taxLabel, setTaxLabel] = useState('Tax');
   const [taxNumber, setTaxNumber] = useState<string | null>(null);
@@ -79,6 +76,16 @@ export default function POSPage() {
   const [promoLoading, setPromoLoading] = useState(false);
   const [emailModal, setEmailModal] = useState(false);
   const [emailInput, setEmailInput] = useState('');
+  // Loyalty points redemption (1 point = Rp 100)
+  const POINT_VALUE = 100;
+  const [redeemPoints, setRedeemPoints] = useState(0);
+  const [redeemDiscount, setRedeemDiscount] = useState(0);
+
+  // FnB Active Orders — untuk kasir lihat order aktif per meja
+  const [fnbActiveOrders, setFnbActiveOrders] = useState<any[]>([]);
+  const [fnbOrdersLoading, setFnbOrdersLoading] = useState(false);
+  const [showFnbPanel, setShowFnbPanel] = useState(false);
+  const [activeFnbOrderId, setActiveFnbOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     // Load stores first
@@ -96,11 +103,9 @@ export default function POSPage() {
 
   useEffect(() => {
     if (storeId) {
-      setActiveShift(null);
       // Update active store data when storeId changes
       const found = stores.find((s: any) => s.id === storeId);
       if (found) setActiveStore(found);
-      checkActiveShift(storeId);
       fetchPaymentMethods();
       fetchTaxRate();
       if (isFnB) fetchTables(storeId);
@@ -145,19 +150,90 @@ export default function POSPage() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [cartItems]);
 
-  const checkActiveShift = async (storeId: string) => {
-    setShiftLoading(true);
+  // Fetch FnB active orders (pending/preparing/ready) untuk ditampilkan di POS
+  const fetchFnbActiveOrders = useCallback(async () => {
+    if (!storeId || !isFnB) return;
+    setFnbOrdersLoading(true);
     try {
-      const shift = await shiftService.getActiveShift(storeId);
-      setActiveShift(shift);
-      if (!shift) {
-        toast.error('No active shift. Please open a shift first.');
+      const res: any = await apiClient.get('/fnb/orders', {
+        params: { store_id: storeId, status: 'pending' },
+      });
+      const pending = Array.isArray(res.data) ? res.data : (res.data?.data || []);
+      const res2: any = await apiClient.get('/fnb/orders', {
+        params: { store_id: storeId, status: 'preparing' },
+      });
+      const preparing = Array.isArray(res2.data) ? res2.data : (res2.data?.data || []);
+      const res3: any = await apiClient.get('/fnb/orders', {
+        params: { store_id: storeId, status: 'ready' },
+      });
+      const ready = Array.isArray(res3.data) ? res3.data : (res3.data?.data || []);
+      const res4: any = await apiClient.get('/fnb/orders', {
+        params: { store_id: storeId, status: 'served' },
+      });
+      const served = Array.isArray(res4.data) ? res4.data : (res4.data?.data || []);
+      setFnbActiveOrders([...pending, ...preparing, ...ready, ...served]);
+    } catch { /* silent */ }
+    finally { setFnbOrdersLoading(false); }
+  }, [storeId, isFnB]);
+
+  // Load FnB orders when storeId changes, and auto-refresh every 15s
+  useEffect(() => {
+    if (isFnB && storeId) {
+      fetchFnbActiveOrders();
+      const interval = setInterval(fetchFnbActiveOrders, 15000);
+      return () => clearInterval(interval);
+    }
+  }, [storeId, isFnB, fetchFnbActiveOrders]);
+
+  // Load FnB order items into cart
+  const loadFnbOrderToCart = async (order: any) => {
+    try {
+      // Get full order with transaction items
+      const res: any = await apiClient.get(`/fnb/orders/${order.id}`);
+      const fullOrder = res.data;
+      const tx = fullOrder.transaction;
+      const items = tx?.items || [];
+
+      if (items.length === 0) {
+        toast.error('Order ini belum ada item. Tambahkan menu terlebih dahulu.');
+        return;
       }
-    } catch (error) {
-      console.error('Failed to check active shift:', error);
-      setActiveShift(null);
-    } finally {
-      setShiftLoading(false);
+
+      // Convert transaction items to cart items
+      const newCartItems: CartItem[] = items.map((item: any) => ({
+        product: {
+          id: item.productId || item.product_id || null,
+          name: item.productName || item.product_name || 'Item',
+          price: Number(item.unitPrice || item.unit_price || 0),
+          stock: 999,
+          isActive: true,
+        } as any,
+        quantity: item.quantity,
+        price: Number(item.unitPrice || item.unit_price || 0),
+        subtotal: Number(item.subtotal || 0),
+        variantName: item.variantName || item.variant_name,
+      }));
+
+      setCartItems(newCartItems);
+      setActiveFnbOrderId(order.id);
+
+      // Set table if dine-in
+      if (order.order_type === 'dine-in' && order.table_id) {
+        setOrderType('dine-in');
+        setSelectedTableId(order.table_id);
+      } else if (order.order_type) {
+        setOrderType(order.order_type);
+      }
+
+      // Set customer if any
+      if (tx?.customer_id || tx?.customerId) {
+        // Customer will be loaded by CustomerSelect component
+      }
+
+      setShowFnbPanel(false);
+      toast.success(`Order ${order.order_number} dimuat ke cart`);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Gagal memuat order');
     }
   };
 
@@ -273,6 +349,19 @@ export default function POSPage() {
     setPromoCode('');
   };
 
+  const handleApplyRedeemPoints = (points: number) => {
+    const maxPoints = selectedCustomer?.loyaltyPoints || 0;
+    const safePoints = Math.min(points, maxPoints);
+    const discount = safePoints * POINT_VALUE;
+    setRedeemPoints(safePoints);
+    setRedeemDiscount(discount);
+  };
+
+  const handleRemoveRedeemPoints = () => {
+    setRedeemPoints(0);
+    setRedeemDiscount(0);
+  };
+
   const sendReceiptEmail = async (email: string) => {
     if (!lastTransaction?.id) { toast.error('Transaction ID tidak ditemukan'); return; }
     const toastId = toast.loading(`Mengirim struk ke ${email}...`);
@@ -313,7 +402,7 @@ export default function POSPage() {
       const discValue = Number(data.discount?.value || discAmt);
       setDiscountAmount(discAmt);
       setDiscountInfo({ type: discType, value: discValue, promoCode: promoCode.trim() });
-      toast.success(`Promo "${promoCode.trim()}" berhasil diterapkan! Hemat Rp ${discAmt.toLocaleString('id-ID')}`);
+      toast.success(`Promo "${promoCode.trim()}" berhasil diterapkan! Hemat Rp ${formatRupiah(discAmt)}`);
     } catch (err: any) {
       toast.error(err?.response?.data?.message || 'Kode promo tidak valid');
     } finally {
@@ -370,15 +459,11 @@ export default function POSPage() {
   const calculateTotals = () => {
     const subtotal = cartItems.reduce((sum, item) => sum + Number(item.subtotal), 0);
     const tax = Math.round(subtotal * taxRate);
-    const total = Math.max(0, subtotal + tax - Number(discountAmount));
+    const total = Math.max(0, subtotal + tax - Number(discountAmount) - redeemDiscount);
     return { subtotal, tax, total };
   };
 
   const handlePayment = async (paymentMethod: PaymentMethodType, paidAmount: number) => {
-    if (!activeShift) {
-      toast.error('No active shift. Please open a shift first.');
-      return;
-    }
 
     if (cartItems.length === 0) {
       toast.error('Cart is empty');
@@ -394,7 +479,7 @@ export default function POSPage() {
       // Create transaction
       const transaction = await transactionService.createTransaction({
         storeId: storeId!,
-        paymentMethod,
+        paymentMethod: paymentMethod as any,
         subtotal,
         taxAmount: tax,
         discountAmount,
@@ -405,13 +490,13 @@ export default function POSPage() {
         customerId: selectedCustomer?.id,
         employeeId: user?.id,
         employeeName: `${user?.firstName} ${user?.lastName}`,
-        shiftId: activeShift?.id,
         ...(isFnB && { orderType }),
         ...(isFnB && orderType === 'dine-in' && selectedTableId && { tableId: selectedTableId }),
+        ...(isFnB && activeFnbOrderId && { fnbOrderId: activeFnbOrderId }),
         items: cartItems.map((item: any) => ({
-          productId: item.product.id,
-          productName: item.product.name,
-          variantName: item.variantName,
+          productId: item.product?.id || item.productId || '',
+          productName: item.product?.name || item.productName || 'Item',
+          variantName: item.variantName || undefined,
           quantity: item.quantity,
           unitPrice: item.price,
           subtotal: item.subtotal,
@@ -419,10 +504,10 @@ export default function POSPage() {
         })),
       });
 
-      // Success � backend handles loyalty points automatically
+      // Success � backend handles loyalty points automatically
       setLastTransaction({
         id: transaction.id,
-        transactionNumber: transaction.transactionNumber || transaction.invoiceNumber,
+        transactionNumber: transaction.transactionNumber || (transaction as any).invoiceNumber,
         items: cartItems,
         subtotal,
         tax,
@@ -436,26 +521,43 @@ export default function POSPage() {
         customerName: selectedCustomer?.name,
         customerEmail: selectedCustomer?.email || null,
         employeeName: `${user?.firstName || ''} ${user?.lastName || ''}`.trim(),
-        // Store info for receipt
+        // Store info for receipt — use store receipt settings, fallback to company settings
         storeName: activeStore?.name || '',
         storeAddress: activeStore?.address || null,
         storePhone: activeStore?.phone || null,
-        storeLogo: receiptSettings?.showLogo !== false ? getImageUrl(activeStore?.receiptLogoUrl || companyLogoUrl) : null,
-        headerText: receiptSettings?.headerText || null,
-        footerText: receiptSettings?.footerText || null,
+        storeLogo: receiptSettings?.showLogo !== false
+          ? getImageUrl(activeStore?.receiptLogoUrl || companyLogoUrl || null)
+          : null,
+        headerText: activeStore?.receiptHeader || receiptSettings?.headerText || null,
+        footerText: activeStore?.receiptFooter || receiptSettings?.footerText || null,
         showTaxNumber: receiptSettings?.showTaxNumber || false,
         taxNumber: taxNumber,
       });
 
       // Reset cart
+      const completedFnbOrderId = activeFnbOrderId; // simpan sebelum di-reset
       setCartItems([]);
       setSelectedCustomer(null);
       setDiscountAmount(0);
       setDiscountInfo(null);
       setPromoCode('');
+      setActiveFnbOrderId(null);
       setIsPaymentModalOpen(false);
 
       toast.success('Transaksi berhasil!');
+
+      // Refresh FnB active orders panel so completed orders disappear
+      if (isFnB) {
+        if (completedFnbOrderId) {
+          // Hapus langsung dari state (optimistic)
+          setFnbActiveOrders(prev => prev.filter(o => o.id !== completedFnbOrderId));
+        } else if (selectedTableId) {
+          // Fallback: hapus berdasarkan table
+          setFnbActiveOrders(prev => prev.filter(o => (o.table_id || o.tableId) !== selectedTableId));
+        }
+        // Refresh dari server setelah delay singkat agar backend selesai update
+        setTimeout(() => fetchFnbActiveOrders(), 1500);
+      }
 
       // Show receipt preview
       setIsReceiptPreviewOpen(true);
@@ -469,27 +571,12 @@ export default function POSPage() {
 
   const { subtotal, tax, total } = calculateTotals();
 
-  if (!storeId || shiftLoading) {
+  if (!storeId) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
         <div style={{ textAlign: 'center' }}>
           <AlertCircle size={48} style={{ margin: '0 auto 16px', color: 'var(--text-tertiary)' }} />
           <p style={{ color: 'var(--text-secondary)' }}>Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!activeShift) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-        <div style={{ textAlign: 'center' }}>
-          <AlertCircle size={48} style={{ margin: '0 auto 16px', color: 'var(--danger)' }} />
-          <p style={{ fontWeight: 600, marginBottom: 8 }}>No Active Shift</p>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: 16 }}>Please open a shift to start selling</p>
-          <button onClick={() => (window.location.href = '/dashboard/shifts')} className="btn btn-primary">
-            Go to Shifts
-          </button>
         </div>
       </div>
     );
@@ -506,7 +593,7 @@ export default function POSPage() {
             {stores.length > 1 && (
               <select
                 value={selectedStoreId}
-                onChange={e => { setSelectedStoreId(e.target.value); setActiveShift(null); setActiveStore(stores.find((s: any) => s.id === e.target.value) || null); }}
+                onChange={e => { setSelectedStoreId(e.target.value); setActiveStore(stores.find((s: any) => s.id === e.target.value) || null); }}
                 style={{ padding: '6px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', fontSize: '0.875rem' }}
               >
                 {stores.map((s: any) => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -552,8 +639,36 @@ export default function POSPage() {
               </select>
             )}
           </div>
-          <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-            Shift: <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>#{activeShift.id.slice(0, 8)}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {/* FnB Active Orders Button — hanya untuk FnB */}
+            {isFnB && (
+              <button
+                onClick={() => { setShowFnbPanel(true); fetchFnbActiveOrders(); }}
+                style={{
+                  position: 'relative', display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '6px 14px', borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-color)', background: 'var(--bg-primary)',
+                  cursor: 'pointer', fontSize: '0.875rem', fontWeight: 500,
+                }}
+              >
+                <UtensilsCrossed size={16} style={{ color: 'var(--warning)' }} />
+                Order Aktif
+                {fnbActiveOrders.length > 0 && (
+                  <span style={{
+                    position: 'absolute', top: -6, right: -6,
+                    background: 'var(--danger)', color: 'white',
+                    borderRadius: '50%', width: 18, height: 18,
+                    fontSize: '0.7rem', fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {fnbActiveOrders.length}
+                  </span>
+                )}
+              </button>
+            )}
+            <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+              Kasir: <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{user?.firstName} {user?.lastName}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -572,8 +687,85 @@ export default function POSPage() {
             {/* Customer Selection */}
             <div>
               <label className="form-label">Customer (Optional)</label>
-              <CustomerSelect storeId={storeId} selectedCustomer={selectedCustomer} onSelectCustomer={setSelectedCustomer} />
+              <CustomerSelect storeId={storeId} selectedCustomer={selectedCustomer} onSelectCustomer={async (c) => {
+                setSelectedCustomer(c);
+                setRedeemPoints(0);
+                setRedeemDiscount(0);
+                // Terapkan diskon tier otomatis jika customer punya tier Silver/Gold/Platinum
+                if (c?.id) {
+                  try {
+                    const res: any = await apiClient.get(`/customers/loyalty/${c.id}/tier-info`);
+                    const tierInfo = res.data;
+                    if (tierInfo?.discountPercentage > 0) {
+                      // Hitung diskon tier berdasarkan subtotal saat ini
+                      const currentSubtotal = cartItems.reduce((s, i) => s + Number(i.subtotal), 0);
+                      const tierDiscount = Math.round(currentSubtotal * (tierInfo.discountPercentage / 100));
+                      if (tierDiscount > 0) {
+                        setDiscountAmount(tierDiscount);
+                        setDiscountInfo({ type: 'percentage', value: tierInfo.discountPercentage });
+                        toast.success(`Diskon ${tierInfo.tier.toUpperCase()} ${tierInfo.discountPercentage}% diterapkan otomatis`);
+                      }
+                    }
+                  } catch { /* silent — tidak gagalkan pemilihan customer */ }
+                } else {
+                  // Customer dihapus — reset diskon tier
+                  setDiscountAmount(0);
+                  setDiscountInfo(null);
+                }
+              }} />
             </div>
+
+            {/* Tier badge — tampil jika customer dipilih */}
+            {selectedCustomer && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'rgba(99,102,241,0.06)', borderRadius: 8, fontSize: '0.82rem' }}>
+                <span style={{ fontWeight: 700, color: selectedCustomer.loyaltyTier === 'platinum' ? '#7c3aed' : selectedCustomer.loyaltyTier === 'gold' ? '#d97706' : selectedCustomer.loyaltyTier === 'silver' ? '#6b7280' : '#374151' }}>
+                  {selectedCustomer.loyaltyTier === 'platinum' ? '💎' : selectedCustomer.loyaltyTier === 'gold' ? '🥇' : selectedCustomer.loyaltyTier === 'silver' ? '🥈' : '👤'} {(selectedCustomer.loyaltyTier || 'regular').toUpperCase()}
+                </span>
+                <span style={{ color: 'var(--text-tertiary)' }}>·</span>
+                <span style={{ color: 'var(--text-secondary)' }}>{(selectedCustomer.loyaltyPoints || 0).toLocaleString('id-ID')} poin</span>
+                {selectedCustomer.loyaltyTier !== 'regular' && (
+                  <>
+                    <span style={{ color: 'var(--text-tertiary)' }}>·</span>
+                    <span style={{ color: 'var(--success)', fontWeight: 600 }}>
+                      Diskon {selectedCustomer.loyaltyTier === 'platinum' ? '15' : selectedCustomer.loyaltyTier === 'gold' ? '10' : '5'}% otomatis
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Loyalty Points Redemption — tampil jika customer dipilih dan punya poin */}
+            {selectedCustomer && (selectedCustomer.loyaltyPoints || 0) > 0 && (
+              <div style={{ padding: 12, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 'var(--radius-md)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: redeemPoints > 0 ? 8 : 0 }}>
+                  <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--warning)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    ⭐ {selectedCustomer.loyaltyPoints} poin tersedia
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)', fontWeight: 400 }}>
+                      (1 poin = Rp {formatRupiah(POINT_VALUE)})
+                    </span>
+                  </div>
+                  {redeemPoints === 0 ? (
+                    <button
+                      onClick={() => handleApplyRedeemPoints(Math.min(selectedCustomer.loyaltyPoints, Math.floor(calculateTotals().total / POINT_VALUE)))}
+                      className="btn btn-outline"
+                      style={{ height: 28, padding: '0 10px', fontSize: '0.75rem', color: 'var(--warning)', borderColor: 'var(--warning)' }}
+                      disabled={cartItems.length === 0}
+                    >
+                      Tukar Poin
+                    </button>
+                  ) : (
+                    <button onClick={handleRemoveRedeemPoints} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '0.75rem' }}>
+                      Batalkan
+                    </button>
+                  )}
+                </div>
+                {redeemPoints > 0 && (
+                  <div style={{ fontSize: '0.8rem', color: 'var(--warning)', fontWeight: 600 }}>
+                    Menggunakan {redeemPoints} poin → Diskon Rp {formatRupiah(redeemDiscount)}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Quick Actions */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
@@ -609,14 +801,14 @@ export default function POSPage() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
                           <div style={{ fontSize: '0.875rem', fontWeight: 500 }}>
-                            {held.items.length} items{held.customer && ` � ${held.customer.name}`}
+                            {held.items.length} items{held.customer && ` � ${held.customer.name}`}
                           </div>
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
                             {new Date(held.timestamp).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' })}
                           </div>
                         </div>
                         <div style={{ fontSize: '0.875rem', fontWeight: 600 }}>
-                          Rp {held.items.reduce((sum, item) => sum + item.subtotal, 0).toLocaleString('id-ID')}
+                          Rp {formatRupiah(held.items.reduce((sum, item) => sum + item.subtotal, 0))}
                         </div>
                       </div>
                     </button>
@@ -655,10 +847,10 @@ export default function POSPage() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>
                     <div style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--success)' }}>
-                      {discountInfo.promoCode ? `Promo "${discountInfo.promoCode}"` : 'Discount'}: {discountInfo.type === 'percentage' ? `${discountInfo.value}%` : `Rp ${discountInfo.value.toLocaleString('id-ID')}`}
+                      {discountInfo.promoCode ? `Promo "${discountInfo.promoCode}"` : 'Discount'}: {discountInfo.type === 'percentage' ? `${discountInfo.value}%` : `Rp ${formatRupiah(discountInfo.value)}`}
                     </div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--success)', marginTop: 4 }}>
-                      Saving: Rp {discountAmount.toLocaleString('id-ID')}
+                      Saving: Rp {formatRupiah(discountAmount)}
                     </div>
                   </div>
                   <button onClick={handleRemoveDiscount} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', fontSize: '0.875rem' }}>
@@ -681,6 +873,7 @@ export default function POSPage() {
               subtotal={subtotal}
               tax={tax}
               discount={discountAmount}
+              redeemDiscount={redeemDiscount}
               total={total}
             />
           </div>
@@ -713,7 +906,6 @@ export default function POSPage() {
         onClose={() => setIsSplitPaymentModalOpen(false)}
         total={total}
         onConfirm={async (payments) => {
-          if (!activeShift) { toast.error('No active shift'); return; }
           if (cartItems.length === 0) { toast.error('Cart is empty'); return; }
           setLoading(true);
           try {
@@ -728,7 +920,7 @@ export default function POSPage() {
               paymentMethods: payments.map(p => ({ method: p.method, amount: p.amount })),
               subtotal,
               taxAmount: tax,
-              discountAmount,
+              discountAmount: discountAmount + redeemDiscount,
               total: txTotal,
               paidAmount: totalPaid,
               changeAmount,
@@ -736,26 +928,42 @@ export default function POSPage() {
               customerId: selectedCustomer?.id,
               employeeId: user?.id,
               employeeName: `${user?.firstName} ${user?.lastName}`,
-              shiftId: activeShift?.id,
+              ...(isFnB && activeFnbOrderId && { fnbOrderId: activeFnbOrderId }),
               items: cartItems.map((item: any) => ({
-                productId: item.product.id,
-                productName: item.product.name,
-                variantName: item.variantName,
+                productId: item.product?.id || item.productId || '',
+                productName: item.product?.name || item.productName || 'Item',
+                variantName: item.variantName || undefined,
                 quantity: item.quantity,
                 unitPrice: item.price,
                 subtotal: item.subtotal,
                 discountAmount: 0,
               })),
             });
+            // Redeem loyalty points if used
+            if (redeemPoints > 0 && selectedCustomer?.id) {
+              try {
+                await apiClient.post('/customers/loyalty/redeem-points', {
+                  customerId: selectedCustomer.id,
+                  points: redeemPoints,
+                  description: `Penukaran poin di POS - ${transaction.transactionNumber || (transaction as any).invoiceNumber}`,
+                  referenceType: 'transaction',
+                  referenceId: transaction.id,
+                });
+              } catch (redeemErr) {
+                console.error('Failed to redeem loyalty points:', redeemErr);
+              }
+            }
             setLastTransaction({
               id: transaction.id,
-              transactionNumber: transaction.transactionNumber || transaction.invoiceNumber,
+              transactionNumber: transaction.transactionNumber || (transaction as any).invoiceNumber,
               items: cartItems,
               subtotal,
               tax,
               taxRate: taxRate * 100,
               taxLabel,
-              discount: discountAmount,
+              discount: discountAmount + redeemDiscount,
+              redeemPoints: redeemPoints > 0 ? redeemPoints : undefined,
+              redeemDiscount: redeemDiscount > 0 ? redeemDiscount : undefined,
               total: txTotal,
               paidAmount: totalPaid,
               changeAmount: Math.max(0, changeAmount),
@@ -766,9 +974,11 @@ export default function POSPage() {
               storeName: activeStore?.name || '',
               storeAddress: activeStore?.address || null,
               storePhone: activeStore?.phone || null,
-              storeLogo: receiptSettings?.showLogo !== false ? getImageUrl(activeStore?.receiptLogoUrl || companyLogoUrl) : null,
-              headerText: receiptSettings?.headerText || null,
-              footerText: receiptSettings?.footerText || null,
+              storeLogo: receiptSettings?.showLogo !== false
+                ? getImageUrl(activeStore?.receiptLogoUrl || companyLogoUrl || null)
+                : null,
+              headerText: activeStore?.receiptHeader || receiptSettings?.headerText || null,
+              footerText: activeStore?.receiptFooter || receiptSettings?.footerText || null,
               showTaxNumber: receiptSettings?.showTaxNumber || false,
               taxNumber: taxNumber,
             });
@@ -777,8 +987,16 @@ export default function POSPage() {
             setDiscountAmount(0);
             setDiscountInfo(null);
             setPromoCode('');
+            const completedOrderId = activeFnbOrderId;
+            setActiveFnbOrderId(null);
             setIsSplitPaymentModalOpen(false);
             setIsReceiptPreviewOpen(true);
+            if (isFnB) {
+              if (completedOrderId) {
+                setFnbActiveOrders(prev => prev.filter(o => o.id !== completedOrderId));
+              }
+              setTimeout(() => fetchFnbActiveOrders(), 1500);
+            }
             toast.success('Split payment processed');
           } catch (error: any) {
             console.error('Split payment failed:', error);
@@ -823,30 +1041,53 @@ export default function POSPage() {
           if (!lastTransaction) return;
           const printWindow = window.open('', '_blank');
           if (printWindow) {
+            const logoHtml = lastTransaction.storeLogo
+              ? `<div class="center"><img src="${lastTransaction.storeLogo}" style="max-height:70px;max-width:180px;object-fit:contain;margin-bottom:8px" onerror="this.style.display='none'" /></div>`
+              : '';
+            const headerHtml = lastTransaction.headerText && lastTransaction.headerText.trim() !== (lastTransaction.storeName || '').trim()
+              ? `<div class="center" style="font-size:11px;color:#666;margin-bottom:4px;white-space:pre-line">${lastTransaction.headerText}</div>`
+              : '';
+            const footerHtml = lastTransaction.footerText
+              ? `<div class="center" style="font-size:11px;color:#666;white-space:pre-line">${lastTransaction.footerText}</div>`
+              : `<div class="center"><p>Terima kasih atas kunjungan Anda!</p></div>`;
             printWindow.document.write(`
-              <html><head><title>Receipt</title>
-              <style>body{font-family:monospace;max-width:300px;margin:0 auto;padding:20px}
-              .center{text-align:center}.divider{border-top:1px dashed #000;margin:8px 0}
-              .row{display:flex;justify-content:space-between}</style></head>
+              <html><head><title>Struk</title>
+              <style>
+                body{font-family:monospace;max-width:300px;margin:0 auto;padding:20px;font-size:12px}
+                .center{text-align:center}
+                .divider{border-top:1px dashed #000;margin:8px 0}
+                .row{display:flex;justify-content:space-between;margin:2px 0}
+                h3{margin:4px 0;font-size:14px}
+                @media print{body{padding:0}}
+              </style></head>
               <body>
-              <div class="center"><h3>MonetraPOS</h3></div>
+              ${logoHtml}
+              ${headerHtml}
+              <div class="center"><h3>${lastTransaction.storeName || 'MonetraPOS'}</h3></div>
+              ${lastTransaction.storeAddress ? `<div class="center" style="font-size:11px">${lastTransaction.storeAddress}</div>` : ''}
+              ${lastTransaction.storePhone ? `<div class="center" style="font-size:11px">${lastTransaction.storePhone}</div>` : ''}
+              ${lastTransaction.showTaxNumber && lastTransaction.taxNumber ? `<div class="center" style="font-size:11px">NPWP: ${lastTransaction.taxNumber}</div>` : ''}
               <div class="divider"></div>
-              <p>Invoice: ${lastTransaction.transactionNumber}</p>
-              <p>Date: ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}</p>
-              ${lastTransaction.customerName ? `<p>Customer: ${lastTransaction.customerName}</p>` : ''}
+              <div class="row"><span>Invoice:</span><span><b>${lastTransaction.transactionNumber}</b></span></div>
+              <div class="row"><span>Tanggal:</span><span>${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })}</span></div>
+              ${lastTransaction.employeeName ? `<div class="row"><span>Kasir:</span><span>${lastTransaction.employeeName}</span></div>` : ''}
+              ${lastTransaction.customerName ? `<div class="row"><span>Pelanggan:</span><span>${lastTransaction.customerName}</span></div>` : ''}
+              <div class="row"><span>Pembayaran:</span><span>${(lastTransaction.paymentMethod || '').toUpperCase()}</span></div>
               <div class="divider"></div>
               ${(lastTransaction.items || []).map((item: any) => `
-                <div class="row"><span>${item.quantity}x ${item.product?.name || item.productName}</span><span>Rp ${item.subtotal?.toLocaleString('id-ID')}</span></div>
+                <div><b>${item.product?.name || item.productName || 'Item'}</b></div>
+                <div class="row"><span>${item.quantity}x Rp ${formatRupiah(item.price ?? item.unitPrice ?? 0)}</span><span>Rp ${formatRupiah(item.subtotal || 0)}</span></div>
               `).join('')}
               <div class="divider"></div>
-              <div class="row"><span>Subtotal</span><span>Rp ${lastTransaction.subtotal?.toLocaleString('id-ID')}</span></div>
-              ${lastTransaction.tax > 0 ? `<div class="row"><span>${lastTransaction.taxLabel || 'Tax'}${lastTransaction.taxRate != null ? ` (${lastTransaction.taxRate}%)` : ''}</span><span>Rp ${lastTransaction.tax?.toLocaleString('id-ID')}</span></div>` : ''}
-              ${lastTransaction.discount ? `<div class="row"><span>Discount</span><span>-Rp ${lastTransaction.discount?.toLocaleString('id-ID')}</span></div>` : ''}
-              <div class="row"><strong>Total</strong><strong>Rp ${lastTransaction.total?.toLocaleString('id-ID')}</strong></div>
-              <div class="row"><span>Paid</span><span>Rp ${lastTransaction.paidAmount?.toLocaleString('id-ID')}</span></div>
-              <div class="row"><span>Change</span><span>Rp ${lastTransaction.changeAmount?.toLocaleString('id-ID')}</span></div>
+              <div class="row"><span>Subtotal:</span><span>Rp ${formatRupiah(lastTransaction.subtotal || 0)}</span></div>
+              ${lastTransaction.discount > 0 ? `<div class="row"><span>Diskon:</span><span>-Rp ${formatRupiah(lastTransaction.discount || 0)}</span></div>` : ''}
+              ${lastTransaction.tax > 0 ? `<div class="row"><span>${lastTransaction.taxLabel || 'Pajak'}${lastTransaction.taxRate != null ? ` (${lastTransaction.taxRate}%)` : ''}:</span><span>Rp ${formatRupiah(lastTransaction.tax || 0)}</span></div>` : ''}
               <div class="divider"></div>
-              <div class="center"><p>Thank you!</p></div>
+              <div class="row"><b>TOTAL:</b><b>Rp ${formatRupiah(lastTransaction.total || 0)}</b></div>
+              <div class="row"><span>Bayar:</span><span>Rp ${formatRupiah(lastTransaction.paidAmount || 0)}</span></div>
+              <div class="row"><span>Kembalian:</span><span>Rp ${formatRupiah(lastTransaction.changeAmount || 0)}</span></div>
+              <div class="divider"></div>
+              ${footerHtml}
               </body></html>
             `);
             printWindow.document.close();
@@ -947,6 +1188,134 @@ export default function POSPage() {
           </div>
         </div>
       )}
+
+      {/* ── FnB Active Orders Panel ─────────────────────────────────────── */}
+      {showFnbPanel && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9000, display: 'flex', alignItems: 'flex-start', justifyContent: 'flex-end' }}>
+          <div onClick={() => setShowFnbPanel(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)' }} />
+          <div style={{
+            position: 'relative', width: 420, height: '100vh', background: 'var(--bg-secondary)',
+            borderLeft: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column',
+            zIndex: 9001, overflowY: 'auto',
+          }}>
+            {/* Panel Header */}
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-primary)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <UtensilsCrossed size={20} style={{ color: 'var(--warning)' }} />
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '1rem' }}>Order Aktif FnB</div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>Klik order untuk proses pembayaran</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button onClick={fetchFnbActiveOrders} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', padding: 4 }} title="Refresh">
+                  <RefreshCcw size={16} style={{ animation: fnbOrdersLoading ? 'spin 1s linear infinite' : 'none' }} />
+                </button>
+                <button onClick={() => setShowFnbPanel(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-tertiary)', fontSize: '1.2rem', padding: 4 }}>✕</button>
+              </div>
+            </div>
+
+            {/* Alur FnB Info */}
+            <div style={{ padding: '12px 20px', background: 'rgba(99,102,241,0.06)', borderBottom: '1px solid var(--border-color)', fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+              <strong style={{ color: 'var(--primary)' }}>Alur FnB:</strong>
+              {' '}Pelayan buat order → Dapur terima di KDS → Kasir klik order di sini → Checkout
+            </div>
+
+            {/* Orders List */}
+            <div style={{ flex: 1, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {fnbOrdersLoading ? (
+                <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-tertiary)', fontSize: '0.9rem' }}>Memuat order...</div>
+              ) : fnbActiveOrders.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 40 }}>
+                  <UtensilsCrossed size={40} style={{ margin: '0 auto 12px', color: 'var(--text-tertiary)', opacity: 0.4 }} />
+                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Tidak ada order aktif</div>
+                  <div style={{ color: 'var(--text-tertiary)', fontSize: '0.8rem', marginTop: 4 }}>Order baru akan muncul di sini secara otomatis</div>
+                </div>
+              ) : (
+                fnbActiveOrders.map((order: any) => {
+                  const statusColor: Record<string, string> = {
+                    pending: 'var(--danger)', preparing: 'var(--warning)',
+                    ready: 'var(--success)', served: 'var(--primary)',
+                  };
+                  const statusLabel: Record<string, string> = {
+                    pending: '🔴 Menunggu', preparing: '🟡 Dimasak',
+                    ready: '🟢 Siap', served: '🔵 Disajikan',
+                  };
+                  const isActive = activeFnbOrderId === order.id;
+                  const tableNum = order.table?.table_number || order.table?.tableNumber || '';
+                  const orderType = order.order_type || order.orderType || '';
+                  const items = order.transaction?.items || [];
+                  const total = Number(order.transaction?.total || 0);
+                  const elapsed = Math.floor((Date.now() - new Date(order.created_at || order.createdAt).getTime()) / 60000);
+
+                  return (
+                    <div
+                      key={order.id}
+                      onClick={() => loadFnbOrderToCart(order)}
+                      style={{
+                        padding: '14px 16px', borderRadius: 'var(--radius-md)', cursor: 'pointer',
+                        border: `2px solid ${isActive ? 'var(--primary)' : 'var(--border-subtle)'}`,
+                        background: isActive ? 'rgba(99,102,241,0.06)' : 'var(--bg-primary)',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {/* Order header */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>
+                            {orderType === 'dine-in' ? `🪑 Meja ${tableNum || '?'}` : orderType === 'takeaway' ? '🥡 Takeaway' : '🛵 Delivery'}
+                            {' '}
+                            <span style={{ fontSize: '0.8rem', fontWeight: 400, color: 'var(--text-tertiary)' }}>#{(order.order_number || order.orderNumber || '').slice(-6)}</span>
+                          </div>
+                          {order.customer_name || order.customerName ? (
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 2 }}>
+                              👤 {order.customer_name || order.customerName}
+                            </div>
+                          ) : null}
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 600, color: statusColor[order.status] || 'var(--text-secondary)', background: `${statusColor[order.status] || '#6b7280'}15`, padding: '2px 8px', borderRadius: 10 }}>
+                            {statusLabel[order.status] || order.status}
+                          </span>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-tertiary)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 3 }}>
+                            <Clock size={10} /> {elapsed < 1 ? 'Baru saja' : `${elapsed} mnt lalu`}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Items preview */}
+                      {items.length > 0 ? (
+                        <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 8 }}>
+                          {items.slice(0, 3).map((item: any, i: number) => (
+                            <div key={i} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                              <span>{item.quantity}× {item.productName || item.product_name || 'Item'}</span>
+                              <span>Rp {formatRupiah(Number(item.subtotal || 0))}</span>
+                            </div>
+                          ))}
+                          {items.length > 3 && <div style={{ color: 'var(--text-tertiary)', fontSize: '0.75rem' }}>+{items.length - 3} item lainnya</div>}
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-tertiary)', marginBottom: 8, fontStyle: 'italic' }}>Belum ada item</div>
+                      )}
+
+                      {/* Total & action */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-subtle)', paddingTop: 8 }}>
+                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--success)' }}>
+                          Rp {formatRupiah(total)}
+                        </span>
+                        <span style={{ fontSize: '0.78rem', color: isActive ? 'var(--primary)' : 'var(--text-tertiary)', fontWeight: isActive ? 700 : 400 }}>
+                          {isActive ? '✓ Dimuat ke cart' : 'Klik untuk checkout →'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      <style dangerouslySetInnerHTML={{ __html: `@keyframes spin { 100% { transform: rotate(360deg); } }` }} />
     </div>
   );
 }

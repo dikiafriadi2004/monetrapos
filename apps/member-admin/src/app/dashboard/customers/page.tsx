@@ -32,8 +32,16 @@ export default function CustomersPage() {
   const [loyaltyForm, setLoyaltyForm] = useState({ action: 'add' as 'add' | 'redeem', points: '', amount: '', description: '' });
   const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
   const [loyaltyHistory, setLoyaltyHistory] = useState<any[]>([]);
+  const [upcomingBirthdays, setUpcomingBirthdays] = useState<any[]>([]);
+  const [sendingReminders, setSendingReminders] = useState(false);
 
   useEffect(() => { fetchData(); }, [currentPage, searchTerm]);
+
+  useEffect(() => {
+    apiClient.get('/customers/birthdays/upcoming').then((r: any) => {
+      setUpcomingBirthdays(Array.isArray(r.data) ? r.data : []);
+    }).catch(() => {});
+  }, []);
 
   // Update storeId in form when stores load
   useEffect(() => {
@@ -50,7 +58,10 @@ export default function CustomersPage() {
         apiClient.get('/stores').then((r: any) => r.data ?? r).catch(() => []),
       ]);
       setCustomers((customersRes as any).data || customersRes || []);
-      setTotalPages((customersRes as any).meta?.totalPages || 1);
+      // Handle both { meta: { totalPages } } and { total, limit } formats
+      const total = (customersRes as any).meta?.total ?? (customersRes as any).total ?? 0;
+      const limit = (customersRes as any).meta?.limit ?? (customersRes as any).limit ?? 10;
+      setTotalPages((customersRes as any).meta?.totalPages || Math.ceil(total / limit) || 1);
       setStores(Array.isArray(storesRes) ? storesRes : (storesRes?.data || []));
     } catch (err) {
       console.error('Failed to fetch customers:', err);
@@ -71,7 +82,12 @@ export default function CustomersPage() {
   const closeModal = () => { setModalType(null); setSelectedCustomer(null); setPurchaseHistory([]); setLoyaltyHistory([]); };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setSaving(true);
+    e.preventDefault();
+    // Basic validation
+    if (!formData.name.trim()) { toast.error('Nama customer wajib diisi'); return; }
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) { toast.error('Format email tidak valid'); return; }
+    if (formData.phone && !/^[0-9+\-\s()]{8,20}$/.test(formData.phone)) { toast.error('Format nomor telepon tidak valid'); return; }
+    setSaving(true);
     try {
       if (modalType === 'create') { await customersService.create(formData); toast.success('Customer created'); }
       else if (modalType === 'edit' && selectedCustomer) { await customersService.update(selectedCustomer.id, formData); toast.success('Customer updated'); }
@@ -90,7 +106,14 @@ export default function CustomersPage() {
   };
 
   const handleLoyalty = async (e: React.FormEvent) => {
-    e.preventDefault(); if (!selectedCustomer) return; setSaving(true);
+    e.preventDefault();
+    if (!selectedCustomer) return;
+    const pts = parseInt(loyaltyForm.points);
+    if (!pts || pts <= 0) { toast.error('Jumlah poin harus lebih dari 0'); return; }
+    if (loyaltyForm.action === 'redeem' && pts > (selectedCustomer.loyaltyPoints || 0)) {
+      toast.error(`Poin tidak cukup. Tersedia: ${selectedCustomer.loyaltyPoints}`); return;
+    }
+    setSaving(true);
     try {
       const dto = { customerId: selectedCustomer.id, points: parseInt(loyaltyForm.points), amount: loyaltyForm.amount ? parseFloat(loyaltyForm.amount) : undefined, description: loyaltyForm.description || undefined };
       if (loyaltyForm.action === 'add') { await customersService.addLoyaltyPoints(dto); toast.success('Points added'); }
@@ -102,6 +125,16 @@ export default function CustomersPage() {
 
   const fmt = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n);
   const fmtDate = (d: string) => new Date(d).toLocaleDateString('id-ID', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Asia/Jakarta' });
+
+  const handleSendBirthdayReminders = async () => {
+    setSendingReminders(true);
+    try {
+      const res: any = await apiClient.post('/customers/birthdays/send-reminders', {});
+      toast.success(res.data?.message || 'Birthday reminders sent!');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Gagal mengirim reminder');
+    } finally { setSendingReminders(false); }
+  };
 
   const filteredCustomers = customers.filter(c =>
     c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -118,6 +151,44 @@ export default function CustomersPage() {
       <div className="flex gap-3 mb-6">
         <SearchInput value={searchTerm} onChange={setSearchTerm} placeholder="Search by name, email, phone, or customer number..." className="flex-1 max-w-md" />
       </div>
+
+      {/* Birthday Widget */}
+      {upcomingBirthdays.length > 0 && (
+        <div className="card mb-6 border-l-4 border-pink-400">
+          <div className="card-header">
+            <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              🎂 Ulang Tahun Minggu Ini
+              <span className="badge bg-pink-100 text-pink-700">{upcomingBirthdays.length} pelanggan</span>
+            </h3>
+            <button onClick={handleSendBirthdayReminders} disabled={sendingReminders}
+              className="btn btn-outline btn-sm" style={{ borderColor: '#ec4899', color: '#ec4899' }}>
+              {sendingReminders ? <Loader2 size={13} className="animate-spin" /> : '🎁'}
+              Kirim Email Selamat
+            </button>
+          </div>
+          <div className="card-body p-0">
+            <div className="divide-y divide-gray-100">
+              {upcomingBirthdays.slice(0, 5).map((c: any) => (
+                <div key={c.id} className="flex items-center justify-between px-4 py-2.5">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-pink-100 flex items-center justify-center text-sm">🎂</div>
+                    <div>
+                      <div className="font-medium text-sm">{c.name}</div>
+                      <div className="text-xs text-gray-400">{c.email || c.phone || '-'}</div>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs font-semibold text-pink-600">
+                      {c.daysUntil === 0 ? '🎉 Hari ini!' : `${c.daysUntil} hari lagi`}
+                    </div>
+                    <div className="text-xs text-gray-400">{c.birthdayDate}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {loading ? <LoadingSpinner /> : filteredCustomers.length === 0 ? (
         <EmptyState icon={Users} title="No customers found" action={<button onClick={() => openModal('create')} className="btn btn-primary btn-sm"><Plus size={14}/> Add Customer</button>} />

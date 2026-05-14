@@ -8,6 +8,7 @@ import {
   Param,
   Query,
   UseGuards,
+  Request,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -31,17 +32,19 @@ export class RolesController {
   @Post()
   @RequirePermissions('employee.manage_role')
   @ApiOperation({ summary: 'Create a new custom role' })
-  create(@Body() dto: CreateRoleDto) {
+  create(@Body() dto: CreateRoleDto, @Request() req: any) {
+    // storeId dari JWT jika tidak dikirim dari body
+    if (!dto.storeId && req.user?.storeId) dto.storeId = req.user.storeId;
     return this.rolesService.create(dto);
   }
 
   @Get()
   @RequirePermissions('employee.view')
-  @ApiOperation({ summary: 'Get all roles for a store' })
+  @ApiOperation({ summary: 'Get all roles for a company' })
   @ApiQuery({ name: 'storeId', required: false })
-  findAll(@Query('storeId') storeId: string) {
-    if (!storeId) return [];
-    return this.rolesService.findAllByStore(storeId);
+  findAll(@Query('storeId') storeId: string, @Request() req: any) {
+    // Jika storeId tidak dikirim, ambil semua role milik company
+    return this.rolesService.findAllByCompany(req.user.companyId, storeId);
   }
 
   @Get('permissions')

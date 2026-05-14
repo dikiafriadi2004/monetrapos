@@ -15,7 +15,6 @@ import { ProductVariant } from '../products/product-variant.entity';
 @Entity('inventory')
 @Unique('unique_store_product_variant', ['storeId', 'productId', 'variantId'])
 @Index('idx_company_store', ['companyId', 'storeId'])
-@Index('idx_low_stock', ['companyId', 'availableQuantity'])
 export class Inventory extends BaseEntity {
   @Column({ name: 'company_id' })
   companyId: string;
@@ -52,15 +51,10 @@ export class Inventory extends BaseEntity {
   @Column({ type: 'int', default: 0, name: 'reserved_quantity' })
   reservedQuantity: number;
 
-  // Computed column: available_quantity = quantity - reserved_quantity
-  // This will be a generated column in the database
-  @Column({
-    type: 'int',
-    name: 'available_quantity',
-    generatedType: 'STORED',
-    asExpression: 'quantity - reserved_quantity',
-  })
-  availableQuantity: number;
+  // Available quantity computed in application (quantity - reservedQuantity)
+  get availableQuantity(): number {
+    return (this.quantity || 0) - (this.reservedQuantity || 0);
+  }
 
   @Column({ type: 'date', nullable: true, name: 'last_restock_date' })
   lastRestockDate: Date;

@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import { FileText, Download, CreditCard, Loader2, RefreshCcw, CheckCircle, Clock, XCircle, RotateCcw } from 'lucide-react';
 import apiClient from '@/lib/api-client';
 import toast from 'react-hot-toast';
-import { PageHeader, StatusBadge, EmptyState, LoadingSpinner } from '@/components/ui';
+import { PageHeader, StatusBadge, EmptyState, LoadingSpinner, Pagination } from '@/components/ui';
+import { usePagination } from '@/hooks/usePagination';
 
 interface Invoice {
   id: string; invoiceNumber: string;
@@ -22,6 +23,7 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [paying, setPaying] = useState<string | null>(null);
   const [regenerating, setRegenerating] = useState<string | null>(null);
+  const { page, setPage, totalPages, totalItems, paginated } = usePagination(invoices);
 
   useEffect(() => { load(); }, []);
 
@@ -37,20 +39,24 @@ export default function BillingPage() {
   const handlePay = async (invoice: Invoice) => {
     setPaying(invoice.id);
     try {
-      // If invoice already has a payment URL, go to checkout directly
+      // Tentukan nama item dari invoice number
+      const itemName = invoice.invoiceNumber.includes('ADDON') ? 'Add-on MonetraPOS' : 'MonetraPOS Subscription';
+
+      // Jika invoice sudah punya payment URL, langsung ke checkout
       if (invoice.paymentUrl) {
-        window.location.href = `/checkout?invoice=${invoice.invoiceNumber}&amount=${invoice.total}&paymentUrl=${encodeURIComponent(invoice.paymentUrl)}`;
+        window.location.href = `/checkout?invoice=${invoice.invoiceNumber}&invoiceId=${invoice.id}&amount=${invoice.total}&paymentUrl=${encodeURIComponent(invoice.paymentUrl)}&item=${encodeURIComponent(itemName)}`;
         return;
       }
-      // Otherwise generate new payment URL
+      // Generate payment URL baru dari backend
       const res = await apiClient.post(`/billing/invoices/${invoice.id}/pay`, { gateway: 'xendit' });
       const url = (res.data as any)?.paymentUrl;
       if (url) {
-        window.location.href = `/checkout?invoice=${invoice.invoiceNumber}&amount=${invoice.total}&paymentUrl=${encodeURIComponent(url)}`;
+        window.location.href = `/checkout?invoice=${invoice.invoiceNumber}&invoiceId=${invoice.id}&amount=${invoice.total}&paymentUrl=${encodeURIComponent(url)}&item=${encodeURIComponent(itemName)}`;
       } else {
-        window.location.href = `/checkout?invoice=${invoice.invoiceNumber}&amount=${invoice.total}`;
+        // Tidak ada URL — langsung ke checkout manual
+        window.location.href = `/checkout?invoice=${invoice.invoiceNumber}&invoiceId=${invoice.id}&amount=${invoice.total}&item=${encodeURIComponent(itemName)}`;
       }
-    } catch (err: any) { toast.error(err?.response?.data?.message || 'Failed to initiate payment'); }
+    } catch (err: any) { toast.error(err?.response?.data?.message || 'Gagal memulai pembayaran'); }
     finally { setPaying(null); }
   };
 
@@ -74,7 +80,7 @@ export default function BillingPage() {
   };
 
   const fmt = (n: number) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(n || 0);
-  const fmtDate = (d: string) => new Date(d).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' });
+  const fmtDate = (d: string) => new Date(d).toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'Asia/Jakarta' });
 
   return (
     <div>
@@ -91,7 +97,7 @@ export default function BillingPage() {
                 <tr><th>Invoice</th><th>Date</th><th>Due Date</th><th>Amount</th><th>Status</th><th className="text-right">Actions</th></tr>
               </thead>
               <tbody>
-                {invoices.map(inv => {
+                {paginated.map(inv => {
                   const isOverdue = inv.status === 'pending' && new Date(inv.dueDate) < new Date();
                   const StatusIcon = STATUS_ICON[inv.status] || Clock;
                   return (
@@ -122,6 +128,7 @@ export default function BillingPage() {
               </tbody>
             </table>
           </div>
+          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} totalItems={totalItems} />
         </div>
       )}
     </div>

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env ts-node
+#!/usr/bin/env ts-node
 import 'reflect-metadata';
 import { DataSource } from 'typeorm';
 import { config } from 'dotenv';
@@ -31,7 +31,6 @@ import { PasswordResetToken } from '../modules/auth/password-reset-token.entity'
 import { Notification } from '../modules/notifications/notification.entity';
 import { AuditLog } from '../modules/audit/audit-log.entity';
 import { Customer } from '../modules/customers/customer.entity';
-import { Shift } from '../modules/shifts/shift.entity';
 import { StockMovement } from '../modules/inventory/stock-movement.entity';
 import { StockOpname, StockOpnameItem } from '../modules/inventory/stock-opname.entity';
 import { AddOn } from '../modules/add-ons/add-on.entity';
@@ -62,7 +61,7 @@ const AppDataSource = new DataSource({
     Transaction, TransactionItem, Feature,
     Invoice, PaymentTransaction, UsageTracking,
     EmailVerificationToken, PasswordResetToken,
-    Notification, AuditLog, Customer, Shift,
+    Notification, AuditLog, Customer,
     StockMovement, StockOpname, StockOpnameItem,
     AddOn, CompanyAddOn, Supplier,
     PurchaseOrder, PurchaseOrderItem,
@@ -366,11 +365,11 @@ const PERMISSIONS = [
 ];
 
 async function seed() {
-  console.log('🌱 Seeding permissions...');
+  console.log('?? Seeding permissions...');
 
   try {
     await AppDataSource.initialize();
-    console.log('✅ Database connected');
+    console.log('? Database connected');
 
     const permRepo = AppDataSource.getRepository(Permission);
 
@@ -378,7 +377,7 @@ async function seed() {
     const existingCount = await permRepo.count();
     if (existingCount > 0) {
       console.log(
-        `⚠️  Permissions already exist (${existingCount} found). Skipping...`,
+        `??  Permissions already exist (${existingCount} found). Skipping...`,
       );
       await AppDataSource.destroy();
       return;
@@ -390,10 +389,10 @@ async function seed() {
       await permRepo.save(permission);
     }
 
-    console.log(`✅ Seeded ${PERMISSIONS.length} permissions`);
+    console.log(`? Seeded ${PERMISSIONS.length} permissions`);
     await AppDataSource.destroy();
   } catch (error) {
-    console.error('❌ Error seeding permissions:', error);
+    console.error('? Error seeding permissions:', error);
     process.exit(1);
   }
 }

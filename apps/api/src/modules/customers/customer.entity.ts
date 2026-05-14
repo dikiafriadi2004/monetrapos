@@ -4,12 +4,14 @@ import {
   ManyToOne,
   JoinColumn,
   DeleteDateColumn,
+  Unique,
 } from 'typeorm';
 import { BaseEntity } from '../../common/entities';
 import { Company } from '../companies/company.entity';
 import { Store } from '../stores/store.entity';
 
 @Entity('customers')
+@Unique('uq_customer_number_company', ['companyId', 'customerNumber'])
 export class Customer extends BaseEntity {
   @Column({ name: 'company_id' })
   companyId: string;
@@ -26,7 +28,7 @@ export class Customer extends BaseEntity {
   store: Store;
 
   // Basic Info
-  @Column({ length: 50, unique: true, name: 'customer_number' })
+  @Column({ length: 50, name: 'customer_number' })
   customerNumber: string; // Auto-generated: CUST-YYYYMMDD-XXXX
 
   @Column({ length: 150 })

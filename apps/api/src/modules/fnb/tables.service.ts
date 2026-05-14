@@ -125,11 +125,7 @@ export class TablesService {
 
     // Validate status transitions
     if (updateStatusDto.status === TableStatus.OCCUPIED) {
-      if (!updateStatusDto.current_transaction_id) {
-        throw new BadRequestException(
-          'Transaction ID is required when setting table to occupied',
-        );
-      }
+      // current_transaction_id optional — can be set later when transaction is created
     }
 
     if (updateStatusDto.status === TableStatus.AVAILABLE) {
@@ -141,6 +137,46 @@ export class TablesService {
 
     table.status = updateStatusDto.status;
     return await this.tableRepository.save(table);
+  }
+
+  /**
+   * Sync table statuses based on active FnB orders.
+   * Fixes tables that are occupied without active orders, or available with active orders.
+   */
+  async syncTableStatuses(companyId: string, storeId?: string): Promise<{ fixed: number }> {
+    const query = this.tableRepository
+      .createQueryBuilder('table')
+      .where('table.company_id = :companyId', { companyId })
+      .andWhere('table.is_active = :isActive', { isActive: true });
+
+    if (storeId) query.andWhere('table.store_id = :storeId', { storeId });
+
+    const tables = await query.getMany();
+    let fixed = 0;
+
+    for (const table of tables) {
+      // Check if there's an active FnB order for this table
+      const activeOrder = await this.tableRepository.manager
+        .createQueryBuilder()
+        .select('o.id', 'id')
+        .from('fnb_orders', 'o')
+        .where('o.table_id = :tableId', { tableId: table.id })
+        .andWhere('o.status NOT IN (:...done)', { done: ['completed', 'cancelled'] })
+        .getRawOne();
+
+      const shouldBeOccupied = !!activeOrder;
+      const isOccupied = table.status === TableStatus.OCCUPIED;
+
+      if (shouldBeOccupied && !isOccupied) {
+        await this.tableRepository.update({ id: table.id }, { status: TableStatus.OCCUPIED });
+        fixed++;
+      } else if (!shouldBeOccupied && isOccupied) {
+        await this.tableRepository.update({ id: table.id }, { status: TableStatus.AVAILABLE, current_transaction_id: null });
+        fixed++;
+      }
+    }
+
+    return { fixed };
   }
 
   async remove(id: string, companyId: string): Promise<void> {

@@ -69,6 +69,11 @@ export class CreateEmployeeDto {
   @IsNumber()
   @Min(0)
   salary?: number;
+
+  @ApiPropertyOptional({ example: 'cashier', description: 'Role for user account: manager, cashier, staff, admin' })
+  @IsOptional()
+  @IsString()
+  role?: string;
 }
 
 export class UpdateEmployeeDto {
@@ -116,6 +121,11 @@ export class UpdateEmployeeDto {
   @MaxLength(100)
   position?: string;
 
+  @ApiPropertyOptional({ example: '2024-01-01', description: 'Hire date in YYYY-MM-DD format' })
+  @IsOptional()
+  @IsDateString()
+  hireDate?: string;
+
   @ApiPropertyOptional({ example: 5500000 })
   @IsOptional()
   @IsNumber()
@@ -125,6 +135,11 @@ export class UpdateEmployeeDto {
   @ApiPropertyOptional()
   @IsOptional()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ example: 'cashier', description: 'Role: manager, cashier, staff, admin' })
+  @IsOptional()
+  @IsString()
+  role?: string;
 }
 
 export class LinkUserDto {

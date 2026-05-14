@@ -19,7 +19,7 @@ class ApiException implements Exception {
       msg = 'Tidak dapat terhubung ke server.';
     }
 
-    return ApiException(msg, statusCode: e.response?.statusCode);
+    return ApiException                                                                                                                                                                                                     (msg, statusCode: e.response?.statusCode);
   }
 
   @override

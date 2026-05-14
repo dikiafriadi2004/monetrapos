@@ -38,7 +38,8 @@ export interface Subscription {
   status: SubscriptionStatus;
   startDate: string;
   endDate?: string;
-  trialEndDate?: string;
+  trialEnd?: string;       // trial end date from API
+  trialEndDate?: string;   // alias
   gracePeriodEndDate?: string;
   autoRenew: boolean;
   cancelledAt?: string;
@@ -52,6 +53,17 @@ export interface Subscription {
   durationMonths?: number;
   price?: number;
   currency?: string;
+  // Trial info from getMe
+  plan_name?: string;
+  plan_slug?: string;
+  trial_days_remaining?: number;
+  is_trial_expired?: boolean;
+  max_products?: number;
+  max_transactions_per_month?: number;
+  max_employees?: number;
+  max_users?: number;
+  max_stores?: number;
+  features?: Record<string, boolean>;
 }
 
 export interface SubscriptionHistory {

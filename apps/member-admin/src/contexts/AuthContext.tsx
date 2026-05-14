@@ -47,7 +47,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (userData.subscription) {
             setSubscription(userData.subscription);
           }
-        } catch {
+        } catch (err: any) {
+          // If 401, try to refresh token first
+          if (err?.response?.status === 401) {
+            try {
+              const refreshToken = localStorage.getItem('refresh_token');
+              if (refreshToken) {
+                const { default: axios } = await import('axios');
+                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4404/api/v1';
+                const refreshRes = await axios.post(`${apiUrl}/auth/refresh`, { refreshToken });
+                const { accessToken, refreshToken: newRefreshToken } = refreshRes.data;
+                localStorage.setItem('access_token', accessToken);
+                if (newRefreshToken) localStorage.setItem('refresh_token', newRefreshToken);
+                // Retry getCurrentUser with new token
+                const userData = await authService.getCurrentUser();
+                const user = {
+                  ...userData.user,
+                  type: (userData as any).type ?? userData.user.type,
+                  permissions: (userData as any).permissions ?? userData.user.permissions ?? [],
+                };
+                setUser(user);
+                setCompany(userData.company);
+                if (userData.subscription) setSubscription(userData.subscription);
+                setIsLoading(false);
+                return;
+              }
+            } catch {
+              // Refresh failed — clear tokens
+              localStorage.removeItem('access_token');
+              localStorage.removeItem('refresh_token');
+              localStorage.removeItem('user');
+              setIsLoading(false);
+              return;
+            }
+          }
+
           // Token might be for employee — try to decode it
           try {
             const parts = token.split('.');

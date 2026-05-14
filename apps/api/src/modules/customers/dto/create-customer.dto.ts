@@ -43,8 +43,8 @@ export class CreateCustomerDto {
   @MaxLength(10)
   postalCode?: string;
 
-  @ApiProperty({ example: 'store-uuid' })
+  @ApiProperty({ example: 'store-uuid', required: false })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
-  storeId: string;
+  storeId?: string;
 }

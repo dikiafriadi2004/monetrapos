@@ -5,6 +5,7 @@ import { discountsService, Discount, DiscountType, CreateDiscountDto } from '@/s
 import { Tag, Plus, Search, Edit2, Trash2, Loader2, X, Percent, DollarSign, Gift, CheckCircle, BarChart2, RefreshCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal, DeleteModal, PageHeader, SearchInput, StatusBadge, EmptyState, LoadingSpinner } from '@/components/ui';
+import { formatRupiah } from '@/lib/date';
 
 const TYPE_CONFIG: Record<string, { icon: React.ElementType; label: string; color: string }> = {
   [DiscountType.PERCENTAGE]:  { icon: Percent,    label: 'Percentage',  color: 'text-indigo-600 bg-indigo-50' },
@@ -69,7 +70,7 @@ export default function DiscountsPage() {
     } catch { toast.error('Failed to load stats'); }
   };
 
-  const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
+  const fmt = (n: number) => `Rp ${formatRupiah(n)}`;
 
   const filtered = discounts.filter(d =>
     d.name.toLowerCase().includes(search.toLowerCase()) ||

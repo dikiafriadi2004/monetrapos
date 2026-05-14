@@ -10,13 +10,15 @@ import {
   Query,
 } from '@nestjs/common';
 import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
+import { FeatureGuard, RequireFeature } from '../auth/guards/feature.guard';
 import { LaundryOrdersService } from './laundry-orders.service';
 import { CreateLaundryOrderDto } from './dto/create-laundry-order.dto';
 import { UpdateLaundryOrderDto, UpdateLaundryOrderStatusDto } from './dto/update-laundry-order.dto';
 import { LaundryOrderStatus } from './laundry-order.entity';
 
 @Controller('laundry/orders')
-@UseGuards(MemberJwtGuard)
+@UseGuards(MemberJwtGuard, FeatureGuard)
+@RequireFeature('laundry_module')
 export class LaundryOrdersController {
   constructor(private readonly ordersService: LaundryOrdersService) {}
 

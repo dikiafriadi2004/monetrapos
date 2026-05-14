@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Settings, Save, Mail, Globe, Shield, User, Plus, Edit, Trash2, X } from 'lucide-react';
 import { api } from '../../../../lib/api';
 import toast from 'react-hot-toast';
+import ConfirmModal from '../../../../components/ConfirmModal';
 
 interface PlatformSettings {
   siteName: string;
@@ -121,15 +122,21 @@ export default function PlatformSettingsPage() {
     }
   };
 
-  const handleDeleteAdmin = async (id: string) => {
-    if (!confirm('Delete this admin user?')) return;
+  const [deleteAdminConfirm, setDeleteAdminConfirm] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
+  const [deletingAdmin, setDeletingAdmin] = useState(false);
+
+  const handleDeleteAdmin = async () => {
+    if (!deleteAdminConfirm.id) return;
+    setDeletingAdmin(true);
     try {
-      await api.delete(`/admin/users/${id}`);
-      setAdmins(prev => prev.filter(a => a.id !== id));
+      await api.delete(`/admin/users/${deleteAdminConfirm.id}`);
+      setAdmins(prev => prev.filter(a => a.id !== deleteAdminConfirm.id));
       toast.success('Admin deleted');
+      setDeleteAdminConfirm({ open: false, id: null });
     } catch (err: any) {
       toast.error(err?.message || 'Failed to delete admin');
-    }
+    } finally {
+      setDeletingAdmin(false); }
   };
 
   const tabs = [
@@ -390,7 +397,7 @@ export default function PlatformSettingsPage() {
                     <button onClick={() => openAdminModal(admin)} className="btn btn-outline" style={{ padding: '6px 12px' }}>
                       <Edit size={14} />
                     </button>
-                    <button onClick={() => handleDeleteAdmin(admin.id)} className="btn btn-outline" style={{ padding: '6px 12px', color: 'var(--danger)' }}>
+                    <button onClick={() => setDeleteAdminConfirm({ open: true, id: admin.id })} className="btn btn-outline" style={{ padding: '6px 12px', color: 'var(--danger)' }}>
                       <Trash2 size={14} />
                     </button>
                   </div>
@@ -440,6 +447,16 @@ export default function PlatformSettingsPage() {
           </div>
         </div>
       )}
+      <ConfirmModal
+        open={deleteAdminConfirm.open}
+        title="Hapus Admin User"
+        description="Hapus admin user ini? Tindakan ini tidak dapat dibatalkan."
+        confirmLabel="Ya, Hapus"
+        variant="danger"
+        loading={deletingAdmin}
+        onConfirm={handleDeleteAdmin}
+        onClose={() => setDeleteAdminConfirm({ open: false, id: null })}
+      />
     </div>
   );
 }

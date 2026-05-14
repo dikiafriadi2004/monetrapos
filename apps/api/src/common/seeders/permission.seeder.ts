@@ -1,4 +1,4 @@
-import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Permission } from '../../modules/roles/permission.entity';
@@ -124,12 +124,6 @@ const PERMISSIONS = [
     name: 'Kelola Role',
     category: 'Employees',
     description: 'Manage employee roles',
-  },
-  {
-    code: 'employee.manage_shift',
-    name: 'Kelola Shift',
-    category: 'Employees',
-    description: 'Manage employee shifts',
   },
   {
     code: 'employee.clock_in_out',
@@ -296,7 +290,7 @@ const PERMISSIONS = [
 ];
 
 @Injectable()
-export class PermissionSeeder implements OnModuleInit {
+export class PermissionSeeder {
   private readonly logger = new Logger(PermissionSeeder.name);
 
   constructor(
@@ -304,7 +298,7 @@ export class PermissionSeeder implements OnModuleInit {
     private permissionRepo: Repository<Permission>,
   ) {}
 
-  async onModuleInit() {
+  async seed(): Promise<void> {
     const existingCount = await this.permissionRepo.count();
     if (existingCount > 0) {
       this.logger.log(`Permissions already seeded (${existingCount} found)`);
@@ -316,6 +310,6 @@ export class PermissionSeeder implements OnModuleInit {
       const permission = this.permissionRepo.create(perm);
       await this.permissionRepo.save(permission);
     }
-    this.logger.log(`Seeded ${PERMISSIONS.length} permissions`);
+    this.logger.log(`✅ Seeded ${PERMISSIONS.length} permissions`);
   }
 }

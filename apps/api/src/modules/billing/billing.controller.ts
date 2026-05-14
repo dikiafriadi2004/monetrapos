@@ -64,10 +64,10 @@ export class BillingController {
   /** GET /billing/invoices/:id */
   @Get('invoices/:id')
   @UseGuards(MemberJwtGuard)
-  @ApiOperation({ summary: 'Get single invoice' })
+  @ApiOperation({ summary: 'Get single invoice by id or invoice number' })
   async getInvoice(@Param('id') id: string, @Request() req: any) {
     const companyId = req.user?.companyId;
-    return this.billingService.findInvoice(id, companyId);
+    return this.billingService.findInvoiceByIdOrNumber(id, companyId);
   }
 
   /** GET /billing/invoices/:id/download */
@@ -80,7 +80,7 @@ export class BillingController {
     @Res() res: Response,
   ) {
     const companyId = req.user?.companyId;
-    const invoice = await this.billingService.findInvoice(id, companyId);
+    const invoice = await this.billingService.findInvoiceByIdOrNumber(id, companyId);
 
     if (!invoice.invoicePdfUrl) {
       await this.billingService.generateAndSaveInvoicePdf(invoice);
@@ -104,12 +104,14 @@ export class BillingController {
   @ApiOperation({ summary: 'Regenerate invoice PDF' })
   async regenerateInvoicePdf(@Param('id') id: string, @Request() req: any) {
     const companyId = req.user?.companyId;
-    const invoice = await this.billingService.findInvoice(id, companyId);
+    const invoice = await this.billingService.findInvoiceByIdOrNumber(id, companyId);
     const pdfPath = await this.billingService.generateAndSaveInvoicePdf(invoice);
     return { message: 'Invoice PDF regenerated successfully', pdfUrl: pdfPath };
   }
 
-  /** POST /billing/invoices/:id/pay — Initiate payment via gateway */
+  /** POST /billing/invoices/:id/pay — Initiate payment via gateway
+   * :id can be UUID or invoice number (INV-YYYYMM-XXXXX)
+   */
   @Post('invoices/:id/pay')
   @UseGuards(MemberJwtGuard)
   @ApiOperation({ summary: 'Initiate payment for invoice' })
@@ -121,7 +123,8 @@ export class BillingController {
     const companyId = req.user?.companyId;
     if (!companyId) throw new UnauthorizedException('Company not found');
 
-    const invoice = await this.billingService.findInvoice(invoiceId, companyId);
+    // Support both UUID and invoice number as :id param
+    let invoice = await this.billingService.findInvoiceByIdOrNumber(invoiceId, companyId);
 
     // Try to generate real payment URL via configured gateway
     try {

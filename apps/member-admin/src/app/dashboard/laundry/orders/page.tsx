@@ -5,6 +5,7 @@ import { laundryService, LaundryOrder, LaundryOrderStatus } from '@/services/lau
 import { Shirt, Eye, Plus, Loader2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal, DeleteModal, PageHeader, SearchInput, StatusBadge, EmptyState, LoadingSpinner } from '@/components/ui';
+import { formatRupiah } from '@/lib/date';
 
 const ITEM_TYPES = ['shirt','pants','dress','jacket','skirt','bedsheet','blanket','curtain','towel','other'];
 
@@ -20,6 +21,9 @@ export default function LaundryOrdersPage() {
   const [statusFilter, setStatusFilter] = useState<LaundryOrderStatus | ''>('');
   const [selectedOrder, setSelectedOrder] = useState<LaundryOrder | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [deliverModal, setDeliverModal] = useState<{ open: boolean; orderId: string | null }>({ open: false, orderId: null });
+  const [deliverPayment, setDeliverPayment] = useState('cash');
+  const [delivering, setDelivering] = useState(false);
 
   useEffect(() => { loadOrders(); }, [statusFilter]);
 
@@ -33,6 +37,12 @@ export default function LaundryOrdersPage() {
   };
 
   const handleUpdateStatus = async (orderId: string, newStatus: LaundryOrderStatus) => {
+    // Saat DELIVERED, tampilkan modal pilih metode pembayaran
+    if (newStatus === LaundryOrderStatus.DELIVERED) {
+      setDeliverPayment('cash');
+      setDeliverModal({ open: true, orderId });
+      return;
+    }
     try {
       await laundryService.updateOrderStatus(orderId, newStatus);
       toast.success('Status updated');
@@ -40,14 +50,25 @@ export default function LaundryOrdersPage() {
     } catch { toast.error('Failed to update status'); }
   };
 
+  const handleConfirmDeliver = async () => {
+    if (!deliverModal.orderId) return;
+    setDelivering(true);
+    try {
+      await laundryService.updateOrderStatus(deliverModal.orderId, LaundryOrderStatus.DELIVERED, deliverPayment);
+      toast.success('Order delivered & transaksi dibuat');
+      setDeliverModal({ open: false, orderId: null });
+      loadOrders();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to deliver order');
+    } finally { setDelivering(false); }
+  };
+
   const filtered = orders.filter(o =>
     o.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (o.customerName || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const fmt = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
-
-  return (
+  const fmt = (n: number) => `Rp ${formatRupiah(n)}`;  return (
     <div>
       <PageHeader title="Laundry Orders" description="Manage laundry service orders"
         action={<button onClick={() => setShowCreate(true)} className="btn btn-primary"><Plus size={16}/> New Order</button>} />
@@ -120,6 +141,32 @@ export default function LaundryOrdersPage() {
 
       {/* Create Modal */}
       {showCreate && <CreateOrderModal onClose={() => setShowCreate(false)} onSuccess={() => { setShowCreate(false); loadOrders(); }} />}
+
+      {/* Deliver Modal — pilih metode pembayaran */}
+      <Modal open={deliverModal.open} onClose={() => setDeliverModal({ open: false, orderId: null })}
+        title="Konfirmasi Pengiriman & Pembayaran"
+        footer={
+          <>
+            <button onClick={() => setDeliverModal({ open: false, orderId: null })} className="btn btn-outline">Batal</button>
+            <button onClick={handleConfirmDeliver} className="btn btn-primary" disabled={delivering}>
+              {delivering ? <Loader2 size={14} className="animate-spin" /> : null}
+              Konfirmasi Delivered
+            </button>
+          </>
+        }>
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">Pilih metode pembayaran untuk order ini. Sistem akan otomatis membuat record transaksi.</p>
+          <div className="form-group">
+            <label className="form-label">Metode Pembayaran</label>
+            <select className="form-input" value={deliverPayment} onChange={e => setDeliverPayment(e.target.value)}>
+              <option value="cash">Cash (Tunai)</option>
+              <option value="qris">QRIS</option>
+              <option value="bank_transfer">Transfer Bank</option>
+              <option value="card">Kartu / EDC</option>
+            </select>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -150,6 +197,11 @@ function CreateOrderModal({ onClose, onSuccess }: { onClose: () => void; onSucce
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.store_id || !form.service_type_id) { toast.error('Store and service type are required'); return; }
+    // Validasi weight untuk per_kg service type
+    const selectedService = serviceTypes.find(s => s.id === form.service_type_id);
+    if (selectedService?.pricingType === 'per_kg' && (!form.weight_kg || Number(form.weight_kg) <= 0)) {
+      toast.error('Berat (kg) wajib diisi untuk layanan per kg'); return;
+    }
     setSaving(true);
     try {
       await laundryService.createOrder({ ...form, weight_kg: form.weight_kg ? Number(form.weight_kg) : undefined, items: items.map(i => ({ ...i, quantity: Number(i.quantity) })) });
@@ -167,7 +219,7 @@ function CreateOrderModal({ onClose, onSuccess }: { onClose: () => void; onSucce
         <div className="grid grid-cols-2 gap-4">
           <div className="form-group"><label className="form-label">Store *</label><select className="form-input" value={form.store_id} onChange={e => f('store_id',e.target.value)} required><option value="">Select store...</option>{stores.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
           <div className="form-group"><label className="form-label">Customer</label><select className="form-input" value={form.customer_id} onChange={e => f('customer_id',e.target.value)}><option value="">Walk-in customer</option>{customers.map(c => <option key={c.id} value={c.id}>{c.name} {c.phone ? `(${c.phone})` : ''}</option>)}</select></div>
-          <div className="form-group col-span-2"><label className="form-label">Service Type *</label><select className="form-input" value={form.service_type_id} onChange={e => f('service_type_id',e.target.value)} required><option value="">Select service type...</option>{serviceTypes.map(s => <option key={s.id} value={s.id}>{s.name} — {s.pricingType==='per_kg'?`Rp ${s.price.toLocaleString('id-ID')}/kg`:`Rp ${s.price.toLocaleString('id-ID')}/item`}</option>)}</select></div>
+          <div className="form-group col-span-2"><label className="form-label">Service Type *</label><select className="form-input" value={form.service_type_id} onChange={e => f('service_type_id',e.target.value)} required><option value="">Select service type...</option>{serviceTypes.map(s => <option key={s.id} value={s.id}>{s.name} — {s.pricingType==='per_kg'?`Rp ${formatRupiah(s.price)}/kg`:`Rp ${formatRupiah(s.price)}/item`}</option>)}</select></div>
           <div className="form-group"><label className="form-label">Weight (kg)</label><input type="number" className="form-input" value={form.weight_kg} onChange={e => f('weight_kg',e.target.value)} step="0.1" min="0"/></div>
           <div className="form-group"><label className="form-label">Notes</label><input className="form-input" value={form.notes} onChange={e => f('notes',e.target.value)}/></div>
           <div className="form-group"><label className="form-label">Pickup Date *</label><input type="date" className="form-input" value={form.pickup_date} onChange={e => f('pickup_date',e.target.value)} required/></div>

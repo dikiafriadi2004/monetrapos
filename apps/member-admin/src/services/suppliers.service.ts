@@ -100,7 +100,7 @@ class SuppliersService {
 
   // Deactivate by patching isActive = false
   async deactivate(id: string): Promise<Supplier> {
-    const res = await apiClient.patch(`/suppliers/${id}`, { is_active: false });
+    const res = await apiClient.patch(`/suppliers/${id}`, { isActive: false });
     return res.data;
   }
 }

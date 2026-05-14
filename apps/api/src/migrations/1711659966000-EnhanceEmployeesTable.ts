@@ -2,72 +2,35 @@ import { MigrationInterface, QueryRunner, TableColumn, TableForeignKey, TableInd
 
 export class EnhanceEmployeesTable1711659966000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // 1. Add user_id column (nullable, for linking to users table)
-    await queryRunner.addColumn(
-      'employees',
-      new TableColumn({
-        name: 'user_id',
-        type: 'uuid',
-        isNullable: true,
-      }),
-    );
+    const table = await queryRunner.getTable('employees');
 
-    // 2. Rename employee_code to employee_number
-    await queryRunner.renameColumn('employees', 'employee_code', 'employee_number');
+    // 1. Add user_id column (nullable, for linking to users table)
+    if (!table?.columns.find((c) => c.name === 'user_id')) {
+      await queryRunner.addColumn('employees', new TableColumn({ name: 'user_id', type: 'varchar', length: '36', isNullable: true }));
+      await queryRunner.createForeignKey('employees', new TableForeignKey({ name: 'fk_employees_user_id', columnNames: ['user_id'], referencedTableName: 'users', referencedColumnNames: ['id'], onDelete: 'SET NULL', onUpdate: 'CASCADE' }));
+      await queryRunner.createIndex('employees', new TableIndex({ name: 'idx_employees_user_id', columnNames: ['user_id'] }));
+    }
+
+    // 2. Rename employee_code to employee_number if old column exists
+    const hasEmployeeCode = await queryRunner.hasColumn('employees', 'employee_code');
+    const hasEmployeeNumber = await queryRunner.hasColumn('employees', 'employee_number');
+    if (hasEmployeeCode && !hasEmployeeNumber) {
+      await queryRunner.renameColumn('employees', 'employee_code', 'employee_number');
+    }
 
     // 3. Add salary column
-    await queryRunner.addColumn(
-      'employees',
-      new TableColumn({
-        name: 'salary',
-        type: 'decimal',
-        precision: 15,
-        scale: 2,
-        default: 0,
-        isNullable: false,
-      }),
-    );
+    if (!table?.columns.find((c) => c.name === 'salary')) {
+      await queryRunner.addColumn('employees', new TableColumn({ name: 'salary', type: 'decimal', precision: 15, scale: 2, default: 0, isNullable: false }));
+    }
 
-    // 4. Add foreign key for user_id
-    await queryRunner.createForeignKey(
-      'employees',
-      new TableForeignKey({
-        name: 'fk_employees_user_id',
-        columnNames: ['user_id'],
-        referencedTableName: 'users',
-        referencedColumnNames: ['id'],
-        onDelete: 'SET NULL',
-        onUpdate: 'CASCADE',
-      }),
-    );
-
-    // 5. Add index on user_id for faster lookups
-    await queryRunner.createIndex(
-      'employees',
-      new TableIndex({
-        name: 'idx_employees_user_id',
-        columnNames: ['user_id'],
-      }),
-    );
-
-    // 6. Add unique constraint on company_id + employee_number
-    await queryRunner.createIndex(
-      'employees',
-      new TableIndex({
-        name: 'idx_employees_company_employee_number',
-        columnNames: ['company_id', 'employee_number'],
-        isUnique: true,
-      }),
-    );
-
-    // 7. Add index on company_id + store_id for faster filtering
-    await queryRunner.createIndex(
-      'employees',
-      new TableIndex({
-        name: 'idx_employees_company_store',
-        columnNames: ['company_id', 'store_id'],
-      }),
-    );
+    // 4. Add indexes only if they don't exist
+    const existingIndexes = (await queryRunner.getTable('employees'))?.indices.map((i) => i.name) ?? [];
+    if (!existingIndexes.includes('idx_employees_company_employee_number')) {
+      await queryRunner.createIndex('employees', new TableIndex({ name: 'idx_employees_company_employee_number', columnNames: ['company_id', 'employee_number'], isUnique: true }));
+    }
+    if (!existingIndexes.includes('idx_employees_company_store')) {
+      await queryRunner.createIndex('employees', new TableIndex({ name: 'idx_employees_company_store', columnNames: ['company_id', 'store_id'] }));
+    }
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

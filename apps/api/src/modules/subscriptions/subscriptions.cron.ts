@@ -1,11 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan, MoreThanOrEqual } from 'typeorm';
+import { Repository, LessThan } from 'typeorm';
 import { SubscriptionsService } from './subscriptions.service';
 import { Subscription, SubscriptionStatus } from './subscription.entity';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationChannel } from '../notifications/notification.entity';
+import { UsageService } from '../usage/usage.service';
 
 @Injectable()
 export class SubscriptionsCron {
@@ -14,6 +15,8 @@ export class SubscriptionsCron {
   constructor(
     private readonly subscriptionsService: SubscriptionsService,
     private readonly notificationsService: NotificationsService,
+    @Inject(forwardRef(() => UsageService))
+    private readonly usageService: UsageService,
     @InjectRepository(Subscription)
     private readonly subscriptionRepository: Repository<Subscription>,
   ) {}
@@ -126,12 +129,31 @@ export class SubscriptionsCron {
         // Send notifications for each subscription
         for (const subscription of subscriptions) {
           try {
-            // Default channels: email and in-app
-            // SMS and WhatsApp are placeholders for future implementation
-            const channels = [
-              NotificationChannel.EMAIL,
-              NotificationChannel.IN_APP,
-            ];
+            // Build channels based on available contact info
+            const channels: NotificationChannel[] = [NotificationChannel.IN_APP];
+
+            // Always send email if company has email
+            if ((subscription as any).company?.email) {
+              channels.push(NotificationChannel.EMAIL);
+            }
+
+            // Send SMS if company has phone and Twilio is configured
+            if (
+              (subscription as any).company?.phone &&
+              process.env.TWILIO_ACCOUNT_SID &&
+              process.env.TWILIO_AUTH_TOKEN
+            ) {
+              channels.push(NotificationChannel.SMS);
+            }
+
+            // Send WhatsApp if company has phone and WhatsApp is configured
+            if (
+              (subscription as any).company?.phone &&
+              process.env.TWILIO_ACCOUNT_SID &&
+              process.env.TWILIO_AUTH_TOKEN
+            ) {
+              channels.push(NotificationChannel.WHATSAPP);
+            }
 
             await this.notificationsService.sendRenewalReminder(
               subscription,
@@ -169,5 +191,129 @@ export class SubscriptionsCron {
     this.logger.log('Manual renewal notification check triggered');
     await this.handleRenewalNotifications();
     return { message: 'Renewal notification check completed' };
+  }
+
+  /**
+   * Reset monthly transaction usage at midnight on the 1st of each month
+   */
+  @Cron('0 0 1 * *', {
+    name: 'reset-monthly-usage',
+    timeZone: 'Asia/Jakarta',
+  })
+  async handleMonthlyUsageReset() {
+    this.logger.log('Running monthly usage reset...');
+    try {
+      await this.usageService.resetMonthlyUsage();
+      this.logger.log('Monthly usage reset completed');
+    } catch (error) {
+      this.logger.error('Failed to reset monthly usage', error);
+    }
+  }
+
+  /**
+   * Auto-check pending payments every 10 minutes
+   * Queries Xendit for payment status and activates subscriptions
+   */
+  @Cron('*/10 * * * *', {
+    name: 'auto-check-pending-payments',
+    timeZone: 'Asia/Jakarta',
+  })
+  async handlePendingPaymentCheck() {
+    try {
+      // Find invoices pending > 5 minutes
+      const pendingInvoices = await this.subscriptionRepository.manager.query(`
+        SELECT 
+          i.id as invoice_id,
+          i.invoice_number,
+          i.payment_url,
+          i.company_id,
+          TIMESTAMPDIFF(MINUTE, i.created_at, NOW()) as minutes_pending
+        FROM invoices i
+        WHERE i.status = 'pending'
+          AND i.payment_url IS NOT NULL
+          AND i.created_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
+        ORDER BY i.created_at DESC
+        LIMIT 20
+      `);
+
+      if (pendingInvoices.length === 0) return;
+
+      this.logger.log(`Auto-check: Found ${pendingInvoices.length} pending invoices`);
+
+      for (const invoice of pendingInvoices) {
+        try {
+          // Extract Xendit invoice ID from payment URL
+          const urlMatch = invoice.payment_url?.match(/\/web\/([a-f0-9]+)$/);
+          if (!urlMatch) continue;
+
+          const xenditInvoiceId = urlMatch[1];
+
+          // Check Xendit status via payment gateway service
+          const result = await this.subscriptionRepository.manager.query(`
+            SELECT pgc.secretKey 
+            FROM payment_gateway_configs pgc 
+            WHERE pgc.gateway = 'xendit' AND pgc.isEnabled = 1
+            LIMIT 1
+          `);
+
+          if (!result?.[0]?.secretKey) continue;
+
+          const axios = require('axios');
+          const xenditRes = await axios.get(
+            `https://api.xendit.co/v2/invoices/${xenditInvoiceId}`,
+            {
+              auth: { username: result[0].secretKey, password: '' },
+              timeout: 5000,
+            }
+          ).catch(() => null);
+
+          if (!xenditRes?.data) continue;
+
+          const status = xenditRes.data.status?.toUpperCase();
+
+          if (status === 'PAID' || status === 'SETTLED') {
+            this.logger.log(`Auto-check: Activating ${invoice.invoice_number}`);
+
+            // Update invoice
+            await this.subscriptionRepository.manager.query(
+              `UPDATE invoices SET status='paid', paid_at=NOW(), payment_method='xendit', updated_at=NOW() WHERE id=?`,
+              [invoice.invoice_id]
+            );
+
+            // Activate subscription
+            await this.subscriptionRepository.manager.query(`
+              UPDATE subscriptions s
+              JOIN invoices i ON i.subscription_id = s.id
+              SET s.status='active', s.start_date=NOW(),
+                  s.end_date=DATE_ADD(NOW(), INTERVAL COALESCE(s.duration_months,1) MONTH),
+                  s.updated_at=NOW()
+              WHERE i.id=?
+            `, [invoice.invoice_id]);
+
+            // Activate company
+            await this.subscriptionRepository.manager.query(`
+              UPDATE companies c
+              JOIN invoices i ON i.company_id = c.id
+              SET c.status='active', c.subscription_status='active',
+                  c.subscription_ends_at=DATE_ADD(NOW(), INTERVAL (
+                    SELECT COALESCE(duration_months,1) FROM subscriptions WHERE id=i.subscription_id
+                  ) MONTH), c.updated_at=NOW()
+              WHERE i.id=?
+            `, [invoice.invoice_id]);
+
+            this.logger.log(`Auto-check: Activated ${invoice.invoice_number}`);
+          } else if (status === 'EXPIRED') {
+            await this.subscriptionRepository.manager.query(
+              `UPDATE invoices SET status='failed', notes='Expired di Xendit', updated_at=NOW() WHERE id=?`,
+              [invoice.invoice_id]
+            );
+          }
+        } catch (err: any) {
+          this.logger.warn(`Auto-check failed for ${invoice.invoice_number}: ${err.message}`);
+        }
+      }
+    } catch (error: any) {
+      this.logger.error(`Auto-check pending payments error: ${error.message}`);
+    }
   }
 }

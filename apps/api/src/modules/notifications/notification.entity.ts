@@ -10,6 +10,8 @@ export enum NotificationType {
   SUBSCRIPTION_EXPIRING = 'subscription_expiring',
   SUBSCRIPTION_EXPIRED = 'subscription_expired',
   SUBSCRIPTION_SUSPENDED = 'subscription_suspended',
+  LOW_STOCK = 'low_stock',
+  NEW_ORDER = 'new_order',
   SYSTEM = 'system',
   ALERT = 'alert',
 }

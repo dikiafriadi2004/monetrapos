@@ -23,13 +23,12 @@ import {
 } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
+import { memoryStorage } from 'multer';
 import * as path from 'path';
-import * as fs from 'fs';
 import { PermissionGuard, RequirePermissions } from '../auth/guards';
 import { MemberJwtGuard } from '../auth/guards/member-jwt.guard';
 import { ProductsService } from './products.service';
-import { deleteOldFile } from '../../common/utils/file.utils';
+import { StorageService } from '../../common/utils/storage.service';
 import {
   CreateProductDto,
   UpdateProductDto,
@@ -44,7 +43,10 @@ import {
 @UseGuards(MemberJwtGuard, PermissionGuard)
 @Controller()
 export class ProductsController {
-  constructor(private readonly productsService: ProductsService) {}
+  constructor(
+    private readonly productsService: ProductsService,
+    private readonly storageService: StorageService,
+  ) {}
 
   // ────── Products ──────
 
@@ -141,19 +143,7 @@ export class ProductsController {
   })
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: diskStorage({
-        destination: (req, file, cb) => {
-          const uploadDir = path.join(process.cwd(), 'uploads', 'products');
-          if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
-          }
-          cb(null, uploadDir);
-        },
-        filename: (req, file, cb) => {
-          const ext = path.extname(file.originalname).toLowerCase();
-          cb(null, `product-${Date.now()}${ext}`);
-        },
-      }),
+      storage: memoryStorage(),
       fileFilter: (req, file, cb) => {
         const allowed = ['.jpg', '.jpeg', '.png', '.webp'];
         const ext = path.extname(file.originalname).toLowerCase();
@@ -162,7 +152,7 @@ export class ProductsController {
         }
         cb(null, true);
       },
-      limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+      limits: { fileSize: 5 * 1024 * 1024 },
     }),
   )
   async uploadProductImage(
@@ -170,12 +160,14 @@ export class ProductsController {
     @UploadedFile() file: Express.Multer.File,
   ) {
     if (!file) throw new BadRequestException('No file uploaded');
-    const imageUrl = `/uploads/products/${file.filename}`;
+    const ext = path.extname(file.originalname).toLowerCase();
+    const filename = `product-${Date.now()}${ext}`;
 
     // Delete old image
     const product = await this.productsService.findOneProduct(id);
-    deleteOldFile(product.imageUrl);
+    if (product.imageUrl) await this.storageService.deleteFile(product.imageUrl);
 
+    const imageUrl = await this.storageService.uploadFile(file.buffer, filename, 'products', file.mimetype);
     const updated = await this.productsService.updateProduct(id, { imageUrl } as any);
     return { imageUrl, product: updated };
   }
@@ -185,6 +177,58 @@ export class ProductsController {
   @ApiOperation({ summary: 'Update product stock' })
   updateStock(@Param('id') id: string, @Body('stock') stock: number) {
     return this.productsService.updateStock(id, stock);
+  }
+
+  @Post('products/bulk/import')
+  @RequirePermissions('product.create')
+  @ApiOperation({ summary: 'Bulk import products from JSON array' })
+  async bulkImport(
+    @Body() dto: { storeId: string; products: any[] },
+    @Request() req: any,
+  ) {
+    const companyId = req.user.companyId;
+    let storeId: string = dto.storeId;
+    if (!storeId) {
+      const defaultStore = await this.productsService.getDefaultStoreId(companyId);
+      if (!defaultStore) throw new BadRequestException('Tidak ada toko aktif');
+      storeId = defaultStore;
+    }
+
+    const results = { success: 0, failed: 0, errors: [] as string[] };
+
+    for (const p of dto.products) {
+      try {
+        // Resolve categoryId by name if needed
+        let categoryId = p.categoryId;
+        if (!categoryId && p.categoryName) {
+          const cats = await this.productsService.findAllCategories(storeId, companyId);
+          const found = cats.find((c: any) => c.name.toLowerCase() === p.categoryName.toLowerCase());
+          categoryId = found?.id;
+        }
+
+        await this.productsService.createProduct({
+          name: p.name,
+          sku: p.sku || undefined,
+          barcode: p.barcode || undefined,
+          price: Number(p.price || p.basePrice || 0),
+          costPrice: Number(p.costPrice || p.cost || 0) || undefined,
+          unit: p.unit || 'pcs',
+          stock: Number(p.stock || 0),
+          lowStockThreshold: Number(p.minStock || p.lowStockThreshold || 5),
+          trackInventory: p.trackInventory !== false && p.trackInventory !== 'No',
+          isActive: p.isActive !== false && p.isActive !== 'No',
+          categoryId: categoryId || undefined,
+          storeId,
+          companyId,
+        } as any);
+        results.success++;
+      } catch (err: any) {
+        results.failed++;
+        results.errors.push(`${p.name}: ${err.message}`);
+      }
+    }
+
+    return results;
   }
 
   @Post('products/bulk/prices')
@@ -297,17 +341,7 @@ export class ProductsController {
   @ApiConsumes('multipart/form-data')
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: diskStorage({
-        destination: (req, file, cb) => {
-          const uploadDir = path.join(process.cwd(), 'uploads', 'categories');
-          if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-          cb(null, uploadDir);
-        },
-        filename: (req, file, cb) => {
-          const ext = path.extname(file.originalname).toLowerCase();
-          cb(null, `category-${Date.now()}${ext}`);
-        },
-      }),
+      storage: memoryStorage(),
       fileFilter: (req, file, cb) => {
         const allowed = ['.jpg', '.jpeg', '.png', '.webp'];
         const ext = path.extname(file.originalname).toLowerCase();
@@ -323,12 +357,13 @@ export class ProductsController {
     @UploadedFile() file: Express.Multer.File,
   ) {
     if (!file) throw new BadRequestException('No file uploaded');
-    const imageUrl = `/uploads/categories/${file.filename}`;
+    const ext = path.extname(file.originalname).toLowerCase();
+    const filename = `category-${Date.now()}${ext}`;
 
-    // Delete old image
     const category = await this.productsService.findOneCategory(id, req.user.companyId);
-    deleteOldFile(category.imageUrl);
+    if (category.imageUrl) await this.storageService.deleteFile(category.imageUrl);
 
+    const imageUrl = await this.storageService.uploadFile(file.buffer, filename, 'categories', file.mimetype);
     await this.productsService.updateCategory(id, req.user.companyId, { imageUrl });
     return { imageUrl };
   }

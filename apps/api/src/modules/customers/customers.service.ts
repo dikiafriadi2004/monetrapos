@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Customer } from './customer.entity';
@@ -146,7 +146,7 @@ export class CustomersService {
   ): Promise<Customer> {
     const customer = await this.findOne(id, companyId);
     if (customer.loyaltyPoints < dto.points) {
-      throw new Error('Insufficient points');
+      throw new BadRequestException('Insufficient loyalty points');
     }
     customer.loyaltyPoints -= dto.points;
     const savedCustomer = await this.customerRepo.save(customer);
@@ -283,5 +283,33 @@ export class CustomersService {
       where: { customerNumber },
     });
     return count === 0;
+  }
+
+  /**
+   * Sync total_spent dan total_orders dari actual transactions
+   * Berguna untuk memperbaiki data yang tidak sinkron
+   */
+  async syncCustomerTotals(companyId: string): Promise<number> {
+    const result = await this.customerRepo.manager.query(`
+      UPDATE customers c
+      INNER JOIN (
+        SELECT 
+          customer_id,
+          SUM(total) as actual_total,
+          COUNT(*) as actual_orders,
+          MAX(created_at) as last_purchase
+        FROM transactions
+        WHERE status = 'completed' AND customer_id IS NOT NULL
+          AND company_id = ?
+        GROUP BY customer_id
+      ) tx ON c.id = tx.customer_id
+      SET 
+        c.total_spent = tx.actual_total,
+        c.total_orders = tx.actual_orders,
+        c.last_purchase_at = tx.last_purchase
+      WHERE c.company_id = ?
+    `, [companyId, companyId]);
+
+    return result?.affectedRows || 0;
   }
 }

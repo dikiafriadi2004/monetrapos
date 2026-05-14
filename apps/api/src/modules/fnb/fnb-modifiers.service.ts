@@ -29,13 +29,11 @@ export class FnbModifiersService {
 
   async findGroupsForProduct(companyId: string, productId: string): Promise<FnbModifierGroup[]> {
     const groups = await this.findAllGroups(companyId);
-    return groups.filter(g =>
-      g.is_active && (
-        !g.product_ids ||
-        g.product_ids.length === 0 ||
-        g.product_ids.includes(productId)
-      )
-    );
+    return groups.filter(g => {
+      if (!g.is_active) return false;
+      const ids = Array.isArray(g.product_ids) ? g.product_ids : [];
+      return ids.length === 0 || ids.includes(productId);
+    });
   }
 
   async findOneGroup(companyId: string, id: string): Promise<FnbModifierGroup> {

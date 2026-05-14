@@ -133,6 +133,7 @@ export class InventoryService {
 
       // Update inventory quantity
       inventory.quantity = newQuantity;
+
       if (dto.type === MovementType.IN) {
         inventory.lastRestockDate = new Date();
       }
@@ -209,6 +210,7 @@ export class InventoryService {
 
       // Increase reserved quantity
       inventory.reservedQuantity += dto.quantity;
+
       const updatedInventory = await queryRunner.manager.save(
         Inventory,
         inventory,
@@ -280,6 +282,7 @@ export class InventoryService {
 
       // Decrease reserved quantity
       inventory.reservedQuantity -= dto.quantity;
+
       const updatedInventory = await queryRunner.manager.save(
         Inventory,
         inventory,
@@ -387,10 +390,12 @@ export class InventoryService {
 
       // Deduct from source
       fromInventory.quantity -= dto.quantity;
+
       await queryRunner.manager.save(Inventory, fromInventory);
 
       // Add to destination
       toInventory.quantity += dto.quantity;
+
       toInventory.lastRestockDate = new Date();
       await queryRunner.manager.save(Inventory, toInventory);
 
@@ -468,7 +473,7 @@ export class InventoryService {
 
     if (filters?.lowStock) {
       query.andWhere(
-        'inventory.availableQuantity <= product.lowStockThreshold',
+        '(inventory.quantity - inventory.reservedQuantity) <= product.lowStockThreshold',
       );
     }
 
@@ -540,9 +545,9 @@ export class InventoryService {
       .where('inventory.companyId = :companyId', { companyId })
       .andWhere('inventory.storeId = :storeId', { storeId })
       .andWhere('product.trackInventory = true')
-      .andWhere('inventory.availableQuantity <= product.lowStockThreshold')
+      .andWhere('(inventory.quantity - inventory.reservedQuantity) <= product.lowStockThreshold')
       .andWhere('product.isActive = true')
-      .orderBy('inventory.availableQuantity', 'ASC')
+      .orderBy('inventory.quantity', 'ASC')
       .getMany();
   }
 
@@ -719,9 +724,26 @@ export class InventoryService {
           `Low stock detected: ${productName}, available: ${inventory.availableQuantity}, threshold: ${inventory.product.lowStockThreshold}`,
         );
 
-        // Note: In production, you would get the recipient email from company settings
-        // For now, this is a placeholder that logs the alert
-        // The actual email sending would be triggered by a scheduled job or manual call
+        // Send in-app notification for low stock
+        try {
+          // Get company owner email for alert
+          const companyRows = await this.dataSource.query(
+            `SELECT c.email, c.name FROM companies c WHERE c.id = ? LIMIT 1`,
+            [companyId]
+          );
+          const companyEmail = companyRows?.[0]?.email;
+
+          if (companyEmail) {
+            await this.notificationsService.sendLowStockAlert(
+              companyEmail,
+              productName,
+              inventory.availableQuantity,
+            );
+          }
+          this.logger.log(`Low stock alert sent for ${productName} (company: ${companyId})`);
+        } catch (notifError) {
+          this.logger.warn(`Failed to send low stock notification: ${(notifError as any).message}`);
+        }
       }
     } catch (error) {
       this.logger.error(

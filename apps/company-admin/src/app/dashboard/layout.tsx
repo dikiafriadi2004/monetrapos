@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Building, LayoutDashboard, Users, Settings, LogOut, PackageSearch, CreditCard, Receipt, Shield, ShoppingBag, Menu, X, Globe, Key } from 'lucide-react';
+import { Building, LayoutDashboard, Users, Settings, LogOut, PackageSearch, CreditCard, Receipt, Shield, ShoppingBag, Menu, X, Globe, Key, TrendingUp, Tag, Webhook, Mail } from 'lucide-react';
 import { api } from '../../lib/api';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -21,16 +21,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const handleLogout = () => { localStorage.removeItem('company_token'); router.push('/login'); };
 
   const menuItems = [
-    { name: 'Overview',          href: '/dashboard',                    icon: LayoutDashboard },
-    { name: 'Members',           href: '/dashboard/members',            icon: Users },
-    { name: 'Transactions',      href: '/dashboard/transactions',       icon: Receipt },
-    { name: 'Platform Features', href: '/dashboard/features',           icon: PackageSearch },
-    { name: 'Add-ons Catalog',   href: '/dashboard/add-ons',            icon: ShoppingBag },
-    { name: 'Subscriptions',     href: '/dashboard/subscriptions',      icon: CreditCard },
-    { name: 'Permissions',       href: '/dashboard/permissions',        icon: Key },
-    { name: 'Audit Logs',        href: '/dashboard/audit',              icon: Shield },
-    { name: 'Landing Page',      href: '/dashboard/landing',            icon: Globe },
-    { name: 'Platform Settings', href: '/dashboard/settings',           icon: Settings },
+    { name: 'Overview',          href: '/dashboard',                        icon: LayoutDashboard },
+    { name: 'Members',           href: '/dashboard/members',                icon: Users },
+    { name: 'Transactions',      href: '/dashboard/transactions',           icon: Receipt },
+    { name: 'Revenue Reports',   href: '/dashboard/revenue',                icon: TrendingUp },
+    { name: 'Platform Features', href: '/dashboard/features',               icon: PackageSearch },
+    { name: 'Add-ons Catalog',   href: '/dashboard/add-ons',                icon: ShoppingBag },
+    { name: 'Add-on Purchases',  href: '/dashboard/add-ons/purchases',      icon: PackageSearch },
+    { name: 'Subscriptions',     href: '/dashboard/subscriptions',          icon: CreditCard },
+    { name: 'Coupons & Promo',   href: '/dashboard/coupons',                icon: Tag },
+    { name: 'Email Templates',   href: '/dashboard/email-templates',        icon: Mail },
+    { name: 'Webhook Logs',      href: '/dashboard/webhooks',               icon: Webhook },
+    { name: 'Permissions',       href: '/dashboard/permissions',            icon: Key },
+    { name: 'Audit Logs',        href: '/dashboard/audit',                  icon: Shield },
+    { name: 'Landing Page',      href: '/dashboard/landing',                icon: Globe },
+    { name: 'Platform Settings', href: '/dashboard/settings',               icon: Settings },
   ];
 
   if (!isClient) return null;

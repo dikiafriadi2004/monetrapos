@@ -5,7 +5,7 @@
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull, MoreThanOrEqual } from 'typeorm';
+import { DataSource, Repository, IsNull, MoreThanOrEqual } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { Company } from './company.entity';
 import { User, UserRole } from '../users/user.entity';
@@ -21,6 +21,7 @@ export class CompaniesService {
     private userRepo: Repository<User>,
     @InjectRepository(Invoice)
     private invoiceRepo: Repository<Invoice>,
+    private dataSource: DataSource,
   ) {}
 
   /**
@@ -613,5 +614,54 @@ export class CompaniesService {
     }
 
     return this.companyRepo.save(company);
+  }
+
+  async getMemberSubscriptions(companyId: string): Promise<any[]> {
+    const subs = await this.dataSource.query(
+      `SELECT s.*, sp.name as plan_name, sp.slug as plan_slug
+       FROM subscriptions s
+       LEFT JOIN subscription_plans sp ON s.plan_id = sp.id
+       WHERE s.company_id = ?
+       ORDER BY s.created_at DESC`,
+      [companyId],
+    );
+    return subs.map((s: any) => ({
+      id: s.id,
+      status: s.status,
+      startDate: s.start_date,
+      endDate: s.end_date,
+      durationMonths: s.duration_months,
+      plan: s.plan_name ? { name: s.plan_name, slug: s.plan_slug } : null,
+    }));
+  }
+
+  async extendSubscription(companyId: string, months: number): Promise<any> {
+    const company = await this.companyRepo.findOne({ where: { id: companyId } });
+    if (!company) throw new NotFoundException('Company not found');
+
+    // Get active subscription
+    const [sub] = await this.dataSource.query(
+      `SELECT * FROM subscriptions WHERE company_id = ? AND status IN ('active','expired') ORDER BY created_at DESC LIMIT 1`,
+      [companyId],
+    );
+
+    const now = new Date();
+    const currentEnd = sub?.end_date ? new Date(sub.end_date) : now;
+    const newEnd = new Date(Math.max(currentEnd.getTime(), now.getTime()));
+    newEnd.setMonth(newEnd.getMonth() + months);
+
+    if (sub) {
+      await this.dataSource.query(
+        `UPDATE subscriptions SET status='active', end_date=?, duration_months=COALESCE(duration_months,0)+? WHERE id=?`,
+        [newEnd, months, sub.id],
+      );
+    }
+
+    // Update company
+    company.subscriptionStatus = 'active';
+    company.subscriptionEndsAt = newEnd;
+    await this.companyRepo.save(company);
+
+    return { message: `Subscription diperpanjang ${months} bulan hingga ${newEnd.toLocaleDateString('id-ID')}`, newEndDate: newEnd };
   }
 }

@@ -5,16 +5,21 @@ import { SubscriptionPlansService } from './subscription-plans.service';
 import { SubscriptionsController } from './subscriptions.controller';
 import { SubscriptionPlansController } from './subscription-plans.controller';
 import { SubscriptionsCron } from './subscriptions.cron';
+import { TrialExpirationCron } from './trial-expiration.cron';
 import { SubscriptionPlan } from './subscription-plan.entity';
 import { Subscription } from './subscription.entity';
 import { SubscriptionDuration } from './subscription-duration.entity';
 import { SubscriptionHistory } from './subscription-history.entity';
 import { Feature } from '../features/feature.entity';
 import { Company } from '../companies/company.entity';
+import { User } from '../users/user.entity';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { BillingModule } from '../billing/billing.module';
 import { PaymentGatewayModule } from '../payment-gateway/payment-gateway.module';
 import { AdminAuthModule } from '../admin-auth/admin-auth.module';
+import { UsageModule } from '../usage/usage.module';
+import { SubscriptionPlansSeeder } from '../../common/seeders/subscription-plans.seeder';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
@@ -25,18 +30,23 @@ import { AdminAuthModule } from '../admin-auth/admin-auth.module';
       SubscriptionHistory,
       Feature,
       Company,
+      User,
     ]),
     NotificationsModule,
     BillingModule,
     forwardRef(() => PaymentGatewayModule),
     AdminAuthModule,
+    forwardRef(() => UsageModule),
+    EmailModule,
   ],
   controllers: [SubscriptionsController, SubscriptionPlansController],
   providers: [
     SubscriptionsService,
     SubscriptionPlansService,
     SubscriptionsCron,
+    TrialExpirationCron,
+    SubscriptionPlansSeeder,
   ],
-  exports: [SubscriptionsService, SubscriptionPlansService],
+  exports: [SubscriptionsService, SubscriptionPlansService, SubscriptionPlansSeeder],
 })
 export class SubscriptionsModule {}

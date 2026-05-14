@@ -13,6 +13,20 @@ import { PurchaseAddOnDto } from './dto/purchase-add-on.dto';
 import { UnifiedPaymentService } from '../payment-gateway/unified-payment.service';
 import { BillingService } from '../billing/billing.service';
 import { Company } from '../companies/company.entity';
+import { Subscription } from '../subscriptions/subscription.entity';
+
+/** Add-on yang sudah include di setiap plan — sinkron dengan add-ons.controller.ts */
+const PLAN_INCLUDED_ADDONS: Record<string, string[]> = {
+  starter: [],
+  professional: [
+    'advanced-reporting', 'multi-location', 'online-ordering', 'loyalty-program-advanced',
+  ],
+  enterprise: [
+    'advanced-reporting', 'multi-location', 'online-ordering', 'loyalty-program-advanced',
+    'delivery-integration', 'accounting-integration', 'ecommerce-integration',
+    'whatsapp-integration', 'priority-support', 'extra-products', 'extra-users',
+  ],
+};
 
 @Injectable()
 export class CompanyAddOnsService {
@@ -23,6 +37,8 @@ export class CompanyAddOnsService {
     private companyAddOnsRepository: Repository<CompanyAddOn>,
     @InjectRepository(Company)
     private companyRepository: Repository<Company>,
+    @InjectRepository(Subscription)
+    private subscriptionRepository: Repository<Subscription>,
     private addOnsService: AddOnsService,
     private unifiedPaymentService: UnifiedPaymentService,
     private billingService: BillingService,
@@ -45,6 +61,31 @@ export class CompanyAddOnsService {
     // Check if add-on is active
     if (addOn.status !== 'active') {
       throw new BadRequestException('This add-on is not available for purchase');
+    }
+
+    // Cek apakah add-on sudah include di plan aktif company (via raw query — lebih reliable)
+    try {
+      const planRows: any[] = await this.companyRepository.manager.query(
+        `SELECT sp.slug as plan_slug, sp.name as plan_name
+         FROM subscriptions s
+         JOIN subscription_plans sp ON s.plan_id = sp.id
+         WHERE s.company_id = ? AND s.status = 'active'
+         ORDER BY s.created_at DESC LIMIT 1`,
+        [companyId],
+      );
+      if (planRows.length > 0) {
+        const planSlug = planRows[0].plan_slug;
+        const planName = planRows[0].plan_name;
+        const includedInPlan = PLAN_INCLUDED_ADDONS[planSlug] || [];
+        if (includedInPlan.includes(addOn.slug)) {
+          throw new BadRequestException(
+            `Add-on "${addOn.name}" sudah termasuk dalam paket ${planName} Anda. Tidak perlu dibeli terpisah.`,
+          );
+        }
+      }
+    } catch (e) {
+      if (e instanceof BadRequestException) throw e;
+      this.logger.warn(`Plan check failed: ${e.message}`);
     }
 
     // Check if company already has this add-on active
@@ -93,8 +134,11 @@ export class CompanyAddOnsService {
     }
 
     // Create payment
-    const payment = await this.unifiedPaymentService.createPayment(
-      {
+    let paymentUrl = '';
+    let paymentWarning: string | null = null;
+
+    try {
+      const payment = await this.unifiedPaymentService.createPayment({
         orderId: invoice.invoiceNumber,
         amount: Number(addOn.price),
         customerName: company.name,
@@ -109,13 +153,43 @@ export class CompanyAddOnsService {
             quantity: 1,
           },
         ],
-      },
-    );
+      });
+      paymentUrl = payment.redirectUrl;
+
+      // Simpan paymentUrl ke invoice agar bisa diakses dari halaman Billing
+      if (paymentUrl) {
+        await this.billingService.updateInvoicePaymentUrl(invoice.id, paymentUrl);
+        this.logger.log(`Payment URL saved for invoice ${invoice.invoiceNumber}`);
+      }
+    } catch (paymentErr: any) {
+      this.logger.warn(`Payment URL generation failed for add-on: ${paymentErr.message}`);
+
+      // Xendit gagal (misal 403 IP Allowlist) — record sudah dibuat dengan status pending_payment
+      // Kembalikan data invoice agar frontend bisa arahkan ke halaman billing untuk bayar manual
+      // JANGAN throw error — member harus tetap bisa melihat invoice-nya
+      const rawMsg: string = paymentErr.message || '';
+      if (rawMsg.includes('UNAUTHORIZED_SENDER_IP') || rawMsg.includes('IP Allowlist') || rawMsg.includes('403')) {
+        paymentWarning = 'Link pembayaran otomatis tidak tersedia. Invoice sudah dibuat — silakan bayar melalui halaman Billing atau hubungi admin.';
+      } else if (rawMsg.includes('INVALID_API_KEY') || rawMsg.includes('401')) {
+        paymentWarning = 'Konfigurasi payment gateway bermasalah. Invoice sudah dibuat — silakan hubungi admin untuk aktivasi.';
+      } else {
+        paymentWarning = 'Gagal membuat link pembayaran otomatis. Invoice sudah dibuat — silakan coba bayar dari halaman Billing.';
+      }
+
+      this.logger.log(`Add-on ${addOn.name} pending_payment, invoice: ${invoice.invoiceNumber}`);
+    }
 
     return {
       companyAddOn,
-      paymentUrl: payment.redirectUrl,
-    };
+      paymentUrl,
+      invoice: {
+        id: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        total: invoice.total,
+        dueDate: invoice.dueDate,
+      },
+      paymentWarning,
+    } as any;
   }
 
   /**
@@ -165,6 +239,51 @@ export class CompanyAddOnsService {
       relations: ['add_on'],
       order: { created_at: 'DESC' },
     });
+  }
+
+  /**
+   * Get all purchases across all companies (admin only)
+   */
+  async findAllPurchases(filters?: {
+    status?: string;
+    addOnId?: string;
+  }): Promise<CompanyAddOn[]> {
+    const query = this.companyAddOnsRepository
+      .createQueryBuilder('ca')
+      .leftJoinAndSelect('ca.add_on', 'add_on')
+      .leftJoinAndSelect('ca.company', 'company')
+      .orderBy('ca.created_at', 'DESC');
+
+    if (filters?.status) {
+      query.andWhere('ca.status = :status', { status: filters.status });
+    }
+    if (filters?.addOnId) {
+      query.andWhere('ca.add_on_id = :addOnId', { addOnId: filters.addOnId });
+    }
+
+    return await query.getMany();
+  }
+
+  /**
+   * Admin: activate add-on manually
+   */
+  async adminActivateAddOn(companyAddOnId: string): Promise<CompanyAddOn> {
+    const companyAddOn = await this.companyAddOnsRepository.findOne({
+      where: { id: companyAddOnId },
+      relations: ['add_on'],
+    });
+    if (!companyAddOn) throw new NotFoundException('Company add-on not found');
+
+    companyAddOn.status = CompanyAddOnStatus.ACTIVE;
+    companyAddOn.activated_at = new Date();
+
+    if (companyAddOn.add_on.pricing_type === AddOnPricingType.RECURRING) {
+      const expiryDate = new Date();
+      expiryDate.setDate(expiryDate.getDate() + 30);
+      companyAddOn.expires_at = expiryDate;
+    }
+
+    return await this.companyAddOnsRepository.save(companyAddOn);
   }
 
   /**

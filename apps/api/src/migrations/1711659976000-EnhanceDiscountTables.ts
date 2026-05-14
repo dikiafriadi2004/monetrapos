@@ -2,33 +2,49 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 
 export class EnhanceDiscountTables1711659976000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // Add new columns to discounts table (PostgreSQL syntax)
-    await queryRunner.query(`
-      ALTER TABLE discounts
-      ADD COLUMN IF NOT EXISTS description TEXT,
-      ADD COLUMN IF NOT EXISTS promo_code VARCHAR(50),
-      ADD COLUMN IF NOT EXISTS scope VARCHAR(20) DEFAULT 'all',
-      ADD COLUMN IF NOT EXISTS applicable_ids TEXT,
-      ADD COLUMN IF NOT EXISTS usage_limit INT,
-      ADD COLUMN IF NOT EXISTS usage_count INT DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS usage_limit_per_customer INT,
-      ADD COLUMN IF NOT EXISTS company_id VARCHAR(36);
-    `);
-    
-    // Alter store_id to be nullable
-    await queryRunner.query(`
-      ALTER TABLE discounts ALTER COLUMN store_id DROP NOT NULL;
-    `);
-    
+    // Add new columns to discounts table (MySQL syntax - add one by one to handle IF NOT EXISTS)
+    const table = await queryRunner.getTable('discounts');
+
+    const columnsToAdd: { name: string; sql: string }[] = [
+      { name: 'description', sql: 'ALTER TABLE discounts ADD COLUMN description TEXT' },
+      { name: 'promo_code', sql: 'ALTER TABLE discounts ADD COLUMN promo_code VARCHAR(50)' },
+      { name: 'scope', sql: "ALTER TABLE discounts ADD COLUMN scope VARCHAR(20) DEFAULT 'all'" },
+      { name: 'applicable_ids', sql: 'ALTER TABLE discounts ADD COLUMN applicable_ids TEXT' },
+      { name: 'usage_limit', sql: 'ALTER TABLE discounts ADD COLUMN usage_limit INT' },
+      { name: 'usage_count', sql: 'ALTER TABLE discounts ADD COLUMN usage_count INT DEFAULT 0' },
+      { name: 'usage_limit_per_customer', sql: 'ALTER TABLE discounts ADD COLUMN usage_limit_per_customer INT' },
+      { name: 'company_id', sql: 'ALTER TABLE discounts ADD COLUMN company_id VARCHAR(36)' },
+    ];
+
+    for (const col of columnsToAdd) {
+      const exists = table?.columns.find((c) => c.name === col.name);
+      if (!exists) {
+        await queryRunner.query(col.sql);
+      }
+    }
+
+    // Alter store_id to be nullable (MySQL syntax - must drop FK first)
+    const discountsTable = await queryRunner.getTable('discounts');
+    const storeIdFk = discountsTable?.foreignKeys.find((fk) => fk.columnNames.includes('store_id'));
+    if (storeIdFk) {
+      await queryRunner.dropForeignKey('discounts', storeIdFk);
+    }
+    await queryRunner.query(`ALTER TABLE discounts MODIFY COLUMN store_id VARCHAR(36) NULL;`);
+    // Re-add FK if it existed
+    if (storeIdFk) {
+      await queryRunner.createForeignKey('discounts', storeIdFk);
+    }
+
     // Add unique constraint for promo_code
     await queryRunner.query(`
       ALTER TABLE discounts ADD CONSTRAINT uq_discounts_promo_code UNIQUE (promo_code);
     `);
 
     // Remove old voucher_code column if exists
-    await queryRunner.query(`
-      ALTER TABLE discounts DROP COLUMN IF EXISTS voucher_code;
-    `);
+    const hasVoucherCode = table?.columns.find((c) => c.name === 'voucher_code');
+    if (hasVoucherCode) {
+      await queryRunner.query(`ALTER TABLE discounts DROP COLUMN voucher_code;`);
+    }
 
     // Add foreign key for company_id
     await queryRunner.query(`
@@ -37,26 +53,12 @@ export class EnhanceDiscountTables1711659976000 implements MigrationInterface {
       FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE;
     `);
 
-    // Add check constraint for scope
-    await queryRunner.query(`
-      ALTER TABLE discounts
-      ADD CONSTRAINT chk_discount_scope
-      CHECK (scope IN ('all', 'category', 'product'));
-    `);
-
-    // Create indexes
-    await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS idx_discounts_company ON discounts(company_id);
-    `);
-    await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS idx_discounts_promo_code ON discounts(promo_code);
-    `);
-    await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS idx_discounts_active ON discounts(is_active);
-    `);
-    await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS idx_discounts_dates ON discounts(start_date, end_date);
-    `);
+    // Create indexes (MySQL does not support IF NOT EXISTS for indexes before 8.0.12, use try/catch pattern)
+    await queryRunner.query(`CREATE INDEX idx_discounts_company ON discounts(company_id);`);
+    await queryRunner.query(`CREATE INDEX idx_discounts_promo_code ON discounts(promo_code);`);
+    // Note: column is isActive (camelCase) in this table
+    await queryRunner.query(`CREATE INDEX idx_discounts_active ON discounts(isActive);`);
+    await queryRunner.query(`CREATE INDEX idx_discounts_dates ON discounts(startDate, endDate);`);
 
     // Create discount_usages table
     await queryRunner.query(`
@@ -73,33 +75,35 @@ export class EnhanceDiscountTables1711659976000 implements MigrationInterface {
       );
     `);
 
-    // Create indexes for discount_usages
-    await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS idx_discount_usages_discount ON discount_usages(discount_id);
-    `);
-    await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS idx_discount_usages_customer ON discount_usages(customer_id);
-    `);
-    await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS idx_discount_usages_transaction ON discount_usages(transaction_id);
-    `);
-    await queryRunner.query(`
-      CREATE INDEX IF NOT EXISTS idx_discount_usages_used_at ON discount_usages(used_at);
-    `);
+    await queryRunner.query(`CREATE INDEX idx_discount_usages_discount ON discount_usages(discount_id);`);
+    await queryRunner.query(`CREATE INDEX idx_discount_usages_customer ON discount_usages(customer_id);`);
+    await queryRunner.query(`CREATE INDEX idx_discount_usages_transaction ON discount_usages(transaction_id);`);
+    await queryRunner.query(`CREATE INDEX idx_discount_usages_used_at ON discount_usages(used_at);`);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`DROP TABLE IF EXISTS discount_usages CASCADE;`);
+    await queryRunner.query(`DROP TABLE IF EXISTS discount_usages;`);
+
+    // Drop foreign key first
+    await queryRunner.query(`ALTER TABLE discounts DROP FOREIGN KEY fk_discounts_company;`);
+
+    // Drop indexes
+    await queryRunner.query(`DROP INDEX idx_discounts_company ON discounts;`);
+    await queryRunner.query(`DROP INDEX idx_discounts_promo_code ON discounts;`);
+    await queryRunner.query(`DROP INDEX idx_discounts_active ON discounts;`);
+    await queryRunner.query(`DROP INDEX idx_discounts_dates ON discounts;`);
+
+    // Drop columns
     await queryRunner.query(`
       ALTER TABLE discounts
-      DROP COLUMN IF EXISTS description,
-      DROP COLUMN IF EXISTS promo_code,
-      DROP COLUMN IF EXISTS scope,
-      DROP COLUMN IF EXISTS applicable_ids,
-      DROP COLUMN IF EXISTS usage_limit,
-      DROP COLUMN IF EXISTS usage_count,
-      DROP COLUMN IF EXISTS usage_limit_per_customer,
-      DROP COLUMN IF EXISTS company_id;
+      DROP COLUMN description,
+      DROP COLUMN promo_code,
+      DROP COLUMN scope,
+      DROP COLUMN applicable_ids,
+      DROP COLUMN usage_limit,
+      DROP COLUMN usage_count,
+      DROP COLUMN usage_limit_per_customer,
+      DROP COLUMN company_id;
     `);
   }
 }

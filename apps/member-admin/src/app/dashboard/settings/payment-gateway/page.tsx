@@ -9,9 +9,13 @@ export default function PaymentGatewaySettingsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiClient.get('/admin/payment-gateway/status')
-      .then(r => setStatus(r.data))
-      .catch(() => {})
+    apiClient.get('/payment-gateway/available')
+      .then(r => {
+        const gateways = r.data?.gateways || [];
+        const xenditEnabled = gateways.includes('xendit') || gateways.some((g: any) => g === 'xendit' || g?.name === 'xendit');
+        setStatus({ xendit: { enabled: xenditEnabled, isProduction: process.env.NODE_ENV === 'production' } });
+      })
+      .catch(() => setStatus({ xendit: { enabled: false, isProduction: false } }))
       .finally(() => setLoading(false));
   }, []);
 

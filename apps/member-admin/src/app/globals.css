@@ -20,12 +20,15 @@
   --accent-lighter: #f5f7ff;
   --success: #10b981;
   --success-light: #d1fae5;
+  --success-lighter: #d1fae5;
   --warning: #f59e0b;
   --warning-light: #fef3c7;
   --danger: #ef4444;
   --danger-light: #fee2e2;
+  --danger-lighter: #fee2e2;
   --info: #3b82f6;
   --info-light: #dbeafe;
+  --info-lighter: #dbeafe;
   --border-color: #e5e7eb;
   --border-subtle: #f3f4f6;
   --border-focus: #4f46e5;
@@ -147,6 +150,12 @@
     @apply w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400
            focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
            disabled:bg-gray-50 disabled:text-gray-500 transition-colors;
+  }
+  .form-textarea {
+    @apply w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-400
+           focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent
+           disabled:bg-gray-50 disabled:text-gray-500 transition-colors;
+    resize: vertical;
   }
   .form-error {
     @apply text-xs text-red-600 mt-0.5;
@@ -299,6 +308,13 @@
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(6px); }
     to   { opacity: 1; transform: translateY(0); }
+  }
+  .animate-spin {
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
   }
 
   /* ── Scrollbar ── */

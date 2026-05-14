@@ -45,7 +45,6 @@ import { Notification } from '../modules/notifications/notification.entity';
 import { AuditLog } from '../modules/audit/audit-log.entity';
 import { Customer } from '../modules/customers/customer.entity';
 import { LoyaltyPointTransaction } from '../modules/customers/loyalty-point-transaction.entity';
-import { Shift } from '../modules/shifts/shift.entity';
 import { EmployeeAttendance } from '../modules/employees/employee-attendance.entity';
 import { Inventory } from '../modules/inventory/inventory.entity';
 import { StockMovement } from '../modules/inventory/stock-movement.entity';
@@ -80,7 +79,7 @@ const AppDataSource = new DataSource({
     EmailVerificationToken, PasswordResetToken,
     Notification, AuditLog,
     Customer, LoyaltyPointTransaction,
-    Shift, Inventory, StockMovement, StockOpname, StockOpnameItem,
+    Inventory, StockMovement, StockOpname, StockOpnameItem,
     AddOn, CompanyAddOn, Supplier, PurchaseOrder, PurchaseOrderItem,
     Table, FnbOrder, FnbModifierGroup, FnbModifierOption,
     LaundryServiceType, LaundryOrder, LaundryItem,

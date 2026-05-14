@@ -86,6 +86,11 @@ export class AllExceptionsFilter implements ExceptionFilter {
           `Database error: ${dbError.message}`,
           dbError.stack,
         );
+
+        // In development, expose the actual error for easier debugging
+        if (process.env.NODE_ENV !== 'production') {
+          details = dbError.message;
+        }
       }
     }
     // Handle generic JavaScript errors

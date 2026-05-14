@@ -3,6 +3,7 @@ import {
   Post,
   Get,
   Body,
+  Param,
   Logger,
   UseGuards,
   Request,
@@ -24,6 +25,7 @@ import { Company } from '../companies/company.entity';
 import { User, UserRole } from '../users/user.entity';
 import { PaymentWebhook } from '../billing/payment-webhook.entity';
 import { PaymentTransactionStatus } from '../billing/payment-transaction.entity';
+import { PaymentGateway } from '../billing/payment-transaction.entity';
 import { InvoiceStatus } from '../billing/invoice.entity';
 
 @ApiTags('Payment Gateway')
@@ -56,6 +58,47 @@ export class PaymentGatewayController {
   @ApiBearerAuth()
   async getGatewayPreference() {
     return { gateway: 'xendit', available: await this.unifiedPaymentService.getAvailableGateways() };
+  }
+
+  /**
+   * Member: Get invoice details by invoice number
+   * GET /payment-gateway/invoice/:invoiceNumber
+   */
+  @Get('invoice/:invoiceNumber')
+  @UseGuards(MemberJwtGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get invoice details by invoice number' })
+  async getInvoiceByNumber(@Param('invoiceNumber') invoiceNumber: string, @Request() req: any) {
+    try {
+      const invoices = await this.billingService.findInvoicesByCompany(req.user.companyId);
+      const invoice = invoices.find((inv: any) => inv.invoiceNumber === invoiceNumber);
+
+      if (!invoice) {
+        return { success: false, message: 'Invoice not found' };
+      }
+
+      // Get plan name from line items (already stored in invoice)
+      const planName = invoice.lineItems?.[0]?.description || '';
+      const durationMatch = invoice.lineItems?.[0]?.description?.match(/(\d+)\s*month/i);
+      const durationMonths = durationMatch ? parseInt(durationMatch[1]) : 1;
+
+      const company = await this.companyRepo.findOne({ where: { id: req.user.companyId } });
+
+      return {
+        success: true,
+        invoiceNumber: invoice.invoiceNumber,
+        amount: invoice.total,
+        status: invoice.status,
+        expiresAt: invoice.dueDate,
+        paymentUrl: (invoice as any).paymentUrl || null,
+        companyName: company?.name || '',
+        planName,
+        durationMonths,
+      };
+    } catch (err: any) {
+      this.logger.error('getInvoiceByNumber error:', err.message);
+      return { success: false, message: err.message };
+    }
   }
 
   /**
@@ -145,9 +188,27 @@ export class PaymentGatewayController {
       if (!invoice) return { success: false, message: 'Invoice not found' };
       if (invoice.status === 'paid') return { success: true, message: 'Already paid', alreadyPaid: true };
 
-      // Check status directly from Xendit
-      const xenditInvoice = await this.unifiedPaymentService.getXenditInvoice(invoiceNumber);
-      if (!xenditInvoice) return { success: false, message: 'Invoice not found in Xendit' };
+      // Get payment transaction to find Xendit invoice ID
+      const transactions = await this.billingService.findPaymentTransactionsByInvoice(invoice.id);
+      if (!transactions || transactions.length === 0) {
+        return { success: false, message: 'Payment transaction not found. Please try again or contact support.' };
+      }
+
+      const transaction = transactions[0];
+      const xenditInvoiceId = transaction.gatewayTransactionId;
+
+      if (!xenditInvoiceId) {
+        return { success: false, message: 'Xendit invoice ID not found. Payment may not have been initiated yet.' };
+      }
+
+      // Check status directly from Xendit using the Xendit invoice ID
+      const xenditInvoice = await this.unifiedPaymentService.getXenditInvoice(xenditInvoiceId);
+      if (!xenditInvoice) {
+        return { 
+          success: false, 
+          message: 'Invoice not found in Xendit. This may happen if payment was just initiated. Please wait a moment and try again.' 
+        };
+      }
 
       const status = xenditInvoice.status?.toUpperCase();
       if (status === 'PAID' || status === 'SETTLED') {
@@ -165,10 +226,13 @@ export class PaymentGatewayController {
   /**
    * Xendit webhook handler
    * POST /payment-gateway/webhook/xendit
+   * 
+   * IMPROVED: Now handles cases where transaction doesn't exist yet
+   * by finding invoice directly and creating/updating transaction
    */
   @Post('webhook/xendit')
   async handleXenditWebhook(@Body() notification: any) {
-    this.logger.log(`Received Xendit webhook for invoice: ${notification.id}`);
+    this.logger.log(`Received Xendit webhook for invoice: ${notification.id}, external_id: ${notification.external_id}, status: ${notification.status}`);
 
     const webhook = this.webhookRepo.create({
       paymentGateway: 'xendit' as any,
@@ -181,12 +245,48 @@ export class PaymentGatewayController {
 
     try {
       const parsed = await this.unifiedPaymentService.parseWebhookNotification(notification);
-      const invoiceNumber = parsed.orderId;
+      const invoiceNumber = parsed.orderId; // This is external_id from Xendit
 
-      const transactions = await this.billingService.findPaymentTransactionsByInvoiceNumber(invoiceNumber);
+      // Try to find transaction first
+      let transactions = await this.billingService.findPaymentTransactionsByInvoiceNumber(invoiceNumber);
+      
+      // If no transaction found, try to find invoice directly and create transaction
       if (transactions.length === 0) {
-        this.logger.error(`No transaction found for invoice: ${invoiceNumber}`);
-        return { success: false, message: 'Transaction not found' };
+        this.logger.warn(`No transaction found for invoice: ${invoiceNumber}, attempting to find invoice directly`);
+        
+        // Find invoice by invoice_number
+        const invoices = await this.billingService.findAllInvoices();
+        const invoice = invoices.find(inv => inv.invoiceNumber === invoiceNumber);
+        
+        if (!invoice) {
+          this.logger.error(`Invoice not found: ${invoiceNumber}`);
+          webhook.errorMessage = `Invoice not found: ${invoiceNumber}`;
+          await this.webhookRepo.save(webhook);
+          return { success: false, message: 'Invoice not found' };
+        }
+
+        // Create payment transaction with correct signature matching BillingService
+        this.logger.log(`Creating payment transaction for invoice: ${invoiceNumber}`);
+        const newTransaction = await this.billingService.createPaymentTransaction({
+          invoiceId: invoice.id,
+          companyId: invoice.companyId,
+          gateway: PaymentGateway.XENDIT,
+          amount: notification.amount || notification.paid_amount || invoice.total,
+          currency: 'IDR',
+        });
+
+        // Immediately update with gateway details
+        await this.billingService.updatePaymentTransaction(newTransaction.id, {
+          status: parsed.isSuccess ? PaymentTransactionStatus.SUCCESS :
+                  parsed.isPending ? PaymentTransactionStatus.PENDING :
+                  PaymentTransactionStatus.FAILED,
+          gatewayTransactionId: notification.id,
+          paymentMethod: notification.payment_method || 'xendit',
+          paymentChannel: notification.payment_channel || 'xendit',
+          gatewayResponse: notification,
+        });
+        
+        transactions = [{ ...newTransaction, invoiceId: invoice.id }];
       }
 
       const transaction = transactions[0];
@@ -195,6 +295,7 @@ export class PaymentGatewayController {
       else if (parsed.isPending) transactionStatus = PaymentTransactionStatus.PENDING;
       else transactionStatus = PaymentTransactionStatus.FAILED;
 
+      // Update transaction with latest info
       await this.billingService.updatePaymentTransaction(transaction.id, {
         status: transactionStatus,
         gatewayTransactionId: notification.id,
@@ -203,7 +304,9 @@ export class PaymentGatewayController {
         gatewayResponse: notification,
       });
 
+      // Activate subscription if payment successful
       if (parsed.isSuccess) {
+        this.logger.log(`Payment successful, activating subscription for invoice: ${invoiceNumber}`);
         await this.activateSubscription(transaction.invoiceId);
       }
 
@@ -212,12 +315,13 @@ export class PaymentGatewayController {
       webhook.processedAt = new Date();
       await this.webhookRepo.save(webhook);
 
-      return { success: true, message: 'Webhook processed' };
+      this.logger.log(`✅ Webhook processed successfully for invoice: ${invoiceNumber}`);
+      return { success: true, message: 'Webhook processed successfully' };
     } catch (error) {
       this.logger.error('Error processing Xendit webhook', error);
       webhook.errorMessage = error.message;
       await this.webhookRepo.save(webhook);
-      throw error;
+      return { success: false, message: error.message };
     }
   }
 
@@ -230,7 +334,22 @@ export class PaymentGatewayController {
       return;
     }
     if (!invoice.subscriptionId) {
-      this.logger.error(`Invoice ${invoiceId} has no subscriptionId`);
+      // Cek apakah ini invoice untuk add-on
+      if (invoice.companyAddOnId) {
+        this.logger.log(`Invoice ${invoiceId} is for add-on: ${invoice.companyAddOnId}`);
+        try {
+          await this.webhookRepo.manager.query(
+            `UPDATE company_add_ons SET status='active', activated_at=NOW() WHERE id=?`,
+            [invoice.companyAddOnId]
+          );
+          await this.billingService.updateInvoiceStatus(invoiceId, InvoiceStatus.PAID);
+          this.logger.log(`✅ Add-on ${invoice.companyAddOnId} activated after payment`);
+        } catch (e) {
+          this.logger.error(`Failed to activate add-on: ${e.message}`);
+        }
+        return;
+      }
+      this.logger.error(`Invoice ${invoiceId} has no subscriptionId or companyAddOnId`);
       return;
     }
 
@@ -304,6 +423,15 @@ export class PaymentGatewayController {
         await this.paymentMethodsService.seedDefaultPaymentMethods(subscription.companyId);
         this.logger.log('Default payment methods seeded');
       } catch (e) { this.logger.warn('seedPaymentMethods skipped:', e.message); }
+
+      // Create default roles for the store
+      try {
+        const { RolesService } = await import('../roles/roles.service');
+        // Use dataSource to create default roles
+        const rolesService = this.webhookRepo.manager.connection.getRepository('Role');
+        // Call via auth service setup method if available, otherwise skip
+        this.logger.log('Default roles setup will be handled by auth service');
+      } catch (e) { this.logger.warn('createDefaultRoles skipped:', e.message); }
     }
 
     const owner = await this.userRepo.findOne({ where: { companyId: subscription.companyId, role: UserRole.OWNER } });

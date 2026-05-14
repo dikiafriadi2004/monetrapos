@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Search, Filter, Download, Upload, Package, AlertCircle, Loader2 } from 'lucide-react';
+import { Plus, Search, Filter, Download, Upload, Package, AlertCircle, Loader2, Barcode } from 'lucide-react';
 import { ProductFormModal } from './components/ProductFormModal';
 import { ProductTableRow } from './components/ProductTableRow';
 import { BulkImportModal } from './components/BulkImportModal';
+import { BarcodePrintModal } from './components/BarcodePrintModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useStore } from '@/hooks/useStore';
 import apiClient from '@/lib/api-client';
@@ -52,6 +53,7 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
+  const [isBarcodeOpen, setIsBarcodeOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkModal, setBulkModal] = useState<'price' | 'stock' | 'activate' | null>(null);
@@ -135,7 +137,7 @@ export default function ProductsPage() {
     const activeStoreId = storeId || '';
     if (!activeStoreId) {
       toast.error('Tidak ada toko aktif. Pastikan subscription sudah aktif.');
-      throw new Error('No store');
+      return null;
     }
     const res = await apiClient.post(API_ENDPOINTS.PRODUCTS.BASE, {
       ...data,
@@ -279,59 +281,51 @@ export default function ProductsPage() {
 
   const handleBulkImport = async (file: File) => {
     try {
-      // Parse CSV
       const text = await file.text();
       const lines = text.split('\n').filter(line => line.trim());
-      const headers = lines[0].split(',').map(h => h.trim());
-      
+      if (lines.length < 2) { toast.error('File CSV kosong atau tidak valid'); return; }
+
+      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
       const products = lines.slice(1).map(line => {
-        const values = line.split(',').map(v => v.trim());
+        // Handle quoted CSV values
+        const values = line.match(/(".*?"|[^,]+|(?<=,)(?=,)|^(?=,)|(?<=,)$)/g)?.map(v => v.trim().replace(/^"|"$/g, '')) || line.split(',').map(v => v.trim());
+        const obj: any = {};
+        headers.forEach((h, i) => { obj[h] = values[i] || ''; });
         return {
-          name: values[0],
-          sku: values[1] || undefined,
-          barcode: values[2] || undefined,
-          categoryName: values[3] || undefined,
-          basePrice: parseFloat(values[4]) || 0,
-          costPrice: parseFloat(values[5]) || 0,
-          unit: values[6] || 'pcs',
-          minStock: parseInt(values[7]) || 0,
-          trackInventory: values[8]?.toLowerCase() === 'yes',
-          isActive: values[9]?.toLowerCase() !== 'no',
+          name: obj['Name'] || obj['name'] || '',
+          sku: obj['SKU'] || obj['sku'] || undefined,
+          barcode: obj['Barcode'] || obj['barcode'] || undefined,
+          categoryName: obj['Category'] || obj['category'] || undefined,
+          price: parseFloat(obj['Base Price'] || obj['price'] || obj['Price'] || '0') || 0,
+          costPrice: parseFloat(obj['Cost Price'] || obj['costPrice'] || '0') || 0,
+          unit: obj['Unit'] || obj['unit'] || 'pcs',
+          stock: parseInt(obj['Stock'] || obj['stock'] || '0') || 0,
+          minStock: parseInt(obj['Min Stock'] || obj['minStock'] || '5') || 5,
+          trackInventory: (obj['Track Inventory'] || obj['trackInventory'] || 'Yes').toLowerCase() !== 'no',
+          isActive: (obj['Active'] || obj['isActive'] || 'Yes').toLowerCase() !== 'no',
         };
+      }).filter(p => p.name);
+
+      if (!products.length) { toast.error('Tidak ada produk valid di file CSV'); return; }
+
+      // Send all at once to backend
+      const res: any = await apiClient.post('/products/bulk/import', {
+        storeId: storeId || '',
+        products,
       });
 
-      // Find category IDs
-      const productsWithCategories = products.map(p => {
-        const category = categories.find(c => c.name.toLowerCase() === p.categoryName?.toLowerCase());
-        const activeStoreId = storeId || company?.id || '';
-        return {
-          ...p,
-          categoryId: category?.id,
-          companyId: company?.id,
-          storeId: activeStoreId,
-        };
-      });
-
-      // Import products one by one
-      let successCount = 0;
-      let errorCount = 0;
-      
-      for (const product of productsWithCategories) {
-        try {
-          await apiClient.post(API_ENDPOINTS.PRODUCTS.BASE, product);
-          successCount++;
-        } catch (error) {
-          errorCount++;
-          console.error('Failed to import product:', product.name, error);
-        }
+      const { success, failed, errors } = res.data || res;
+      if (failed > 0) {
+        toast.success(`${success} produk berhasil diimpor, ${failed} gagal`);
+        if (errors?.length) console.warn('Import errors:', errors);
+      } else {
+        toast.success(`${success} produk berhasil diimpor!`);
       }
-
-      toast.success(`Imported ${successCount} products${errorCount > 0 ? `, ${errorCount} failed` : ''}`);
       fetchProducts();
       setIsBulkImportOpen(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Bulk import error:', error);
-      toast.error('Failed to import products');
+      toast.error(error?.response?.data?.message || 'Gagal mengimpor produk');
     }
   };
 
@@ -362,6 +356,15 @@ export default function ProductsPage() {
             >
               <Upload size={18} />
               Import
+            </button>
+            <button
+              onClick={() => setIsBarcodeOpen(true)}
+              className="btn btn-outline"
+              style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-xs)' }}
+              title={selectedIds.size > 0 ? `Print barcode ${selectedIds.size} produk` : 'Print barcode semua produk'}
+            >
+              <Barcode size={18} />
+              Barcode{selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
             </button>
             <button 
               onClick={() => {
@@ -448,6 +451,7 @@ export default function ProductsPage() {
       <div className="glass-panel" style={{ overflow: 'hidden' }}>
         {/* Table Header */}
         <div className="flex-between" style={{ 
+          overflowX: 'auto',
           padding: 'var(--space-md) var(--space-lg)', 
           borderBottom: '1px solid var(--border-subtle)',
           fontWeight: 600,
@@ -571,6 +575,15 @@ export default function ProductsPage() {
         isOpen={isBulkImportOpen}
         onClose={() => setIsBulkImportOpen(false)}
         onImport={handleBulkImport}
+      />
+
+      <BarcodePrintModal
+        isOpen={isBarcodeOpen}
+        onClose={() => setIsBarcodeOpen(false)}
+        products={selectedIds.size > 0
+          ? products.filter(p => selectedIds.has(p.id)).map(p => ({ id: p.id, name: p.name, sku: p.sku, barcode: p.barcode, price: p.basePrice }))
+          : products.slice(0, 20).map(p => ({ id: p.id, name: p.name, sku: p.sku, barcode: p.barcode, price: p.basePrice }))
+        }
       />
 
       <ConfirmModal

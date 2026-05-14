@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Users, ShieldAlert, Plus, Edit, Trash2, Clock, History, X, Calendar, Loader2 } from 'lucide-react';
 import { employeesService, Employee, ClockInStatus, AttendanceRecord, rolesService } from '@/services/employees.service';
 import { RoleFormModal } from './components/RoleFormModal';
@@ -9,12 +10,14 @@ import PermissionGate from '@/components/PermissionGate';
 import { PERMISSIONS } from '@/hooks/usePermission';
 import apiClient from '@/lib/api-client';
 import toast from 'react-hot-toast';
-import { Modal, DeleteModal, PageHeader, StatusBadge, EmptyState, LoadingSpinner, ConfirmModal } from '@/components/ui';
+import { Modal, DeleteModal, PageHeader, StatusBadge, EmptyState, LoadingSpinner, ConfirmModal, Pagination } from '@/components/ui';
+import { usePagination } from '@/hooks/usePagination';
 
 interface Store { id: string; name: string; }
 interface Role { id: string; name: string; description?: string; permissions?: Array<{ name: string } | string>; }
 
 export default function EmployeesRolesPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'employees' | 'roles'>('employees');
   const [roles, setRoles] = useState<Role[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -35,23 +38,46 @@ export default function EmployeesRolesPage() {
   const [deleteRoleConfirm, setDeleteRoleConfirm] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
   const [deleteEmpConfirm, setDeleteEmpConfirm] = useState<{ open: boolean; id: string | null }>({ open: false, id: null });
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+
+  // Update waktu setiap 30 detik agar durasi clock-in real-time
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const [rolesData, empData, storesData]: any = await Promise.all([
-        rolesService.getAll(), employeesService.getAll(),
-        apiClient.get('/stores').then((r: any) => r.data ?? r).catch(() => []),
+        rolesService.getAll().catch((e: any) => { console.error('roles error:', e?.response?.status, e?.response?.data); return []; }),
+        employeesService.getAll().catch((e: any) => {
+          console.error('employees error:', e?.response?.status, e?.response?.data);
+          const status = e?.response?.status;
+          if (status === 401 || status === 403) toast.error('Sesi habis, silakan login ulang');
+          else toast.error(`Gagal memuat karyawan: ${e?.response?.data?.message || e.message}`);
+          return [];
+        }),
+        apiClient.get('/stores').then((r: any) => {
+          const d = r.data ?? r;
+          return Array.isArray(d) ? d : (d?.data || []);
+        }).catch(() => []),
       ]);
       setRoles(Array.isArray(rolesData) ? rolesData : []);
       setEmployees(Array.isArray(empData) ? empData : []);
       setStores(Array.isArray(storesData) ? storesData : []);
       if (storesData.length > 0) setClockInForm(prev => ({ ...prev, storeId: storesData[0].id }));
-    } catch (err) { console.error('Failed to fetch employees data:', err); toast.error('Failed to load data'); }
+    } catch (err: any) {
+      console.error('Failed to fetch employees data:', err);
+      toast.error('Gagal memuat data');
+    }
     finally { setLoading(false); }
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  const empPagination = usePagination(employees);
+  const rolesPagination = usePagination(roles, 10);
 
   useEffect(() => {
     if (employees.length > 0) {
@@ -81,9 +107,20 @@ export default function EmployeesRolesPage() {
 
   const handleSaveEmployee = async (data: any) => {
     try {
-      if (editingEmp) await employeesService.update(editingEmp.id, data); else await employeesService.create(data);
-      toast.success(editingEmp ? 'Employee updated' : 'Employee invited'); await fetchData();
-    } catch (err: any) { toast.error(err?.response?.data?.message || 'Failed to save employee'); throw err; }
+      console.log('[handleSaveEmployee] data:', JSON.stringify(data));
+      if (editingEmp) {
+        const result = await employeesService.update(editingEmp.id, data);
+        console.log('[handleSaveEmployee] update result:', JSON.stringify(result));
+      } else {
+        await employeesService.create(data);
+      }
+      toast.success(editingEmp ? 'Employee updated' : 'Employee invited');
+      await fetchData();
+    } catch (err: any) {
+      console.error('[handleSaveEmployee] error:', err);
+      toast.error(err?.response?.data?.message || 'Failed to save employee');
+      throw err;
+    }
   };
 
   const handleDeleteEmployee = async (id: string) => {
@@ -109,16 +146,32 @@ export default function EmployeesRolesPage() {
 
   const handleClockIn = async () => {
     if (!clockInOutModal.employee) return;
-    setClockActionLoading(clockInOutModal.employee.id);
-    try { await employeesService.clockIn(clockInOutModal.employee.id, clockInForm); setClockInOutModal({ isOpen: false, employee: null, action: 'clock-in' }); toast.success('Employee clocked in'); }
+    if (!clockInForm.storeId) { toast.error('Pilih toko terlebih dahulu'); return; }
+    const empId = clockInOutModal.employee.id; // simpan sebelum modal di-reset
+    setClockActionLoading(empId);
+    try {
+      await employeesService.clockIn(empId, clockInForm);
+      setClockInOutModal({ isOpen: false, employee: null, action: 'clock-in' });
+      toast.success('Employee clocked in');
+      const newStatus = await employeesService.getClockInStatus(empId).catch(() => ({ isClockedIn: false } as ClockInStatus));
+      setClockInStatuses(prev => ({ ...prev, [empId]: newStatus }));
+    }
     catch (err: any) { toast.error(err?.response?.data?.message || 'Failed to clock in'); }
     finally { setClockActionLoading(null); }
   };
 
   const handleClockOut = async () => {
     if (!clockInOutModal.employee) return;
-    setClockActionLoading(clockInOutModal.employee.id);
-    try { await employeesService.clockOut(clockInOutModal.employee.id, clockOutForm); setClockInOutModal({ isOpen: false, employee: null, action: 'clock-in' }); toast.success('Employee clocked out'); }
+    if (clockOutForm.breakDurationMinutes < 0) { toast.error('Durasi istirahat tidak boleh negatif'); return; }
+    const empId = clockInOutModal.employee.id; // simpan sebelum modal di-reset
+    setClockActionLoading(empId);
+    try {
+      await employeesService.clockOut(empId, clockOutForm);
+      setClockInOutModal({ isOpen: false, employee: null, action: 'clock-in' });
+      toast.success('Employee clocked out');
+      const newStatus = await employeesService.getClockInStatus(empId).catch(() => ({ isClockedIn: false } as ClockInStatus));
+      setClockInStatuses(prev => ({ ...prev, [empId]: newStatus }));
+    }
     catch (err: any) { toast.error(err?.response?.data?.message || 'Failed to clock out'); }
     finally { setClockActionLoading(null); }
   };
@@ -129,15 +182,25 @@ export default function EmployeesRolesPage() {
     catch { toast.error('Failed to load attendance'); setAttendanceModal(prev => ({ ...prev, loading: false })); }
   };
 
-  const fmtDate = (d: string) => new Date(d).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
-  const fmtDuration = (min?: number) => { if (!min) return '—'; const h = Math.floor(min/60), m = min%60; return `${h}h ${m}m`; };
-  const calcDuration = (t: string) => Math.floor((Date.now() - new Date(t).getTime()) / 60000);
+  const fmtDate = (d: string) => new Date(d).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Jakarta' });
+  const fmtDuration = (min?: number) => {
+    if (min === undefined || min === null || isNaN(min) || min < 0) return '—';
+    const h = Math.floor(min / 60), m = min % 60;
+    return `${h}h ${m}m`;
+  };
+  const calcDuration = (t: string) => {
+    const ms = now - new Date(t).getTime();
+    return isNaN(ms) ? 0 : Math.floor(ms / 60000);
+  };
 
   return (
     <div>
       <PageHeader title="Team & Permissions" description="Configure roles and manage store staff."
         action={
           <div className="flex gap-2">
+            <button onClick={() => router.push('/dashboard/employees/attendance')} className="btn btn-outline btn-sm">
+              <Calendar size={14}/> Laporan Absensi
+            </button>
             <PermissionGate permission={PERMISSIONS.EMPLOYEE_MANAGE_ROLE}>
               <button onClick={() => { setEditingRole(null); setRoleModalOpen(true); }} className="btn btn-outline btn-sm"><ShieldAlert size={14}/> New Role</button>
             </PermissionGate>
@@ -161,65 +224,103 @@ export default function EmployeesRolesPage() {
         <div className="card">
           {activeTab === 'employees' && (
             employees.length === 0 ? <div className="card-body"><EmptyState icon={Users} title="No staff members yet" /></div> : (
-              <div className="table-container border-0">
-                <table className="table">
-                  <thead><tr><th>Employee</th><th>Role</th><th>Clock Status</th><th>Duration</th><th className="text-right">Actions</th></tr></thead>
-                  <tbody>
-                    {employees.map(emp => {
-                      const status = clockInStatuses[emp.id];
-                      const isClockedIn = status?.isClockedIn || false;
-                      const duration = status?.currentAttendance?.clockInTime ? calcDuration(status.currentAttendance.clockInTime) : 0;
-                      return (
-                        <tr key={emp.id}>
-                          <td><div className="font-semibold">{emp.name}</div><div className="text-xs text-gray-400">{emp.employeeNumber} • {emp.email}</div></td>
-                          <td><span className="badge badge-gray">{emp.role?.name || 'Unassigned'}</span></td>
-                          <td><span className={`badge ${isClockedIn ? 'badge-success' : 'badge-gray'}`}>{isClockedIn ? '● Clocked In' : 'Clocked Out'}</span></td>
-                          <td className={`font-medium ${isClockedIn ? 'text-emerald-600' : 'text-gray-400'}`}>{isClockedIn ? fmtDuration(duration) : '—'}</td>
-                          <td>
-                            <div className="flex justify-end gap-1">
-                              <button onClick={() => openClockModal(emp, isClockedIn ? 'clock-out' : 'clock-in')} disabled={clockActionLoading === emp.id}
-                                className={`btn btn-sm ${isClockedIn ? 'btn-warning' : 'btn-success'}`}>
-                                <Clock size={13}/> {clockActionLoading === emp.id ? '...' : isClockedIn ? 'Out' : 'In'}
-                              </button>
-                              <button onClick={() => openAttendance(emp)} className="btn btn-ghost btn-icon btn-sm" title="Attendance"><History size={14}/></button>
-                              <button onClick={() => { setEditingEmp(emp); setEmpModalOpen(true); }} className="btn btn-ghost btn-icon btn-sm"><Edit size={14}/></button>
-                              <PermissionGate permission={PERMISSIONS.EMPLOYEE_DELETE}>
-                                <button onClick={() => handleDeleteEmployee(emp.id)} className="btn btn-ghost btn-icon btn-sm text-red-500"><Trash2 size={14}/></button>
-                              </PermissionGate>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                <div className="table-container border-0">
+                  <table className="table">
+                    <thead><tr><th>Employee</th><th>Role</th><th>Clock Status</th><th>Duration</th><th className="text-right">Actions</th></tr></thead>
+                    <tbody>
+                      {empPagination.paginated.map(emp => {
+                        const status = clockInStatuses[emp.id];
+                        const isClockedIn = status?.isClockedIn || false;
+                        const clockInTime = status?.currentAttendance?.clockInTime;
+                        const duration = isClockedIn && clockInTime
+                          ? calcDuration(typeof clockInTime === 'string' ? clockInTime : new Date(clockInTime).toISOString())
+                          : null;
+                        return (
+                          <tr key={emp.id}>
+                            <td><div className="font-semibold">{emp.name}</div><div className="text-xs text-gray-400">{emp.employeeNumber} • {emp.email}</div></td>
+                            <td>
+                              {(() => {
+                                const role = emp.user?.role || (typeof emp.role === 'string' ? emp.role : '') || '';
+                                const ROLE_BADGE: Record<string, string> = {
+                                  owner: 'bg-purple-100 text-purple-700',
+                                  admin: 'badge-primary',
+                                  manager: 'badge-info',
+                                  accountant: 'bg-amber-100 text-amber-700',
+                                  cashier: 'badge-success',
+                                  staff: 'badge-gray',
+                                };
+                                return (
+                                  <span className={`badge ${ROLE_BADGE[role] || 'badge-gray'} capitalize`}>
+                                    {role || 'Unassigned'}
+                                  </span>
+                                );
+                              })()}
+                            </td>
+                            <td><span className={`badge ${isClockedIn ? 'badge-success' : 'badge-gray'}`}>{isClockedIn ? '● Clocked In' : 'Clocked Out'}</span></td>
+                            <td className={`font-medium ${isClockedIn ? 'text-emerald-600' : 'text-gray-400'}`}>{isClockedIn ? fmtDuration(duration ?? 0) : '—'}</td>
+                            <td>
+                              <div className="flex justify-end gap-1">
+                                <button onClick={() => openClockModal(emp, isClockedIn ? 'clock-out' : 'clock-in')} disabled={clockActionLoading === emp.id}
+                                  className={`btn btn-sm ${isClockedIn ? 'btn-warning' : 'btn-success'}`}>
+                                  <Clock size={13}/> {clockActionLoading === emp.id ? '...' : isClockedIn ? 'Out' : 'In'}
+                                </button>
+                                <button onClick={() => openAttendance(emp)} className="btn btn-ghost btn-icon btn-sm" title="Attendance"><History size={14}/></button>
+                                <button onClick={async () => {
+                                  // Fetch data terbaru sebelum buka form edit
+                                  try {
+                                    const fresh = await employeesService.getAll();
+                                    const freshEmp = (Array.isArray(fresh) ? fresh : (fresh as any)?.data || []).find((e: any) => e.id === emp.id) || emp;
+                                    setEditingEmp(freshEmp);
+                                  } catch { setEditingEmp(emp); }
+                                  setEmpModalOpen(true);
+                                }} className="btn btn-ghost btn-icon btn-sm"><Edit size={14}/></button>
+                                <PermissionGate permission={PERMISSIONS.EMPLOYEE_DELETE}>
+                                  <button onClick={() => handleDeleteEmployee(emp.id)} className="btn btn-ghost btn-icon btn-sm text-red-500"><Trash2 size={14}/></button>
+                                </PermissionGate>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="px-4 pb-3">
+                  <Pagination page={empPagination.page} totalPages={empPagination.totalPages} onPageChange={empPagination.setPage} totalItems={empPagination.totalItems} />
+                </div>
+              </>
             )
           )}
 
           {activeTab === 'roles' && (
             roles.length === 0 ? <div className="card-body"><EmptyState icon={ShieldAlert} title="No roles defined" /></div> : (
-              <div className="table-container border-0">
-                <table className="table">
-                  <thead><tr><th>Role Name</th><th>Permissions</th><th className="text-right">Actions</th></tr></thead>
-                  <tbody>
-                    {roles.map(role => (
-                      <tr key={role.id}>
-                        <td><div className="font-semibold">{role.name}</div><div className="text-xs text-gray-400">{role.description || 'No description'}</div></td>
-                        <td><span className="text-emerald-600 font-semibold">{role.permissions?.length || 0} permissions</span></td>
-                        <td>
-                          <div className="flex justify-end gap-1">
-                            <PermissionGate permission={PERMISSIONS.EMPLOYEE_MANAGE_ROLE}>
-                              <button onClick={() => { setEditingRole(role); setRoleModalOpen(true); }} className="btn btn-ghost btn-icon btn-sm"><Edit size={14}/></button>
-                              <button onClick={() => handleDeleteRole(role.id)} className="btn btn-ghost btn-icon btn-sm text-red-500"><Trash2 size={14}/></button>
-                            </PermissionGate>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <>
+                <div className="table-container border-0">
+                  <table className="table">
+                    <thead><tr><th>Role Name</th><th>Permissions</th><th className="text-right">Actions</th></tr></thead>
+                    <tbody>
+                      {rolesPagination.paginated.map(role => (
+                        <tr key={role.id}>
+                          <td><div className="font-semibold">{role.name}</div><div className="text-xs text-gray-400">{role.description || 'No description'}</div></td>
+                          <td><span className="text-emerald-600 font-semibold">{role.permissions?.length || 0} permissions</span></td>
+                          <td>
+                            <div className="flex justify-end gap-1">
+                              <PermissionGate permission={PERMISSIONS.EMPLOYEE_MANAGE_ROLE}>
+                                <button onClick={() => { setEditingRole(role); setRoleModalOpen(true); }} className="btn btn-ghost btn-icon btn-sm"><Edit size={14}/></button>
+                                <button onClick={() => handleDeleteRole(role.id)} className="btn btn-ghost btn-icon btn-sm text-red-500"><Trash2 size={14}/></button>
+                              </PermissionGate>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="px-4 pb-3">
+                  <Pagination page={rolesPagination.page} totalPages={rolesPagination.totalPages} onPageChange={rolesPagination.setPage} totalItems={rolesPagination.totalItems} />
+                </div>
+              </>
             )
           )}
         </div>

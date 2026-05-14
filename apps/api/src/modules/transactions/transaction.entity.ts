@@ -1,10 +1,9 @@
-import { Entity, Column, ManyToOne, OneToMany, JoinColumn } from 'typeorm';
+import { Entity, Column, ManyToOne, OneToMany, JoinColumn, Index, Unique } from 'typeorm';
 import { BaseEntity } from '../../common/entities';
 import { Company } from '../companies/company.entity';
 import { Store } from '../stores/store.entity';
 import { Employee } from '../employees/employee.entity';
 import { Customer } from '../customers/customer.entity';
-import { Shift } from '../shifts/shift.entity';
 import { TransactionItem } from './transaction-item.entity';
 
 export enum TransactionStatus {
@@ -23,6 +22,8 @@ export enum PaymentMethodType {
 }
 
 @Entity('transactions')
+@Unique('uq_transaction_number_store', ['storeId', 'transactionNumber'])
+@Unique('uq_invoice_number_store', ['storeId', 'invoiceNumber'])
 export class Transaction extends BaseEntity {
   @Column({ name: 'company_id' })
   companyId: string;
@@ -37,13 +38,6 @@ export class Transaction extends BaseEntity {
   @ManyToOne(() => Store, (store) => store.transactions)
   @JoinColumn({ name: 'store_id' })
   store: Store;
-
-  @Column({ nullable: true, name: 'shift_id' })
-  shiftId: string;
-
-  @ManyToOne(() => Shift, { nullable: true })
-  @JoinColumn({ name: 'shift_id' })
-  shift: Shift;
 
   @Column({ nullable: true, name: 'employee_id' })
   employeeId: string;
@@ -60,10 +54,10 @@ export class Transaction extends BaseEntity {
   customer: Customer;
 
   // Invoice
-  @Column({ unique: true, length: 50, name: 'transaction_number' })
+  @Column({ length: 50, name: 'transaction_number' })
   transactionNumber: string;
 
-  @Column({ unique: true, length: 50, name: 'invoice_number' })
+  @Column({ length: 50, name: 'invoice_number' })
   invoiceNumber: string;
 
   // Amounts
